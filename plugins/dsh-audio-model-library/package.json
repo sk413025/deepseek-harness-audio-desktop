@@ -1,0 +1,49 @@
+{
+  "name": "dsh-audio-model-library",
+  "version": "0.1.4",
+  "description": "DeepSeek Harness plugin: full audio model catalog, task selection and controlled activation/switching of DGX/vLLM model services, bound into dsh-dgx-audio. Shared Web/Desktop UI; optional narrow server controller proposal.",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src/*.js",
+    "lib/client.js",
+    "lib/client.js.map",
+    "controller/dsh_audio_controller.py",
+    "controller/DEPLOY.md",
+    "controller/examples",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test --test-timeout=120000 test/*.test.js",
+    "test:controller": "python3 -m unittest discover -s controller/tests"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-settings-plugins",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-api-session-controller"
+      ]
+    }
+  }
+}

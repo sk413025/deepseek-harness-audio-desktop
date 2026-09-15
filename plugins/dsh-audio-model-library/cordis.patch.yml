@@ -1,0 +1,6 @@
+# dsh-audio-model-library bundle layer: one row with no server configured.
+# Configure servers in Harness user settings (namespace `dsh-audio-model-library`).
+# Nothing contacts a server until the user presses Refresh or Activate.
+- insert:
+    - id: audio-model-library
+      name: dsh-audio-model-library

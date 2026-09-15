@@ -1,0 +1,19 @@
+{
+  "protocol": "dsh.audio-controller/0.1",
+  "serverId": "gpu-server-1",
+  "stateDir": "../state",
+  "recipesFile": "recipes.json",
+  "catalogFile": "catalog.v1.json",
+  "dockerBinary": "/usr/bin/docker",
+  "ssBinary": "/usr/bin/ss",
+  "policy": {
+    "exclusiveGpu": true,
+    "gpuOwnerLock": { "path": "/srv/gpu/GPU_OWNER.lock", "delegationLine": "controller=allow" },
+    "reservationFile": "/srv/gpu/GPU_RESERVATION.json",
+    "foreignContainerPrefixes": ["lab-"],
+    "drainSeconds": 20,
+    "restorePreviousOnFailure": true,
+    "healthHost": "127.0.0.1"
+  },
+  "http": { "bind": "127.0.0.1:18190", "tokenFile": "controller.token" }
+}

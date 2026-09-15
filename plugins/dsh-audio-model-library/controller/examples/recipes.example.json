@@ -1,0 +1,47 @@
+{
+  "recipes": [
+    {
+      "id": "example-omni-speech",
+      "displayName": "Example omni model · vLLM-Omni <version>",
+      "catalogIds": ["vllm-omni:<org>/<repo>"],
+      "runtime": { "engine": "vllm-omni", "version": "<version>", "image": "<image>", "imageDigest": "sha256:<digest>" },
+      "container": "lab-omni-example",
+      "port": 18200,
+      "servedModels": ["<org>/<repo>"],
+      "typicalLoadSeconds": 300,
+      "startTimeoutSeconds": 1800,
+      "stopTimeoutSeconds": 90,
+      "memoryGiB": 30,
+      "pull": "never",
+      "compose": {
+        "projectDirectory": "/srv/gpu/omni-lab",
+        "project": "omni-lab",
+        "files": ["compose.yml"],
+        "envFile": ".env",
+        "profile": "omni-example",
+        "service": "omni-example",
+        "env": {}
+      },
+      "endpoints": [
+        { "task": "spoken_chat_speech_reply", "adapterMode": "chat", "outputAudio": true, "outputSampleRate": 24000, "declares": ["text_delta_sse", "progressive_audio_output_http"] },
+        { "task": "audio_understanding_qa", "adapterMode": "chat", "outputAudio": false },
+        { "task": "full_duplex_dialogue", "adapterMode": "realtime", "wire": "omni-duplex", "path": "/realtime", "query": { "duplex": "1", "autostart": "0" }, "inputSampleRate": 16000, "outputSampleRate": 24000, "requiresReferenceAudio": true, "declares": ["full_duplex_ws", "barge_in_interruption"] }
+      ]
+    },
+    {
+      "id": "example-asr",
+      "displayName": "Example ASR model · vLLM <version>",
+      "catalogIds": ["vllm:<org>/<asr-repo>"],
+      "runtime": { "engine": "vllm", "version": "<version>", "image": "<image>", "imageDigest": "sha256:<digest>" },
+      "container": "lab-asr-example",
+      "port": 18201,
+      "servedModels": ["<org>/<asr-repo>"],
+      "typicalLoadSeconds": 120,
+      "compose": { "projectDirectory": "/srv/gpu/asr-lab", "project": "asr-lab", "files": ["compose.yml"], "profile": "asr-example", "service": "asr-example" },
+      "endpoints": [
+        { "task": "asr", "adapterMode": "transcribe" },
+        { "task": "audio_understanding_qa", "adapterMode": "chat", "systemPromptWithAudio": "user-prefix" }
+      ]
+    }
+  ]
+}
