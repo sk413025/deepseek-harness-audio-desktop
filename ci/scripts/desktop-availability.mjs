@@ -129,9 +129,15 @@ async function main() {
     '          sendModalities: true',
     '',
   ].join('\n'))
+  // The macOS workspace chooser is `osascript choose folder` run by the Desktop host; a PATH shim answers only that
+  // OS dialog with the test workspace and passes every other osascript call through. Everything after it is real.
+  const shimDir = join(workDir, 'os-dialog-shim')
+  mkdirSync(shimDir, { recursive: true })
+  const shimLog = join(outDir, 'os-dialog-shim.log')
+  writeFileSync(join(shimDir, 'osascript'), `#!/bin/sh\ncase "$*" in *"choose folder"*) echo "$(date +%s) choose-folder $*" >> "${shimLog}"; printf '%s/\\n' "${workspace}"; exit 0 ;; esac\nexec /usr/bin/osascript "$@"\n`, { mode: 0o755 })
   const env = {}
   for (const key of ['HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', '__CF_USER_TEXT_ENCODING']) if (process.env[key] !== undefined) env[key] = process.env[key]
-  Object.assign(env, { PATH: '/usr/bin:/bin:/usr/sbin:/sbin', LANG: 'en_US.UTF-8', DSH_HOME: home, DSH_TELEMETRY_DISABLED: '1', DSH_DESKTOP_DIAGNOSTIC_FILE: join(outDir, 'startup-diagnostic.txt') })
+  Object.assign(env, { PATH: `${shimDir}:/usr/bin:/bin:/usr/sbin:/sbin`, LANG: 'en_US.UTF-8', DSH_HOME: home, DSH_TELEMETRY_DISABLED: '1', DSH_DESKTOP_DIAGNOSTIC_FILE: join(outDir, 'startup-diagnostic.txt') })
 
   const { _electron } = await import('playwright-core')
   const app = await _electron.launch({ executablePath: executable, args: [`--user-data-dir=${userData}`], env, timeout: 420_000 })
@@ -153,26 +159,21 @@ async function main() {
   await dismissFirstRunDialogs(page)
   await shot('00-booted')
 
-  // Session in a workspace (the directory picker is native; the RPC is what the picker's choice triggers), then the UI.
-  const rpc = (method, request) => page.evaluate(async ([method, request]) => {
-    const body = { type: 'client-request', rpcId: crypto.randomUUID(), method, payload: { args: { request } } }
-    const response = await fetch(`/api/${method}`, { method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
-    const json = await response.json()
-    if (!json.result?.ok) throw new Error(`${method}: ${JSON.stringify(json).slice(0, 400)}`)
-    return json.result.value
-  }, [method, request])
-  let created
-  for (const preset of ['dgx-audio', undefined]) {
-    try { created = await rpc('session/create', { cwd: workspace, ...(preset ? { agentPreset: preset } : {}) }); report.add('availability.session', 'info', U, `session ${created.sessionId} created in the workspace (agent preset ${preset ?? 'default'})`); break } catch (error) { note(`session/create preset=${preset}: ${String(error.message).slice(0, 200)}`) }
-  }
-  if (!created) throw new Error('could not create a session')
-  await rpc('session/selectModel', { sessionId: created.sessionId, provider: 'ci-fake', model: 'ci-chat' })
-  await openSession(page, created.sessionId)
-  await shot('01-session-open')
+  // Workspace through the real hero UI: "Choose workspace" → host → OS folder chooser (shimmed) → composer enabled.
+  const choose = page.getByRole('button', { name: /Choose workspace/i }).or(page.getByText(/^Choose workspace$/)).first()
+  await choose.click({ timeout: 30_000 })
+  const workspaceReady = await waitUntil('hero composer enabled for the chosen workspace', async () => page.evaluate(() => {
+    const box = [...document.querySelectorAll('[role=textbox]')].at(-1)
+    return box !== undefined && !/Choose a workspace/i.test(box.getAttribute('aria-label') ?? '') ? (box.getAttribute('aria-label') ?? 'ready') : null
+  }), { timeoutMs: 30_000, intervalMs: 300 }).catch(() => null)
+  const shimCalls = existsSync(shimLog) ? readFileSync(shimLog, 'utf8').trim().split('\n').filter(Boolean).length : 0
+  await shot('01-workspace-chosen')
+  report.expect('availability.workspace', workspaceReady !== null && shimCalls >= 1, U, `workspace chosen through the UI (OS folder chooser answered by the PATH shim ${shimCalls}×); composer: ${workspaceReady?.value ?? 'not ready'}`)
+  if (workspaceReady === null) throw new Error(`workspace not accepted: ${JSON.stringify(await page.evaluate(() => document.body.innerText.slice(0, 800)))}`)
   const composer = page.locator('main [role=textbox], [role=textbox]').last()
   await composer.waitFor({ state: 'visible', timeout: 30_000 })
   const micPresent = await page.locator('[data-testid=dsh-voice-capture-mic]').count()
-  report.add('availability.session-ui', 'info', U, `session view open: composer visible, microphone control ${micPresent > 0 ? 'present' : 'absent'}`)
+  report.add('availability.session-ui', 'info', U, `composer visible, microphone control ${micPresent > 0 ? 'present' : 'absent'}, Live control ${await page.locator('[data-testid=dsh-voice-capture-live]').count() > 0 ? 'present' : 'absent'}`)
 
   const send = async (text) => {
     await composer.click()
@@ -260,26 +261,6 @@ async function dismissFirstRunDialogs(page) {
       note(`dismissed first-run dialog: ${text}`)
     }
   }
-}
-
-async function openSession(page, sessionId) {
-  // A new workspace session shows up in the sidebar tree; its group may start collapsed.
-  const deadline = Date.now() + 60_000
-  while (Date.now() < deadline) {
-    const opened = await page.evaluate((id) => Boolean(document.querySelector(`[data-session-id="${id}"]`)), sessionId)
-    if (opened) return
-    const rows = page.locator('[role=treeitem]')
-    const count = await rows.count()
-    const titles = []
-    for (let i = 0; i < count; i++) titles.push((await rows.nth(i).innerText().catch(() => '')).trim())
-    const sessionIndex = titles.findLastIndex(t => /New Session|CI availability/i.test(t))
-    if (sessionIndex >= 0) { await rows.nth(sessionIndex).click().catch(() => undefined) }
-    else if (count > 0) { for (let i = 0; i < count; i++) if (/workspace/i.test(titles[i])) await rows.nth(i).click().catch(() => undefined) }
-    await sleep(1000)
-    if (await page.locator('main [role=textbox]').count() > 0 && sessionIndex >= 0) return
-  }
-  const dump = await page.evaluate(() => ({ treeitems: [...document.querySelectorAll('[role=treeitem]')].map(e => e.innerText.slice(0, 80)), text: document.body.innerText.slice(0, 1500) }))
-  throw new Error(`could not open session ${sessionId} in the UI: ${JSON.stringify(dump).slice(0, 1500)}`)
 }
 
 async function waitIdle(page) {
