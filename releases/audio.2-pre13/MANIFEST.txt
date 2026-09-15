@@ -1,0 +1,13 @@
+# audio.2-pre13 manifest 2026-09-15 11:05:43 CST
+5cd3a029c474b9a000cff08ddd81b7eb5f04ceae7211a6af537ed26750237039  dsh-audio-model-library-0.1.4.tgz
+17fc0ef98dbff4e0ed92bc4ab4d186b4e50346aa144a9edc545f82d0829ad94c  dsh-audio-release-kit-0.2.2.tgz
+9dff24b64a5ad67d794cd65767d6b92453e419ba3d8c298d6329c1182645398b  dsh-dgx-audio-0.4.8.tgz
+38d722c3f35983e64c5955a7b66fb9f70e6320eadc79a7d57df751b546f76b0c  dsh-voice-capture-0.3.3.tgz
+27c752d2074897ac3310f88997d4966bc87e16eb88e15e3550e5def4a8e8d00f  desktop-local-build/patches/0001-local-unsigned-macos-dev-build.patch
+f89b02037cec1b5e61daf36e09e111b0a42648c6d11954cb45dbaf041fe098cd  desktop-local-build/patches/0002-local-ui-audio-player-for-local-audio-files.patch
+e2451d1666ace869c87b4ae731b46bf83dc9fcd9ca61cd1593c12898411a3e14  desktop-local-build/patches/0003-desktop-bundled-and-local-plugin-lifecycle.patch
+2d734314b9dd688e6ef9a74a0c952d8c86c1d65357ef547a8186dcc4836f48be  desktop-local-build/patches/0004-desktop-host-plugin-agent-presets.patch
+e8aacb5a741716bbe74ffe92bf91fd9807911d88e8c30b845c9eaeb97a219bc2  desktop-local-build/patches/0005-client-preset-repo-relative-css-virtual-ids.patch
+cd4ce291156d7605c3de3921dddf26c6fd8aed8b17cd4bb0ea9335e95fa2d1d9  app/DeepSeek Harness Audio (Local Build).app/Contents/Resources/seed/desktop-bundled-plugins.json
+8d092ae049a012370b7e36edc984b5a28bebc52c5e8453c20f3ebe409bb28913  app/DeepSeek Harness Audio (Local Build).app/Contents/Resources/app.asar
+183f08e9c6dde7e36cd2318eaee70b0da08fb35e
