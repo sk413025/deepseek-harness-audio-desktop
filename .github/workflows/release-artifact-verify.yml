@@ -212,6 +212,10 @@ jobs:
         if: always() && steps.artifact.outcome == 'success' && (github.event_name != 'workflow_dispatch' || inputs.lifecycle)
         timeout-minutes: 20
         run: node ci-src/ci/scripts/desktop-smoke.mjs --phase lifecycle --app "$RUNNER_TEMP/app/DeepSeek Harness Audio (Local Build).app" --tag "$TAG" --tag-src tag-src --assets assets --out-dir reports/smoke
+      - name: Plugins lifecycle with CI=true in the app environment (known-defect registry)
+        if: always() && steps.artifact.outcome == 'success' && (github.event_name != 'workflow_dispatch' || inputs.lifecycle)
+        timeout-minutes: 15
+        run: node ci-src/ci/scripts/desktop-smoke.mjs --phase ci-env --app "$RUNNER_TEMP/app/DeepSeek Harness Audio (Local Build).app" --tag "$TAG" --tag-src tag-src --assets assets --out-dir reports/smoke
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
@@ -243,7 +247,7 @@ jobs:
           DESKTOP_RESULT: ${{ needs.desktop.result }}
           REQUIRED_SOURCES: verify-release-sources,verify-patch-stack,negative-controls-sources
           REQUIRED_DESKTOP: >-
-            verify-desktop-artifact,negative-controls-artifact,desktop-smoke-launch${{ (github.event_name != 'workflow_dispatch' || inputs.lifecycle) && ',desktop-smoke-lifecycle' || '' }}
+            verify-desktop-artifact,negative-controls-artifact,desktop-smoke-launch${{ (github.event_name != 'workflow_dispatch' || inputs.lifecycle) && ',desktop-smoke-lifecycle,desktop-smoke-ci-env' || '' }}
         run: |
           set -euo pipefail
           if [ "$DESKTOP_RESULT" = skipped ]; then

@@ -21,6 +21,7 @@
 | `verify-desktop-artifact` | macos-26 | `release-artifact`, `packaged-app-static` | See [App checks](#app-checks). |
 | `negative-controls-artifact` | macos-26 | `negative-control` | The dmg seed checked against a PLUGINS.json with a wrong hash must fail. |
 | `desktop-smoke-launch` | macos-26 | `packaged-app-hosted-launch` | See [Launch smoke](#launch-smoke). |
+| `desktop-smoke-ci-env` | macos-26 | `packaged-app-hosted-ui` | The same Install from File + Remove, but with `CI=true` in the app environment. The expected result per build comes from `ci/expected.json` `knownDefects`, bound to the tag's MANIFEST patch hash. A reproduced known defect is reported as `known-fail`: visible in the summary and `evidence.json`, but it does not fail the run. The same failure on a build that should carry the fix is a `fail`. |
 | `desktop-smoke-lifecycle` | macos-26 | `packaged-app-hosted-ui` | See [Plugins window lifecycle](#plugins-window-lifecycle). |
 
 ### Source checks

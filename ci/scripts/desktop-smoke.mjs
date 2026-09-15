@@ -6,6 +6,9 @@
 //                      offline seed install, window boot graph, the client bundles the app serves == released
 //                      lib/client.js bytes, host routes of the bundled plugins answer with the released versions and
 //                      product defaults, installed package files == release tarballs, clean quit, relaunch.
+//   --phase ci-env     like lifecycle, but the app environment contains CI=true: Install from File + Remove of a local
+//                      package. The expected outcome per build comes from ci/expected.json knownDefects (bound to the
+//                      tag's MANIFEST.txt patch hash), so a known defect stays visible without hiding a regression.
 //   --phase lifecycle  Playwright (experimental Electron support) drives the real Plugins window:
 //                      list, Install from File (only the native OS open-panel is stubbed in the main process),
 //                      rejected bad packages, Remove, bundled Disable/Enable, main window boot graph follows.
@@ -49,6 +52,7 @@ process.on('uncaughtException', async (error) => { report.add('smoke.uncaught', 
 try {
   if (args.phase === 'launch') await launchPhase()
   else if (args.phase === 'lifecycle') await lifecyclePhase()
+  else if (args.phase === 'ci-env') await ciEnvPhase()
   else throw new Error(`unknown phase ${args.phase}`)
 } catch (error) {
   report.add(`${args.phase}.aborted`, 'fail', args.phase === 'launch' ? L : U, String(error?.message ?? error).slice(0, 1500), { last: error?.last, stack: String(error?.stack ?? '').slice(0, 2000) })
@@ -396,6 +400,62 @@ async function lifecyclePhase() {
   const closeStarted = Date.now()
   await Promise.race([app.close(), sleep(60_000).then(() => { throw new Error('app.close() did not finish in 60 s') })])
   report.add('lifecycle.quit', 'pass', U, `app closed in ${Date.now() - closeStarted} ms`)
+}
+
+async function ciEnvPhase() {
+  const { _electron } = await import('playwright-core')
+  const instance = newInstance('ci-env')
+  instance.env.CI = 'true'
+  report.meta.appEnvironmentKeys = Object.keys(instance.env).sort()
+  const defect = expected.knownDefects.find(d => d.id === 'remove-local-ci-env')
+  const manifest = readFileSync(join(args['tag-src'], 'releases', args.tag, 'MANIFEST.txt'), 'utf8')
+  const patchSha = manifest.split('\n').map(l => /^([0-9a-f]{64})\s+(.+)$/.exec(l.trim())).find(m => m && m[2] === defect.affectedWhen.manifestEntry)?.[1] ?? null
+  const defectExpected = patchSha !== null && defect.affectedWhen.sha256.includes(patchSha)
+  report.meta.knownDefect = { id: defect.id, patchSha, defectExpected, fixedBy: defect.fixedBy, firstSeen: defect.firstSeen }
+  note(`ci-env: patch 0003 ${patchSha} → defect expected: ${defectExpected}`)
+
+  const app = await _electron.launch({ executablePath: executable, args: [`--user-data-dir=${instance.userData}`], env: instance.env, timeout: 420_000 })
+  cleanups.push(async () => { try { app.process().kill('SIGKILL') } catch { /* gone */ } })
+  app.process().stdout?.pipe(createWriteStream(join(outDir, 'ci-env-stdout.log')))
+  app.process().stderr?.pipe(createWriteStream(join(outDir, 'ci-env-stderr.log')))
+  const main = await waitUntil('main window', async () => {
+    const page = app.windows().find(w => !w.isClosed() && w.url().startsWith('dsh-app://app/'))
+    return page && (await page.evaluate(() => Array.isArray(window.__DSH_BOOT__?.entries) && window.__DSH_BOOT__.entries.length > 0).catch(() => false)) ? page : undefined
+  }, { timeoutMs: 420_000, intervalMs: 1000 })
+  report.add('ci-env.boot', 'pass', U, `app with CI=true booted after ${main.ms} ms`)
+  await app.evaluate(({ Menu }) => { for (const top of Menu.getApplicationMenu()?.items ?? []) for (const item of top.submenu?.items ?? []) if (item.accelerator === 'CmdOrCtrl+,') { item.click(); return } })
+  const pm = (await waitUntil('plugin manager window', async () => app.windows().find(w => w.url().includes('plugin-manager.html')), { timeoutMs: 30_000, intervalMs: 500 })).value
+  const idle = () => pm.waitForFunction(() => !document.querySelector('#install-file')?.disabled && document.querySelectorAll('#plugins li').length > 0, null, { timeout: 420_000 })
+  const busyThenIdle = async () => { await pm.waitForFunction(() => document.querySelector('#install-file')?.disabled === true, null, { timeout: 5_000 }).catch(() => undefined); await idle() }
+  await idle()
+  const list = () => pm.evaluate(() => window.dshDesktop.plugins.list())
+  const probe = makeProbePackages().good
+  await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }) }, probe.path)
+  await pm.click('#install-file')
+  await busyThenIdle()
+  const installStatus = await pm.textContent('#status')
+  const installed = (await list()).find(p => p.name === probe.name)
+  report.expect('ci-env.install-from-file', installed?.source === 'local', U, `Install from File with CI=true: ${probe.name} source=${installed?.source} (status "${installStatus}")`)
+  if (installed?.source !== 'local') return
+
+  const row = pm.locator('#plugins li', { has: pm.locator('.package-name', { hasText: /^dsh-ci-probe-plugin$/ }) })
+  const started = Date.now()
+  await row.locator('button').last().click()
+  await busyThenIdle()
+  const status = (await pm.textContent('#status')) ?? ''
+  const after = await list()
+  await pm.screenshot({ path: join(outDir, 'ci-env-after-remove.png') })
+  const removed = !after.some(p => p.name === probe.name)
+  const lockfileDefect = /ERR_PNPM_OUTDATED_LOCKFILE|frozen-lockfile/.test(status)
+  const detail = { status: status.slice(0, 1500), ms: Date.now() - started, removed, lockfileDefect, patchSha, defectExpected, fixedBy: defect.fixedBy, firstSeen: defect.firstSeen }
+  if (defectExpected) {
+    if (!removed && lockfileDefect) report.add(defect.check, 'known-fail', U, `KNOWN DEFECT reproduced on this build (patch 0003 ${patchSha.slice(0, 12)}…): ${defect.summary}. Fixed by ${defect.fixedBy}.`, detail)
+    else if (removed) report.add(defect.check, 'warn', U, `known defect NOT reproduced although this build carries patch 0003 ${patchSha.slice(0, 12)}… — check the registry`, detail)
+    else report.add(defect.check, 'fail', U, 'Remove failed with CI=true for a different reason than the known defect', detail)
+  } else {
+    report.expect(defect.check, removed, U, removed ? `Remove of a local plugin works with CI=true (patch 0003 ${patchSha?.slice(0, 12)}…)` : `Remove failed with CI=true on a build that should carry the fix (patch 0003 ${patchSha?.slice(0, 12) ?? 'unknown'}…)`, detail)
+  }
+  await Promise.race([app.close(), sleep(60_000)])
 }
 
 function makeProbePackages() {

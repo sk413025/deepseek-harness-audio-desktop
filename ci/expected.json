@@ -27,6 +27,16 @@
       { "value": "192.168.1.20", "reason": "placeholder in release-kit / model-library Settings field hint (\"e.g. http://192.168.1.20:8000/v1\")" }
     ]
   },
+  "knownDefects": [
+    {
+      "id": "remove-local-ci-env",
+      "check": "ci-env.remove-local",
+      "summary": "Desktop Remove of a locally installed plugin fails with ERR_PNPM_OUTDATED_LOCKFILE when the app environment has CI=true (pnpm defaults to --frozen-lockfile)",
+      "firstSeen": "https://github.com/sk413025/deepseek-harness-audio-desktop/actions/runs/34927273171",
+      "affectedWhen": { "manifestEntry": "desktop-local-build/patches/0003-desktop-bundled-and-local-plugin-lifecycle.patch", "sha256": ["e2451d1666ace869c87b4ae731b46bf83dc9fcd9ca61cd1593c12898411a3e14"] },
+      "fixedBy": "patch 0003 sha256 4b658ecc4219274e904f2cf2c23460931fec994c6b02a65f91753ac144cad16e (commit 37072b3, first release audio.2-pre16)"
+    }
+  ],
   "hostedSmoke": {
     "clientPlugins": ["dsh-voice-capture", "dsh-audio-model-library", "dsh-audio-release-kit"],
     "hostRoutes": [
