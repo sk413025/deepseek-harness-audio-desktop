@@ -286,7 +286,14 @@ async function main() {
     await shot('07-a2-preview-while-down')
     const upstreamBeforeSend = mockRequests().length - beforeA2
     await page.locator('[data-testid=dsh-voice-capture-send]').first().click().catch(() => undefined)
-    const explicit = await waitUntil('explicit failure for the recording turn', async () => page.evaluate((before) => ((document.querySelector('main')?.innerText ?? '').match(/cannot reach/gi) ?? []).length > before, errorsBefore), { timeoutMs: 45_000, intervalMs: 300 }).then(() => true).catch(() => false)
+    // The conversation list is virtualised (earlier turns leave the DOM), so judge by order: an explicit "cannot reach"
+    // failure must follow the recording message itself.
+    const explicit = await waitUntil('explicit failure after the recording message', async () => page.evaluate(() => {
+      const text = document.querySelector('main')?.innerText ?? ''
+      const message = text.lastIndexOf('recording-')
+      return message >= 0 && text.indexOf('cannot reach', message) > message
+    }), { timeoutMs: 45_000, intervalMs: 300 }).then(() => true).catch(() => false)
+    void errorsBefore
     await shot('08-a2-send-while-down')
     const failed = invocations().slice(invBeforeA2).find(record => record.ok === false)
     const audio = failed?.inputAudio?.[0] ?? null

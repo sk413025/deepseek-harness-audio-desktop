@@ -36,7 +36,7 @@ OUT="${OUT:A}"
 (cd "$R" && grep -v 'minicpmo_system_ref_audio.wav' FIXTURE_CAPTURE_HARNESS_1.0.0.SHA256SUMS | shasum -a 256 -c - > "$OUT/harness-verify.txt") || { echo "harness checksum mismatch" >&2; exit 4; }
 [[ "$(shasum -a 256 "$R/FIXTURE_CAPTURE_HARNESS_1.0.0.SHA256SUMS" | cut -d' ' -f1)" = 8a6b428b13a9a1fd401eeb6f8e4f2bbd673fddaa0f3af03105250da60dd03a3e ]] || { echo "owner hash list changed" >&2; exit 4; }
 (cd "$FXD" && shasum -a 256 -c SHA256SUMS > "$OUT/fixtures-verify.txt") || { echo "fixture checksum mismatch" >&2; exit 4; }
-"$PYTHON" "$R/parallel-work/microphone-ui/fixtures/test-analyze-capture.py" > "$OUT/analyzer-controls.log" 2>&1 || { tail -20 "$OUT/analyzer-controls.log" >&2; echo "analyzer controls failed" >&2; exit 4; }
+"$PYTHON" "$R/parallel-work/microphone-ui/fixtures/test-analyze-capture.py" "$FXD" > "$OUT/analyzer-controls.log" 2>&1 || { tail -20 "$OUT/analyzer-controls.log" >&2; echo "analyzer controls failed" >&2; exit 4; }
 SILENCE=$("$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1]))["roles"]["silence"])' "$FXD/manifest.json")
 REF="$R/parallel-work/microphone-ui/fixtures/ci-jfk/A.wav"   # public-domain voice prompt for the mock (it only checks a WAV data URL)
 freeport() { node -e 'const s=require("net").createServer();s.listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})' }
