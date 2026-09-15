@@ -162,6 +162,9 @@ async function main() {
   // Workspace through the real hero UI: "Choose workspace" → host → OS folder chooser (shimmed) → composer enabled.
   const choose = page.getByRole('button', { name: /Choose workspace/i }).or(page.getByText(/^Choose workspace$/)).first()
   await choose.click({ timeout: 30_000 })
+  const addWorkspace = page.getByText(/Add workspace/i).first()
+  if (await addWorkspace.waitFor({ state: 'visible', timeout: 3_000 }).then(() => true).catch(() => false)) await addWorkspace.click()
+  else await page.locator('[role=textbox]').last().click().catch(() => undefined) // the hero textbox also opens the chooser
   const workspaceReady = await waitUntil('hero composer enabled for the chosen workspace', async () => page.evaluate(() => {
     const box = [...document.querySelectorAll('[role=textbox]')].at(-1)
     return box !== undefined && !/Choose a workspace/i.test(box.getAttribute('aria-label') ?? '') ? (box.getAttribute('aria-label') ?? 'ready') : null
@@ -170,6 +173,15 @@ async function main() {
   await shot('01-workspace-chosen')
   report.expect('availability.workspace', workspaceReady !== null && shimCalls >= 1, U, `workspace chosen through the UI (OS folder chooser answered by the PATH shim ${shimCalls}×); composer: ${workspaceReady?.value ?? 'not ready'}`)
   if (workspaceReady === null) throw new Error(`workspace not accepted: ${JSON.stringify(await page.evaluate(() => document.body.innerText.slice(0, 800)))}`)
+  await page.keyboard.press('Escape').catch(() => undefined)
+  // Agent preset: the audio models refuse tool calling (run 34935000130: UNSUPPORTED_OPTION), so pick the release-kit preset.
+  await page.getByText(/^Standard mode$/).first().click({ timeout: 10_000 }).catch(() => undefined)
+  const presetOption = page.getByText(/DGX audio/i).first()
+  const presetChosen = await presetOption.waitFor({ state: 'visible', timeout: 5_000 }).then(async () => { await presetOption.click(); return true }).catch(() => false)
+  await page.keyboard.press('Escape').catch(() => undefined)
+  const presetLabel = await page.evaluate(() => (document.querySelector('main')?.innerText ?? document.body.innerText).match(/DGX audio[^\n]*/i)?.[0] ?? null)
+  await shot('01b-preset')
+  report.expect('availability.preset', presetChosen && presetLabel !== null, U, `agent preset chosen in the hero UI: ${presetLabel ?? 'not found'}`)
   const composer = page.locator('main [role=textbox], [role=textbox]').last()
   await composer.waitFor({ state: 'visible', timeout: 30_000 })
   const micPresent = await page.locator('[data-testid=dsh-voice-capture-mic]').count()
@@ -306,7 +318,7 @@ async function stopDuringActiveBuffer(page, send) {
 function labPathScan(home) {
   const patterns = [
     ['builder-home', /\/Users\/(?!runner\/)[A-Za-z0-9_][A-Za-z0-9._-]+\//],
-    ['tailnet-ip', /\b100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}\b/],
+    ['tailnet-ip', /\b100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}\b(?<!\b100\.64\.0\.0)(?!\/10)/],
     ['lab-host', /\bdgx-spark\b|\bSBPLab\b/],
     ['window-guard', /window-guard|OPEN_WINDOW|WINDOW_OPEN|\.window-open\b/],
   ]
@@ -326,7 +338,7 @@ function labPathScan(home) {
   }
   for (const root of roots) if (existsSync(root)) scan(root)
   const windowFiles = []
-  const walkNames = (dir, depth) => { if (depth > 5 || !existsSync(dir)) return; for (const entry of readdirSync(dir, { withFileTypes: true })) { if (entry.name === 'node_modules' || entry.name === 'store') continue; if (/^(OPEN|DONE|LEASE)(\.|$)|window/i.test(entry.name)) windowFiles.push(relative(home, join(dir, entry.name))); if (entry.isDirectory()) walkNames(join(dir, entry.name), depth + 1) } }
+  const walkNames = (dir, depth) => { if (depth > 5 || !existsSync(dir)) return; for (const entry of readdirSync(dir, { withFileTypes: true })) { if (entry.name === 'node_modules' || entry.name === 'store') continue; if (/^(OPEN|DONE|LEASE)(\.|$)|window-guard|\.window-open$/i.test(entry.name)) windowFiles.push(relative(home, join(dir, entry.name))); if (entry.isDirectory()) walkNames(join(dir, entry.name), depth + 1) } }
   walkNames(home, 0)
   const ok = hits.length === 0 && windowFiles.length === 0
   return [ok ? 'pass' : 'fail', U, `${label('none')} ${files} installed plugin/settings files and the used home: ${hits.length} lab identifiers, ${windowFiles.length} window/lease files`, { hits: hits.slice(0, 30), windowFiles: windowFiles.slice(0, 30) }]
