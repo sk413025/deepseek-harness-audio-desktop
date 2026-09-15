@@ -3,6 +3,7 @@
 // job summary that separates what this hosted run verified from what it cannot verify.
 // Exit 1 when any required report is missing or failed — a missing report is never a pass.
 // Usage: summarize.mjs --reports <dir> --target <target.json> --required <name,name,...> --out <evidence.json> [--summary <file>]
+//          [--scope full|sources-only]  (sources-only: the macOS job did not run, so nothing about the app is claimed)
 import { appendFileSync, existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { parseArgs, required } from '../lib/report.mjs'
@@ -31,16 +32,20 @@ const rows = requiredNames.map(name => {
   const found = byName.get(name)
   return { report: name, verdict: found ? found.document.verdict : 'missing', counts: found?.document.counts ?? {}, path: found?.path ?? null }
 })
-const optional = reports.filter(r => !requiredNames.includes(r.document.report)).map(r => ({ report: r.document.report, verdict: r.document.verdict, counts: r.document.counts, path: r.path }))
+const optional = reports.filter(r => !requiredNames.includes(r.document.report)).map(r => ({ report: r.document.report, verdict: r.document.verdict, counts: r.document.counts ?? {}, path: r.path }))
 const ok = rows.every(r => r.verdict === 'pass')
+const scope = args.scope === 'sources-only' ? 'sources-only' : 'full'
 
 const pick = (name, key) => byName.get(name)?.document.meta?.[key]
 const evidence = {
   schemaVersion: 1,
-  verdict: ok ? 'pass' : 'fail',
-  meaning: ok
-    ? 'The published release assets, their tag tree and the packaged app passed the hosted checks listed below. This is NOT release acceptance: real DGX, real microphone, speaker/audio quality, Gatekeeper first open, notarization and a second physical Mac are outside this run.'
-    : 'At least one required check failed or did not report. Do not treat this release as CI-verified.',
+  verdict: ok ? (scope === 'full' ? 'pass' : 'pass-sources-only') : 'fail',
+  scope,
+  meaning: !ok
+    ? 'At least one required check failed or did not report. Do not treat this release as CI-verified.'
+    : scope === 'full'
+      ? 'The published release assets, their tag tree and the packaged app passed the hosted checks listed below. This is NOT release acceptance: real DGX, real microphone, speaker/audio quality, Gatekeeper first open, notarization and a second physical Mac are outside this run.'
+      : 'Only the release assets and their tag tree were checked (ubuntu). The macOS desktop job did not run, so nothing about the dmg or the packaged app is verified by this run.',
   binding: {
     ...target,
     dmg: pick('verify-desktop-artifact', 'dmg') ?? null,
@@ -65,7 +70,7 @@ const evidence = {
 writeFileSync(args.out, JSON.stringify(evidence, null, 2) + '\n')
 
 const lines = []
-lines.push(`## Release artifact CI: ${ok ? 'PASS (hosted checks only)' : 'FAIL'}`)
+lines.push(`## Release artifact CI: ${!ok ? 'FAIL' : scope === 'full' ? 'PASS (hosted checks only)' : 'PASS — sources only, macOS desktop job NOT run'}`)
 lines.push('')
 lines.push(`- **Tag:** \`${target.tag}\` → commit \`${target.tagCommit}\`; release id ${target.releaseId} (prerelease=${target.prerelease})`)
 lines.push(`- **CI scripts commit:** \`${target.ciCommit}\` (${target.event}); run ${target.runUrl}`)

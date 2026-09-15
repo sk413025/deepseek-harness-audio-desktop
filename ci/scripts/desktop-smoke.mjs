@@ -63,9 +63,14 @@ function newInstance(name) {
   mkdirSync(home, { recursive: true })
   mkdirSync(userData, { recursive: true })
   const diagnostic = join(outDir, `${name}-startup-diagnostic.txt`)
-  const env = { ...process.env, DSH_HOME: home, DSH_DESKTOP_DIAGNOSTIC_FILE: diagnostic, DSH_TELEMETRY_DISABLED: '1', LANG: 'en_US.UTF-8' }
-  delete env.NODE_OPTIONS
-  delete env.ELECTRON_RUN_AS_NODE
+  // A recipient starts the app from Finder (launchd environment), not from a CI shell. Runner variables leak into the
+  // bundled pnpm otherwise: run 34927273171 showed CI=true switching pnpm to --frozen-lockfile (lifecycle.remove-local).
+  const env = {}
+  for (const key of ['HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', '__CF_USER_TEXT_ENCODING', 'XPC_FLAGS', 'XPC_SERVICE_NAME']) {
+    if (process.env[key] !== undefined) env[key] = process.env[key]
+  }
+  Object.assign(env, { PATH: '/usr/bin:/bin:/usr/sbin:/sbin', LANG: 'en_US.UTF-8', DSH_HOME: home, DSH_DESKTOP_DIAGNOSTIC_FILE: diagnostic, DSH_TELEMETRY_DISABLED: '1' })
+  report.meta.appEnvironmentKeys = Object.keys(env).sort()
   return { name, home, userData, diagnostic, env }
 }
 
@@ -141,11 +146,17 @@ async function checkRunningApp(instance, port, boot) {
       const served = await page.evaluate(`(async () => { const r = await fetch(${JSON.stringify(entry.url)}); const b = new Uint8Array(await r.arrayBuffer()); let s = ''; for (let i = 0; i < b.length; i += 32768) s += String.fromCharCode(...b.subarray(i, i + 32768)); return { status: r.status, type: r.headers.get('content-type'), base64: btoa(s) } })()`)
       const bytes = Buffer.from(served.base64, 'base64')
       const released = tarballs.get(name)?.files.get('lib/client.js')
+      // The host rewrites the trailing `//# sourceMappingURL=` comment to its own versioned URL (run 34927273171:
+      // served bundles were 55/61/59 B longer). Compare the code with that single comment line removed on both sides,
+      // and record exactly where the bytes differ so any other rewrite stays visible.
+      const stripMap = (buffer) => buffer.toString('utf8').replace(/\n?\/\/# sourceMappingURL=[^\n]*\n?$/, '')
       const exact = released !== undefined && sha256(bytes) === sha256(released)
-      const contained = !exact && released !== undefined && bytes.includes(released)
-      report.add(`app.client.${name}`, exact || contained ? 'pass' : 'fail', L,
-        exact ? `served ${entry.url} == released lib/client.js (${released.length} B, sha ${sha256(released).slice(0, 12)}…)` : contained ? 'served bundle wraps the released lib/client.js bytes unchanged' : 'served client bundle differs from the released lib/client.js',
-        { status: served.status, contentType: served.type, servedBytes: bytes.length, servedSha256: sha256(bytes), releasedSha256: released ? sha256(released) : null })
+      const codeEqual = released !== undefined && stripMap(bytes) === stripMap(released)
+      const firstDiff = released === undefined ? -1 : (() => { const n = Math.min(bytes.length, released.length); for (let i = 0; i < n; i++) if (bytes[i] !== released[i]) return i; return n })()
+      report.add(`app.client.${name}`, exact || codeEqual ? 'pass' : 'fail', L,
+        exact ? `served ${entry.url} == released lib/client.js (${released.length} B)` : codeEqual ? `served bundle == released lib/client.js except the host-rewritten sourceMappingURL comment (code sha ${sha256(stripMap(released)).slice(0, 12)}…)` : 'served client bundle code differs from the released lib/client.js',
+        { status: served.status, contentType: served.type, servedBytes: bytes.length, releasedBytes: released?.length ?? null, servedSha256: sha256(bytes), releasedSha256: released ? sha256(released) : null,
+          firstDiffOffset: firstDiff, servedTail: bytes.subarray(Math.max(0, firstDiff - 40)).toString('utf8').slice(0, 200), releasedTail: released ? released.subarray(Math.max(0, firstDiff - 40)).toString('utf8').slice(0, 200) : null })
     }
     // Host routes of bundled plugins.
     for (const route of expected.hostedSmoke.hostRoutes) {
@@ -212,12 +223,62 @@ async function lifecyclePhase() {
   proc.stderr?.pipe(createWriteStream(join(outDir, 'lifecycle-stderr.log')))
   report.add('lifecycle.launch', 'pass', U, `playwright attached to the packaged app (pid ${proc.pid})`)
 
-  const main = await waitUntil('main window', async () => app.windows().find(w => w.url().startsWith('dsh-app://app/')), { timeoutMs: 420_000, intervalMs: 1000 })
-  const mainWindow = main.value
-  await mainWindow.waitForFunction(() => Array.isArray(window.__DSH_BOOT__?.entries) && window.__DSH_BOOT__.entries.length > 0, null, { timeout: 240_000 })
-  const bootIds = async () => mainWindow.evaluate(() => window.__DSH_BOOT__.entries.map(e => e.id))
-  const initialIds = await bootIds()
+  // The main window's page can be replaced while the Desktop backend restarts (run 34927273171: Page.reload on a stale
+  // handle after Enable). Always look the window up again and wait for its boot graph.
+  const findMain = () => app.windows().find(w => !w.isClosed() && w.url().startsWith('dsh-app://app/'))
+  const bootedMain = async (reload) => {
+    if (reload) { try { await findMain()?.reload({ timeout: 60_000 }) } catch (error) { note(`main window reload: ${error.message.split('\n')[0]}; looking the window up again`) } }
+    const found = await waitUntil('booted main window', async () => {
+      const page = findMain()
+      if (page === undefined) return undefined
+      return (await page.evaluate(() => Array.isArray(window.__DSH_BOOT__?.entries) && window.__DSH_BOOT__.entries.length > 0).catch(() => false)) ? page : undefined
+    }, { timeoutMs: 300_000, intervalMs: 1000 })
+    return found
+  }
+  const bootIds = async (page) => page.evaluate(() => window.__DSH_BOOT__.entries.map(e => e.id))
+  const main = await bootedMain(false)
+  const initialIds = await bootIds(main.value)
   report.expect('lifecycle.boot', expected.hostedSmoke.clientPlugins.every(id => initialIds.includes(id)), U, `main window booted after ${main.ms} ms with every bundled client plugin`, { ids: initialIds })
+
+  // Basic UI tour of the main window (exploratory: a missing element is a warning until selectors are confirmed).
+  await (async () => {
+    const page = main.value
+    const shot = name => page.screenshot({ path: join(outDir, `ui-${name}.png`) }).catch(() => undefined)
+    const clickText = async (pattern) => {
+      const target = page.getByRole('button', { name: pattern }).or(page.getByText(pattern, { exact: false })).first()
+      if (await target.count() === 0) return false
+      await target.click({ timeout: 10_000 })
+      return true
+    }
+    try {
+      await shot('start')
+      const notice = await page.getByText('Internal Testing Notice').count()
+      if (notice > 0) {
+        const dismissed = await clickText(/^Continue$/)
+        await page.getByText('Internal Testing Notice').waitFor({ state: 'hidden', timeout: 10_000 }).catch(() => undefined)
+        report.add('ui.first-run-notice', dismissed && await page.getByText('Internal Testing Notice').count() === 0 ? 'pass' : 'warn', U, 'first-run "Internal Testing Notice" dismissed with Continue')
+      } else report.add('ui.first-run-notice', 'info', U, 'no first-run notice shown')
+      await shot('after-notice')
+      const composer = { audioModeChip: await page.locator('[data-testid=dsh-audio-mode-chip]').count(), mic: await page.locator('[data-testid=dsh-voice-capture-mic]').count() }
+      report.add('ui.start-composer', composer.audioModeChip > 0 ? 'pass' : 'warn', U, `start page composer: release-kit audio mode chip ${composer.audioModeChip}, voice-capture mic ${composer.mic}`, composer)
+      if (await clickText(/^Audio models$/)) {
+        await sleep(2000)
+        await shot('audio-models')
+        report.add('ui.audio-models', 'pass', U, 'sidebar "Audio models" (dsh-audio-model-library) opened', { text: (await page.locator('main').first().innerText().catch(() => '')).slice(0, 600) })
+      } else report.add('ui.audio-models', 'warn', U, 'sidebar "Audio models" entry not found')
+      if (await clickText(/^Settings$/)) {
+        await sleep(2000)
+        await clickText(/^Plugins$/).catch(() => false)
+        await sleep(1500)
+        const card = await page.locator('[data-testid=dsh-audio-servers-card]').count()
+        await shot('settings')
+        report.add('ui.settings-audio-servers', card > 0 ? 'pass' : 'warn', U, `Settings: release-kit "Audio servers" card rendered ${card}`, { empty: await page.locator('[data-testid=dsh-audio-servers-empty]').count() })
+      } else report.add('ui.settings-audio-servers', 'warn', U, 'sidebar "Settings" entry not found')
+    } catch (error) {
+      report.add('ui.tour', 'warn', U, `UI tour stopped: ${String(error?.message ?? error).split('\n')[0]}`)
+      await shot('tour-error')
+    }
+  })()
 
   // Open Plugins… through the application menu item (what the menu bar / Cmd+, triggers).
   const clicked = await app.evaluate(({ Menu }) => {
@@ -287,27 +348,36 @@ async function lifecyclePhase() {
     await idle()
     return { label, ms: Date.now() - started, status: await pm.textContent('#status') }
   }
-  const removed = await clickRowButton(probes.good.name)
-  const afterRemove = await list()
-  report.expect('lifecycle.remove-local', !afterRemove.some(p => p.name === probes.good.name) && plugins.every(p => afterRemove.some(i => i.name === p.name)), U, `"${removed.label}" removed ${probes.good.name} in ${removed.ms} ms (status "${removed.status}")`, removed)
+  const stage = async (id, fn) => {
+    try { await fn() } catch (error) { report.add(id, 'fail', U, `stage threw: ${String(error?.message ?? error).split('\n')[0]}`, { stack: String(error?.stack ?? '').slice(0, 1500) }) }
+  }
+  await stage('lifecycle.remove-local', async () => {
+    const removed = await clickRowButton(probes.good.name)
+    const afterRemove = await list()
+    const copiedAfter = existsSync(localFile) ? readdirSync(localFile).filter(f => f.startsWith(probes.good.name)) : []
+    report.expect('lifecycle.remove-local', !afterRemove.some(p => p.name === probes.good.name) && plugins.every(p => afterRemove.some(i => i.name === p.name)), U, `"${removed.label}" removed ${probes.good.name} in ${removed.ms} ms (status "${removed.status}")`, { ...removed, copiedAfter })
+    await pm.screenshot({ path: join(outDir, 'plugins-window-removed.png') })
+  })
 
   const target = 'dsh-audio-release-kit'
-  const disabled = await clickRowButton(target)
-  const afterDisable = await list()
-  await pm.screenshot({ path: join(outDir, 'plugins-window-bundled-disabled.png') })
-  await mainWindow.reload()
-  await mainWindow.waitForFunction(() => Array.isArray(window.__DSH_BOOT__?.entries) && window.__DSH_BOOT__.entries.length > 0, null, { timeout: 240_000 })
-  const idsDisabled = await bootIds()
-  report.expect('lifecycle.disable-bundled', afterDisable.find(p => p.name === target)?.state === 'disabled' && !idsDisabled.includes(target), U, `"${disabled.label}" disabled bundled ${target}; main window boot graph no longer loads it`, { ...disabled, state: afterDisable.find(p => p.name === target), idsDisabled })
-  const enabled = await clickRowButton(target)
-  const afterEnable = await list()
-  await mainWindow.reload()
-  await mainWindow.waitForFunction(() => Array.isArray(window.__DSH_BOOT__?.entries) && window.__DSH_BOOT__.entries.length > 0, null, { timeout: 240_000 })
-  const idsEnabled = await bootIds()
-  report.expect('lifecycle.enable-bundled', afterEnable.find(p => p.name === target)?.state !== 'disabled' && idsEnabled.includes(target), U, `"${enabled.label}" re-enabled ${target}; main window boot graph loads it again`, { ...enabled, state: afterEnable.find(p => p.name === target), idsEnabled })
-  await pm.screenshot({ path: join(outDir, 'plugins-window-final.png') })
-  await mainWindow.screenshot({ path: join(outDir, 'lifecycle-main-window-final.png') })
-  await osScreenshot('lifecycle-os-screen')
+  await stage('lifecycle.disable-bundled', async () => {
+    const disabled = await clickRowButton(target)
+    const afterDisable = await list()
+    await pm.screenshot({ path: join(outDir, 'plugins-window-bundled-disabled.png') })
+    const idsDisabled = await bootIds((await bootedMain(true)).value)
+    report.expect('lifecycle.disable-bundled', afterDisable.find(p => p.name === target)?.state === 'disabled' && !idsDisabled.includes(target), U, `"${disabled.label}" disabled bundled ${target}; main window boot graph no longer loads it`, { ...disabled, state: afterDisable.find(p => p.name === target), idsDisabled })
+  })
+  await stage('lifecycle.enable-bundled', async () => {
+    const enabled = await clickRowButton(target)
+    const afterEnable = await list()
+    const idsEnabled = await bootIds((await bootedMain(true)).value)
+    report.expect('lifecycle.enable-bundled', afterEnable.find(p => p.name === target)?.state !== 'disabled' && idsEnabled.includes(target), U, `"${enabled.label}" re-enabled ${target}; main window boot graph loads it again`, { ...enabled, state: afterEnable.find(p => p.name === target), idsEnabled })
+    await pm.screenshot({ path: join(outDir, 'plugins-window-final.png') })
+  })
+  await stage('lifecycle.final-screens', async () => {
+    await findMain()?.screenshot({ path: join(outDir, 'lifecycle-main-window-final.png') })
+    await osScreenshot('lifecycle-os-screen')
+  })
 
   const closeStarted = Date.now()
   await Promise.race([app.close(), sleep(60_000).then(() => { throw new Error('app.close() did not finish in 60 s') })])

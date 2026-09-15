@@ -6,6 +6,9 @@
 # What it does NOT mean: release acceptance. Real DGX servers, a physical microphone, speaker/audio quality,
 # Gatekeeper first open, notarization and a second physical Mac are outside GitHub-hosted runners (ci/README.md).
 #
+# Quota: the macOS job (billed at the macOS rate) runs only for release: published, workflow_dispatch, and pull requests
+# carrying the label `macos-ci`. Other PR / push runs check sources on ubuntu and say so in the summary.
+#
 # Security: read-only GITHUB_TOKEN, no secrets, no self-hosted runners, pull_request (never pull_request_target),
 # third-party code is not executed except the pinned playwright-core / @electron/fuses from ci/package-lock.json.
 name: Release artifact verification
@@ -24,6 +27,7 @@ on:
         type: boolean
         default: true
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - .github/workflows/release-artifact-verify.yml
       - ci/**
@@ -148,6 +152,9 @@ jobs:
   desktop:
     name: Packaged app on macOS arm64 (hosted)
     needs: target
+    if: >-
+      github.event_name == 'release' || github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'macos-ci'))
     runs-on: macos-26
     timeout-minutes: 45
     env:
@@ -233,11 +240,18 @@ jobs:
           path: all-reports
       - name: Aggregate (a missing or failed required report fails the run)
         env:
-          REQUIRED: >-
-            verify-release-sources,verify-patch-stack,negative-controls-sources,verify-desktop-artifact,negative-controls-artifact,desktop-smoke-launch${{ (github.event_name != 'workflow_dispatch' || inputs.lifecycle) && ',desktop-smoke-lifecycle' || '' }}
+          DESKTOP_RESULT: ${{ needs.desktop.result }}
+          REQUIRED_SOURCES: verify-release-sources,verify-patch-stack,negative-controls-sources
+          REQUIRED_DESKTOP: >-
+            verify-desktop-artifact,negative-controls-artifact,desktop-smoke-launch${{ (github.event_name != 'workflow_dispatch' || inputs.lifecycle) && ',desktop-smoke-lifecycle' || '' }}
         run: |
           set -euo pipefail
-          node ci-src/ci/scripts/summarize.mjs --reports all-reports --target all-reports/reports-target/target.json --required "$REQUIRED" --out evidence.json --summary "$GITHUB_STEP_SUMMARY"
+          if [ "$DESKTOP_RESULT" = skipped ]; then
+            REQUIRED="$REQUIRED_SOURCES"; SCOPE=sources-only
+          else
+            REQUIRED="$REQUIRED_SOURCES,$REQUIRED_DESKTOP"; SCOPE=full
+          fi
+          node ci-src/ci/scripts/summarize.mjs --reports all-reports --target all-reports/reports-target/target.json --required "$REQUIRED" --scope "$SCOPE" --out evidence.json --summary "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
