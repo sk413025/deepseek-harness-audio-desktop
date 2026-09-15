@@ -1,0 +1,21 @@
+# Never commit: dependencies, build output, local homes, recordings, model files, credentials
+node_modules/
+.pnpm-store/
+dist/
+out/
+*.dmg
+*.tgz
+*.wav
+*.mp3
+*.m4a
+*.flac
+*.safetensors
+*.bin
+*.gguf
+.env
+.env.*
+*.pem
+*.key
+settings.yaml
+userdata/
+.DS_Store
