@@ -1,0 +1,41 @@
+# Example `dsh-dgx-audio` section for ~/.dsh/settings.yaml (Settings → Plugins → Audio servers, or "Open configuration file").
+# Replace DGX-HOST with the address your DGX administrator gives you. Nothing is contacted until you send a message.
+# No credentials are stored here; if your server needs a key, set only the NAME of an environment variable (apiKeyEnv).
+dsh-dgx-audio:
+  routes:
+    - provider: dgx-minicpm-o-4-5
+      displayName: DGX · MiniCPM-o 4.5
+      baseURL: http://DGX-HOST:18124/v1
+      # apiKeyEnv: DGX_AUDIO_API_KEY
+      models:
+        - id: minicpmo45-s2s
+          name: MiniCPM-o 4.5 · voice/mic question → text + spoken reply
+          upstreamModel: openbmb/MiniCPM-o-4_5
+          mode: chat
+          outputAudio: true
+          sendModalities: true
+          extraBody: { chat_template_kwargs: { enable_thinking: false, use_tts_template: true } }
+        - id: minicpmo45-duplex
+          name: MiniCPM-o 4.5 · Live full duplex (mic)
+          upstreamModel: openbmb/MiniCPM-o-4_5
+          mode: realtime
+          realtime:
+            path: /realtime
+            inputEncoding: pcm16
+            inputSampleRate: 16000
+            frameMs: 200
+            outputSampleRate: 24000
+            query: { duplex: "1", autostart: "0" }
+            session: { extra_body: { native_duplex: true } }
+            refAudioFile: /ABSOLUTE/PATH/TO/a-voice-prompt-you-are-allowed-to-use.wav   # the server requires a voice prompt (ref_audio)
+    - provider: dgx-mimo-audio-7b-instruct
+      displayName: DGX · MiMo-Audio-7B-Instruct (turn-based, not duplex)
+      baseURL: http://DGX-HOST:18212/v1
+      models:
+        - id: mimo-audio-s2s
+          name: MiMo-Audio-7B-Instruct · mic record → text + spoken reply
+          upstreamModel: XiaomiMiMo/MiMo-Audio-7B-Instruct
+          mode: chat
+          outputAudio: true
+          sendModalities: true
+          maxTokens: 200            # longer replies degrade to noise on the tested runtime
