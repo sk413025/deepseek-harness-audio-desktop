@@ -13,6 +13,7 @@ import { LiveError } from './live.js'
 import { attributionHeaders } from './compat.js'
 import { routeApiKey } from './config.js'
 import { validateTaskParams } from './tasks.js'
+import { appendInvocationRecord } from './records.js'
 import { optionControlsOf } from './option-controls.js'
 import { ADAPTER_MODES, REALTIME_WIRES, catalogTasksOf, catalogTasksSourceOf, ioOf, paramsListOf, taskOf, uiTaskOf } from './task-map.js'
 
@@ -48,6 +49,49 @@ export function normalizeVoiceNames(list) {
     if (typeof name === 'string' && name.length > 0 && name.length <= 4000 && !names.includes(name)) names.push(name)
   }
   return names
+}
+
+const PLAYBACK_REPORT_MAX_BYTES = 512 * 1024
+const PLAYBACK_EVENT_TYPES = new Set(['scheduled', 'started', 'position', 'underrun', 'stopped', 'ended', 'error'])
+const DAY_MS = 86_400_000
+
+/**
+ * Validate a client playback report (§K.15). Times are client epoch ms (same machine as the host).
+ * @returns {{ sessionId: string, streamId: string, client: object, events: object[] }}
+ */
+export function validatePlaybackReport(body, now = Date.now()) {
+  const bad = (message) => { throw new LiveError('BAD_REQUEST', message, 400) }
+  if (body?.v !== 1) bad('v must be 1')
+  const id = (v, name) => (typeof v === 'string' && v.length > 0 && v.length <= 200 ? v : bad(`${name} is required (string ≤ 200)`))
+  const sessionId = id(body.sessionId, 'sessionId')
+  const streamId = id(body.streamId, 'streamId')
+  if (!Array.isArray(body.events) || body.events.length === 0 || body.events.length > 4096) bad('events must be a non-empty array of at most 4096 entries')
+  const time = (v, name) => (Number.isFinite(v) && Math.abs(v - now) <= DAY_MS ? v : bad(`${name} must be an epoch-ms time within a day of the host clock`))
+  const count = (v, name) => (Number.isInteger(v) && v >= 0 && v <= 1e10 ? v : bad(`${name} must be a non-negative integer`))
+  const events = body.events.map((e, i) => {
+    if (e === null || typeof e !== 'object' || !PLAYBACK_EVENT_TYPES.has(e.type)) bad(`events[${i}].type must be one of ${[...PLAYBACK_EVENT_TYPES].join(', ')}`)
+    const out = { type: e.type, at: time(e.at, `events[${i}].at`) }
+    if (e.seq !== undefined) out.seq = count(e.seq, `events[${i}].seq`)
+    if (e.startSample !== undefined) out.startSample = count(e.startSample, `events[${i}].startSample`)
+    if (e.samples !== undefined) out.samples = count(e.samples, `events[${i}].samples`)
+    if (e.whenAt !== undefined) out.whenAt = time(e.whenAt, `events[${i}].whenAt`)
+    if (e.playedSamples !== undefined) out.playedSamples = count(e.playedSamples, `events[${i}].playedSamples`)
+    if (e.reason !== undefined) out.reason = typeof e.reason === 'string' ? e.reason.slice(0, 200) : bad(`events[${i}].reason must be a string`)
+    if (e.type === 'scheduled' && (out.seq === undefined || out.startSample === undefined || out.samples === undefined || out.whenAt === undefined)) bad(`events[${i}] scheduled needs seq, startSample, samples, whenAt`)
+    if ((e.type === 'position' || e.type === 'stopped') && out.playedSamples === undefined) bad(`events[${i}] ${e.type} needs playedSamples`)
+    return out
+  })
+  const c = body.client ?? {}
+  const num = (v) => (Number.isFinite(v) ? v : null)
+  const client = {
+    plugin: typeof c.plugin === 'string' ? c.plugin.slice(0, 100) : null,
+    contextSampleRate: num(c.contextSampleRate),
+    baseLatencyMs: num(c.baseLatencyMs),
+    outputLatencyMs: num(c.outputLatencyMs),
+    clockSource: typeof c.clockSource === 'string' ? c.clockSource.slice(0, 100) : null,
+    sentAt: Number.isFinite(c.sentAt) ? c.sentAt : null,
+  }
+  return { sessionId, streamId, client, events }
 }
 
 async function readJsonBody(request, maxBytes = 64 * 1024) {
@@ -370,6 +414,40 @@ export function createRouteHandlers(deps) {
     return json(200, { ok: true, live, inflight })
   }
 
+  /**
+   * §K.15 client playback report for one feed audio stream: the UI's actual output-clock timeline, stored beside the host
+   * arrival evidence (`record: "playback"` in invocations.jsonl). Evidence only: it changes no stream, request or playback.
+   */
+  async function playbackReport(request) {
+    const body = await readJsonBody(request, PLAYBACK_REPORT_MAX_BYTES)
+    const report = validatePlaybackReport(body)
+    const stream = deps.hub.findStream(report.sessionId, report.streamId)
+    if (stream === undefined) throw new LiveError('STREAM_UNKNOWN', `no recent audio stream ${report.streamId} in session ${report.sessionId}`, 404)
+    stream.playbackReports = (stream.playbackReports ?? 0) + 1
+    const summary = stream.summary
+    const config = deps.config()
+    await appendInvocationRecord(config, {
+      record: 'playback',
+      invocation: false,
+      time: new Date().toISOString(),
+      sessionId: report.sessionId,
+      streamId: report.streamId,
+      part: stream.playbackReports,
+      provider: stream.info.provider,
+      model: stream.info.model,
+      origin: stream.info.origin,
+      task: stream.info.task ?? null,
+      host: {
+        clock: 'host-epoch-ms', receivedAt: deps.hub.now(), streamStartedAt: stream.startedAt, firstChunkAt: stream.firstChunkAt ?? null,
+        lastChunkAt: stream.lastChunkAt ?? null, ended: stream.ended, status: summary?.status ?? null, terminalAt: summary?.terminalAt ?? null,
+        delivery: summary?.delivery ?? null, chunks: stream.chunks, totalSamples: stream.totalSamples, format: stream.format ?? null,
+      },
+      client: report.client,
+      events: report.events,
+    }, deps.log)
+    return json(200, { ok: true, recorded: config.invocationLog ? true : false, part: stream.playbackReports })
+  }
+
   async function liveClose(request) {
     const url = new URL(request.url)
     const session = deps.live.get(url.searchParams.get('liveId'))
@@ -385,6 +463,7 @@ export function createRouteHandlers(deps) {
     { path: `${ROUTE_PREFIX}/live/append`, methods: ['POST'], requestBody: 'buffered', fetch: guard(liveAppend) },
     { path: `${ROUTE_PREFIX}/live/control`, methods: ['POST'], requestBody: 'buffered', fetch: guard(liveControl) },
     { path: `${ROUTE_PREFIX}/live/close`, methods: ['POST'], requestBody: 'buffered', fetch: guard(liveClose) },
+    { path: `${ROUTE_PREFIX}/audio/playback`, methods: ['POST'], requestBody: 'buffered', fetch: guard(playbackReport) },
     { path: `${ROUTE_PREFIX}/live/text`, methods: ['POST'], requestBody: 'buffered', fetch: guard(liveText) },
     { path: `${ROUTE_PREFIX}/session-params`, methods: ['POST'], requestBody: 'buffered', fetch: guard(sessionParamsRoute) },
     { path: `${ROUTE_PREFIX}/voices`, methods: ['GET'], requestBody: 'buffered', fetch: guard(voices) },

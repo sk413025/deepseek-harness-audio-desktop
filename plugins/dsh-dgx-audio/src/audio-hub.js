@@ -19,6 +19,11 @@ export const HUB_DEFAULT_LIMITS = Object.freeze({
   maxSessions: 64,
 })
 
+/** Ended streams kept per session feed for late client playback reports. */
+const RECENT_STREAMS = 32
+/** Per-stream arrival entries kept for evidence (later chunks are counted, not listed). */
+export const MAX_ARRIVALS = 2048
+
 export class AudioHub {
   /**
    * @param {object} options
@@ -63,6 +68,17 @@ export class AudioHub {
   }
 
   /**
+   * A stream of this session that is active or ended recently (bounded), for client playback reports (§K.15).
+   * @param {string} sessionId
+   * @param {string} streamId
+   * @returns {AudioStream | undefined}
+   */
+  findStream(sessionId, streamId) {
+    const feed = this.feeds.get(sessionId)
+    return feed?.active.get(streamId) ?? feed?.recent.get(streamId)
+  }
+
+  /**
    * Subscribe to a session feed. Yields plain JSON-serializable events.
    * @param {string} sessionId
    * @param {{ after?: number, signal?: AbortSignal }} [options]
@@ -95,6 +111,14 @@ class Feed {
     this.subscribers = new Set()
     /** @type {Map<string, AudioStream>} */
     this.active = new Map()
+    /** @type {Map<string, AudioStream>} ended streams, newest last (at most RECENT_STREAMS) */
+    this.recent = new Map()
+  }
+
+  remember(stream) {
+    this.recent.delete(stream.id)
+    this.recent.set(stream.id, stream)
+    while (this.recent.size > RECENT_STREAMS) this.recent.delete(this.recent.keys().next().value)
   }
 
   publish(event) {
@@ -247,6 +271,10 @@ export class AudioStream {
     this.writerOpening = undefined
     this.segments = []
     this.ended = false
+    // §K.15 evidence: host arrival time and sample statistics of every published chunk.
+    this.arrivals = []
+    this.quality = { peak: 0, clippedSamples: 0, maxBoundaryJump: 0, boundaryJumpsOver8000: 0 }
+    this.lastSample = undefined
     feed.active.set(this.id, this)
     this.startEvent = feed.publish({
       type: 'audio.start', streamId: this.id, sessionId: feed.sessionId, provider: info.provider, model: info.model,
@@ -291,6 +319,17 @@ export class AudioStream {
     if (samples === 0) return { samples, format }
     this.firstChunkAt ??= now
     this.lastChunkAt = now
+    const stats = pcmStats(pcm, format.channels, this.lastSample)
+    this.lastSample = stats.lastSample
+    this.quality.peak = Math.max(this.quality.peak, stats.peak)
+    this.quality.clippedSamples += stats.clipped
+    if (stats.jump !== null) {
+      this.quality.maxBoundaryJump = Math.max(this.quality.maxBoundaryJump, stats.jump)
+      if (stats.jump > 8000) this.quality.boundaryJumpsOver8000 += 1
+    }
+    if (this.arrivals.length < MAX_ARRIVALS) {
+      this.arrivals.push({ seq: this.seq, t: now, startSample: this.totalSamples, samples, sampleRate: format.sampleRate, channels: format.channels, peak: stats.peak, clipped: stats.clipped, boundaryJump: stats.jump })
+    }
     const writer = await this.ensureWriter()
     const written = writer.append(pcm, format)
     this.feed.publish({
@@ -338,6 +377,7 @@ export class AudioStream {
     if (this.ended) return this.summary
     this.ended = true
     this.feed.active.delete(this.id)
+    this.feed.remember(this)
     const terminalAt = options.terminalAt ?? this.hub.now()
     let recording
     try {
@@ -369,6 +409,9 @@ export class AudioStream {
       recording: recording === undefined ? null : publicRecording(recording),
       recordingPath: recording?.path ?? null,
       segments: this.segments.length,
+      arrivals: this.arrivals,
+      arrivalsTruncated: this.chunks > this.arrivals.length,
+      quality: { ...this.quality, clippedRatio: this.totalSamples === 0 ? 0 : round6(this.quality.clippedSamples / (this.totalSamples * (this.format?.channels ?? 1))) },
     }
     this.feed.publish({
       type: 'audio.end', streamId: this.id, status, delivery, chunks: this.chunks, totalSamples: this.totalSamples,
@@ -380,6 +423,28 @@ export class AudioStream {
     return this.summary
   }
 }
+
+/**
+ * Sample statistics of one s16le chunk (transport-independent quality signals, §K.15): peak |sample|, samples at full
+ * scale (clipped), and the jump from the previous chunk's last sample to this chunk's first (first channel).
+ */
+export function pcmStats(pcm, channels, previousLast) {
+  const frames = Math.floor(pcm.byteLength / (2 * channels))
+  let peak = 0
+  let clipped = 0
+  for (let i = 0; i + 1 < frames * 2 * channels; i += 2) {
+    const v = pcm.readInt16LE(i)
+    const a = v < 0 ? -v : v
+    if (a > peak) peak = a
+    if (v >= 32767 || v <= -32768) clipped += 1
+  }
+  const first = frames > 0 ? pcm.readInt16LE(0) : undefined
+  const lastSample = frames > 0 ? pcm.readInt16LE((frames - 1) * 2 * channels) : previousLast
+  const jump = previousLast === undefined || first === undefined ? null : Math.abs(first - previousLast)
+  return { peak, clipped, jump, lastSample }
+}
+
+function round6(x) { return Math.round(x * 1e6) / 1e6 }
 
 /**
  * CONTRACT.md §3: `progressive` iff ≥ 2 non-empty payloads arrived and the first one came

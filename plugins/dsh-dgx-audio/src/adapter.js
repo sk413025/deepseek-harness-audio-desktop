@@ -490,10 +490,51 @@ class CallState {
     this.endpoint = undefined
     this.transport = undefined
     this.timeline = { textDeltas: 0, reasoningDeltas: 0, audioPayloads: 0, sseEvents: 0, bytesIn: 0 }
+    // §K.15: host wall-clock (epoch ms, the audio hub clock) of each milestone and model text delta.
+    this.at = {}
+    this.textArrivals = []
   }
 
   mark(name) {
     if (this.timeline[`${name}Ms`] === undefined) this.timeline[`${name}Ms`] = round(performance.now() - this.t0)
+    this.at[name] ??= this.now()
+  }
+
+  now() { return this.hub?.now?.() ?? Date.now() }
+
+  /** One model text delta as it arrived (never the evidence footer). */
+  noteText(text) {
+    if (this.textArrivals.length < MAX_TEXT_ARRIVALS) this.textArrivals.push([this.now(), text.length])
+    else this.textArrivalsTruncated = true
+    this.textDeltaCount = (this.textDeltaCount ?? 0) + 1
+    this.textChars = (this.textChars ?? 0) + text.length
+  }
+
+  /** Streaming evidence of this call (TASK_CONTRACT §K.15): what arrived when, on the host clock. */
+  streamRecord(summary, terminalAt) {
+    const text = this.textArrivals
+    const textDeliveryClass = classifyTextDelivery(text)
+    return {
+      clock: 'host-epoch-ms',
+      requestSentAt: this.at.requestSent ?? null,
+      responseHeadersAt: this.at.responseHeaders ?? null,
+      doneAt: this.at.done ?? null,
+      terminalAt,
+      text: {
+        deltas: this.textDeltaCount ?? 0,
+        chars: this.textChars ?? 0,
+        firstAt: text[0]?.[0] ?? null,
+        lastAt: text.at(-1)?.[0] ?? null,
+        delivery: textDeliveryClass,
+        arrivals: text,
+        arrivalsTruncated: this.textArrivalsTruncated === true,
+      },
+      audio: summary === undefined ? null : {
+        streamId: summary.streamId, status: summary.status, delivery: summary.delivery, chunks: summary.chunks, totalSamples: summary.totalSamples,
+        format: summary.format, startedAt: summary.startedAt, firstChunkAt: summary.firstChunkAt, lastChunkAt: summary.lastChunkAt, terminalAt: summary.terminalAt,
+        arrivals: summary.arrivals, arrivalsTruncated: summary.arrivalsTruncated, quality: summary.quality,
+      },
+    }
   }
 
   get hub() { return this.adapter.deps.hub?.() }
@@ -555,7 +596,6 @@ class CallState {
     const counted = (async function * (self) {
       for await (const event of sse) { self.timeline.sseEvents += 1; yield event }
     })(this)
-    let textBeforeDone = 0
     for await (const event of chatStreamEvents(counted)) {
       switch (event.type) {
         case 'meta':
@@ -568,7 +608,7 @@ class CallState {
           else if (this.sawContentText) break
           this.mark('firstText')
           this.timeline.textDeltas += 1
-          textBeforeDone += 1
+          this.noteText(event.text)
           yield * this.delta('text', event.text)
           break
         case 'reasoning':
@@ -591,8 +631,12 @@ class CallState {
           break
       }
     }
-    if (textBeforeDone >= 2) {
-      this.capabilities?.observe(this.route, this.model, 'textStreaming', { state: 'verified', source: 'request', detail: `${textBeforeDone} SSE text deltas` })
+    // 0.4.9 (§K.15): verified only for text that actually arrived incrementally; one final chunk or a burst is not streaming.
+    const textDelivery = classifyTextDelivery(this.textArrivals)
+    if (textDelivery === 'progressive') {
+      this.capabilities?.observe(this.route, this.model, 'textStreaming', { state: 'verified', source: 'request', detail: `${this.textArrivals.length} SSE text deltas over ${this.textArrivals.at(-1)[0] - this.textArrivals[0][0]} ms` })
+    } else if (textDelivery !== 'none') {
+      this.capabilities?.note(this.route, this.model, 'textStreaming', { observedDelivery: textDelivery })
     }
   }
 
@@ -603,7 +647,7 @@ class CallState {
       const rendered = renderAsrBody(this.asrResponseFormat ?? 'json', raw)
       this.usage = rendered.usage
       this.asrResult = rendered
-      if (rendered.text.length > 0) { this.mark('firstText'); yield * this.delta('text', rendered.text) }
+      if (rendered.text.length > 0) { this.mark('firstText'); this.noteText(rendered.text); yield * this.delta('text', rendered.text) }
       this.finishReason = 'stop'
       return
     }
@@ -631,6 +675,7 @@ class CallState {
     const text = texts.join('\n')
     if (text.length > 0) {
       this.mark('firstText')
+      this.noteText(text)
       yield * this.delta('text', text)
     }
   }
@@ -696,6 +741,7 @@ class CallState {
     if (this.audioStream !== undefined) {
       this.audioSummary = await this.audioStream.end('completed')
     }
+    const terminalAt = this.audioSummary?.terminalAt ?? this.now()
     const summary = this.audioSummary
     if (summary !== undefined && summary.chunks > 0) {
       this.capabilities?.observe(this.route, this.model, 'audioOutput', { state: 'verified', source: 'request', detail: `${summary.chunks} audio payload(s)` })
@@ -725,6 +771,7 @@ class CallState {
       audioErrors: this.audioErrors ?? null,
       taskParams: this.taskParamsUsed ?? null,
       ...(this.videoOutput ? { outputVideo: this.videoOutput } : {}),
+      stream: this.streamRecord(summary, terminalAt),
     }
     await this.adapter.writeLog(config, logRecord)
     this.adapter.deps.log(`dgx-audio ${this.record.provider}/${this.record.model} ${this.endpoint} ${this.transport} session=${this.record.sessionId} audio_in=${this.record.inputAudio.map(a => `${a.name}:${a.sha256.slice(0, 12)}`).join(',') || 'none'} audio_out=${outputAudio === null ? 'none' : `${outputAudio.delivery}:${outputAudio.chunks}`} ${latencySeconds.toFixed(2)}s`)
@@ -756,8 +803,9 @@ class CallState {
     this.failed = true
     const aborted = failure.code === 'ABORTED'
     let audio = null
+    let summary
     if (this.audioStream !== undefined) {
-      const summary = await this.audioStream.end(aborted ? 'cancelled' : 'error', { error: { code: failure.code, message: failure.message } })
+      summary = await this.audioStream.end(aborted ? 'cancelled' : 'error', { error: { code: failure.code, message: failure.message } })
       audio = { chunks: summary.chunks, delivery: summary.delivery, partialRecording: summary.recording?.recordingId ?? null }
     }
     await this.adapter.writeLog(this.config, {
@@ -771,6 +819,7 @@ class CallState {
       error: String(failure.message),
       partialText: this.blocks.get('text')?.text.length ?? 0,
       audio,
+      stream: this.streamRecord(summary, summary?.terminalAt ?? this.now()),
     })
   }
 }
@@ -920,6 +969,20 @@ export function systemPlacementPlan(model, evidence) {
 }
 
 /** Fold the system prompt into the first user message (returns a new converted object; audio parts untouched). */
+/** Text delta evidence entries kept per call (later deltas are counted, not listed). */
+const MAX_TEXT_ARRIVALS = 512
+
+/**
+ * §K.15 text delivery: `progressive` iff ≥ 2 model text deltas arrived ≥ 250 ms apart (first to last); `burst` = several
+ * deltas within 250 ms; `single` = one chunk; `none`. Only `progressive` is text streaming.
+ * @param {[number, number][]} arrivals - [host epoch ms, chars]
+ */
+export function classifyTextDelivery(arrivals) {
+  if (arrivals.length === 0) return 'none'
+  if (arrivals.length === 1) return 'single'
+  return arrivals.at(-1)[0] - arrivals[0][0] >= 250 ? 'progressive' : 'burst'
+}
+
 /** Sampling-related fields of one chat request body, verbatim (§K.14). Other extraBody values are named and hashed only. */
 function samplingRecord(body, extraBody) {
   const keys = Object.keys(extraBody ?? {}).sort()
