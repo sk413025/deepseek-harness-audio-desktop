@@ -1,6 +1,6 @@
 {
   "name": "dsh-voice-capture",
-  "version": "0.3.5",
+  "version": "0.3.8",
   "description": "DeepSeek Harness client plugin: shared audio UI for Web and Desktop — explicit microphone record/preview/send as a raw WAV attachment, inline and progressive reply playback, and capability-labelled Live mode over the audio adapter routes",
   "private": true,
   "license": "MIT",

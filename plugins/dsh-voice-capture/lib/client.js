@@ -93,6 +93,18 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 						media.removeEventListener("devicechange", listener);
 					};
 				},
+				async prepare() {
+					let stream;
+					try {
+						stream = await navigator.mediaDevices.getUserMedia({
+							audio: true,
+							video: false
+						});
+					} catch (error) {
+						throw classifyMediaError(error);
+					}
+					for (const track of stream.getTracks()) track.stop();
+				},
 				async open({ deviceId, onFrames, onEnded, sampleRate }) {
 					let context;
 					try {
@@ -1610,6 +1622,16 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 			"live.startTitle": "实时对话：录音时即传送给模型（{evidence}）",
 			"live.panel": "实时对话面板",
 			"live.opening": "正在建立实时会话…",
+			"live.waitingMic": "等待麦克风权限…（允许后才建立实时会话）",
+			"live.turnMode.label": "实时对话轮次模式（{model}）",
+			"live.turn.choice.native-duplex": "原生全双工",
+			"live.turn.choice.server-vad": "服务器 VAD",
+			"live.turn.choice.no-turn-detection": "无轮次检测",
+			"live.turn.label.native-duplex": "原生全双工：由模型决定何时说话",
+			"live.turn.label.server-vad": "服务器 VAD：在回复时说话会打断回复",
+			"live.turn.label.no-turn-detection": "无轮次检测",
+			"live.turn.label.other": "轮次模式：{mode}",
+			"live.turn.label.unreported": "主机未报告轮次模式",
 			"live.sending": "实时传送中",
 			"live.awaiting": "已结束输入，等待回复…",
 			"live.closing": "正在结束实时会话…",
@@ -2026,6 +2048,16 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 			"live.startTitle": "Live conversation: audio is sent to the model while you speak ({evidence})",
 			"live.panel": "Live conversation panel",
 			"live.opening": "Opening live session…",
+			"live.waitingMic": "Waiting for microphone permission… (the live session opens after you allow it)",
+			"live.turnMode.label": "Live turn mode ({model})",
+			"live.turn.choice.native-duplex": "Native duplex",
+			"live.turn.choice.server-vad": "Server VAD",
+			"live.turn.choice.no-turn-detection": "No turn detection",
+			"live.turn.label.native-duplex": "Native duplex: the model decides when to speak",
+			"live.turn.label.server-vad": "Server VAD: speaking over a reply interrupts it",
+			"live.turn.label.no-turn-detection": "No turn detection",
+			"live.turn.label.other": "Turn mode: {mode}",
+			"live.turn.label.unreported": "Turn mode not reported by the host",
 			"live.sending": "Live — sending audio",
 			"live.awaiting": "Input ended, waiting for the reply…",
 			"live.closing": "Ending live session…",
@@ -3348,16 +3380,24 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 			* Apply the user-set values with `POST session-params` (TASK_CONTRACT 0.2 §D).
 			* @param sessionId - Session id.
 			* @param target - selected adapter model.
-			* @returns whether the host accepted them (true when nothing was set).
+			* @param options - `omitKeys`: keys never posted for this model (an omni-duplex turn mode owns them); `force`: post even an
+			*   empty set, which replaces (clears) a stale stored set such as an earlier `turnDetection`; `extra`: fields added verbatim
+			*   (a turn mode's `send`); `onRefused`: receives the host's code and message when the set is not applied.
+			* @returns whether the host accepted them (true when nothing was set and nothing was forced).
 			*/
-			async applyParams(sessionId, target) {
+			async applyParams(sessionId, target, options = {}) {
 				const state = this.state(sessionId);
 				clearTimeout(state.paramsTimer);
 				state.paramsTimer = void 0;
 				if (this.fetchImpl === void 0) return true;
-				const values = state.snapshot.values[target.model] ?? {};
-				const params = this.requestOptions(values, target.view);
-				if (Object.keys(values).length === 0) return true;
+				const all = state.snapshot.values[target.model] ?? {};
+				const omit = options.omitKeys ?? target.omitKeys;
+				const values = omit === void 0 ? all : Object.fromEntries(Object.entries(all).filter(([key]) => !omit.has(key)));
+				const params = {
+					...this.requestOptions(values, target.view),
+					...options.extra
+				};
+				if (Object.keys(values).length === 0 && Object.keys(options.extra ?? {}).length === 0 && options.force !== true) return true;
 				const run = ++state.paramsRun;
 				this.update(sessionId, {
 					params: "applying",
@@ -3382,6 +3422,10 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 				} catch (error) {
 					const status = error.status;
 					const code = error.code;
+					options.onRefused?.({
+						code: code ?? "PARAMS_FAILED",
+						message: error instanceof Error ? error.message : String(error)
+					});
 					if (run === state.paramsRun) this.update(sessionId, {
 						params: status === 404 || status === 405 ? "unsupported" : "failed",
 						paramsDetail: `${code ?? ""} ${error instanceof Error ? error.message : String(error)}`.trim()
@@ -3658,7 +3702,7 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 			"interrupted"
 		]);
 		const num$1 = (value) => typeof value === "number" && Number.isFinite(value) ? value : void 0;
-		const str$1 = (value) => typeof value === "string" && value !== "" ? value : void 0;
+		const str$2 = (value) => typeof value === "string" && value !== "" ? value : void 0;
 		/**
 		* Key of one job: provider, model and the worker's job id.
 		* @param provider - route provider.
@@ -3677,27 +3721,27 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 		*/
 		function applyOfflineJobEvent(jobs, event) {
 			if (event.type !== "offline.job") return jobs;
-			const jobId = str$1(event.jobId);
+			const jobId = str$2(event.jobId);
 			if (jobId === void 0) return jobs;
-			const key = offlineJobKey(str$1(event.provider), str$1(event.model), jobId);
+			const key = offlineJobKey(str$2(event.provider), str$2(event.model), jobId);
 			const previous = jobs[key];
-			const rawStatus = str$1(event.status);
+			const rawStatus = str$2(event.status);
 			const status = rawStatus !== void 0 && KNOWN.has(rawStatus) ? rawStatus : "unknown";
 			if (previous !== void 0 && TERMINAL_JOB_STATUSES.has(previous.status)) return jobs;
 			const frames = num$1(event.framesGenerated);
 			const delivery = event.delivery === "progressive" || event.delivery === "final-only" ? event.delivery : void 0;
 			const next = {
 				jobId,
-				provider: str$1(event.provider) ?? previous?.provider,
-				model: str$1(event.model) ?? previous?.model,
+				provider: str$2(event.provider) ?? previous?.provider,
+				model: str$2(event.model) ?? previous?.model,
 				status: status === "unknown" && previous !== void 0 ? previous.status : status,
 				rawStatus: status === "unknown" ? rawStatus : void 0,
 				framesGenerated: frames === void 0 ? previous?.framesGenerated : Math.max(frames, previous?.framesGenerated ?? 0),
 				maxTokens: num$1(event.maxTokens) ?? previous?.maxTokens,
 				delivery: delivery ?? previous?.delivery,
-				finishReason: str$1(event.finishReason) ?? previous?.finishReason,
+				finishReason: str$2(event.finishReason) ?? previous?.finishReason,
 				reconnectAttempt: status === "reconnecting" ? num$1(event.attempt) ?? previous?.reconnectAttempt : previous?.reconnectAttempt,
-				code: str$1(event.code) ?? previous?.code,
+				code: str$2(event.code) ?? previous?.code,
 				order: previous?.order ?? Object.keys(jobs).length
 			};
 			if (previous !== void 0 && JSON.stringify(previous) === JSON.stringify(next)) return jobs;
@@ -3762,8 +3806,97 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 			return Object.values(jobs).filter((j) => (provider === void 0 || j.provider === provider) && (model === void 0 || j.model === model)).sort((a, b) => a.order - b.order);
 		}
 		//#endregion
+		//#region src/client/audio/turn-mode.ts
+		/** Parameter keys a mode choice owns for omni-duplex models (never offered as separate controls there). */
+		const TURN_KEYS = new Set(["turnDetection", "overlapPolicy"]);
+		const str$1 = (v) => typeof v === "string" && v !== "" ? v : void 0;
+		/**
+		* Parse the host's `turnModes` of a capability model.
+		* @param entry - capability model.
+		* @returns modes, or undefined when the host publishes none (host ≤ 0.4.11, other wires): then no mode choice is offered.
+		*/
+		function turnModesOf(entry) {
+			const raw = entry?.turnModes;
+			if (raw === void 0 || raw === null || typeof raw !== "object" || !Array.isArray(raw.modes)) return void 0;
+			const modes = [];
+			for (const m of raw.modes) {
+				const item = m;
+				const mode = str$1(item?.mode);
+				if (mode === void 0 || modes.some((x) => x.mode === mode)) continue;
+				const send = {};
+				const rawSend = item.send !== null && typeof item.send === "object" ? item.send : {};
+				if (typeof rawSend.turnDetection === "string") send.turnDetection = rawSend.turnDetection;
+				modes.push({
+					mode,
+					send,
+					meaning: str$1(item.meaning)
+				});
+			}
+			if (modes.length === 0) return void 0;
+			const def = str$1(raw.default);
+			return {
+				default: def !== void 0 && modes.some((m) => m.mode === def) ? def : modes[0].mode,
+				modes,
+				refusalCode: str$1(raw.refusalCode)
+			};
+		}
+		/**
+		* Whether the separate `turnDetection` / `overlapPolicy` controls must be hidden for a model.
+		* @param entry - capability model.
+		* @returns true for omni-duplex realtime models (wire published, or `turnModes` present).
+		*/
+		function ownsTurnKeys(entry) {
+			if (entry === void 0 || entry.mode !== "realtime") return false;
+			return turnModesOf(entry) !== void 0 || entry.wire === "omni-duplex";
+		}
+		/**
+		* Whether a parameter control is replaced by the turn mode choice (contract item 1).
+		* @param entry - capability model.
+		* @param key - parameter key.
+		* @returns true for `turnDetection` / `overlapPolicy` of omni-duplex realtime models.
+		*/
+		function hidesTurnParam(entry, key) {
+			return TURN_KEYS.has(key) && ownsTurnKeys(entry);
+		}
+		/**
+		* The mode to use: the user's explicit choice when it is offered, else the host default.
+		* @param modes - offered modes.
+		* @param choice - user's choice for this model in this Session.
+		* @returns the option.
+		*/
+		function chosenTurnMode(modes, choice) {
+			return modes.modes.find((m) => m.mode === choice) ?? modes.modes.find((m) => m.mode === modes.default) ?? modes.modes[0];
+		}
+		/**
+		* Parse a host `turn` summary.
+		* @param value - `turn` field.
+		* @returns summary, or undefined when absent.
+		*/
+		function turnSummaryOf(value) {
+			if (value === null || typeof value !== "object") return void 0;
+			const t = value;
+			return {
+				mode: str$1(t.mode),
+				turnDetection: str$1(t.turnDetection),
+				turnDetectionSource: str$1(t.turnDetectionSource),
+				overlapPolicy: str$1(t.overlapPolicy),
+				overlapPolicySource: str$1(t.overlapPolicySource),
+				nativeDuplexRequested: typeof t.nativeDuplexRequested === "boolean" ? t.nativeDuplexRequested : void 0,
+				implementationLevel: str$1(t.implementationLevel)
+			};
+		}
+		/**
+		* Label of the mode that ran, from the host's summary only.
+		* @param turn - host summary.
+		* @returns label key (`unreported` when the host sent none).
+		*/
+		function turnLabelOf(turn) {
+			if (turn?.mode === void 0) return "unreported";
+			return turn.mode === "native-duplex" || turn.mode === "server-vad" || turn.mode === "no-turn-detection" ? turn.mode : "other";
+		}
+		//#endregion
 		//#region \0dsh-css:packages/third-party/dsh-voice-capture/src/client/audio/audio.module.css.mjs
-		const css = ".hbTdJq_replies{flex-direction:column;gap:8px;margin:4px 0 8px;display:flex}.hbTdJq_reply{border:.5px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);border-radius:12px;flex-direction:column;gap:6px;padding:8px 12px;font-size:13px;line-height:20px;display:flex}.hbTdJq_replyHead,.hbTdJq_row{flex-wrap:wrap;align-items:center;gap:8px;min-height:28px;display:flex}.hbTdJq_nowrap{flex-wrap:nowrap}.hbTdJq_replyTitle,.hbTdJq_title{flex:none;font-weight:500}.hbTdJq_caption{color:var(--dsw-alias-label-secondary);font-size:12px}.hbTdJq_warn{color:var(--dsw-alias-state-warn-label)}.hbTdJq_truncate{text-overflow:ellipsis;white-space:nowrap;flex:auto;min-width:0;overflow:hidden}.hbTdJq_spacer{flex:auto}.hbTdJq_player{width:100%;height:36px;display:block}.hbTdJq_errorText{color:var(--dsw-alias-state-error-primary);font-size:12px}.hbTdJq_bar{box-sizing:border-box;width:calc(100% - var(--dsh-composer-side-clearance,0px) - var(--dsh-composer-side-clearance,0px) - var(--dsh-composer-dock-inset,0px) - var(--dsh-composer-dock-inset,0px) - var(--dsh-composer-dock-inset,0px) - var(--dsh-composer-dock-inset,0px));max-width:calc(var(--dsh-composer-card-max-width,100%) - var(--dsh-composer-dock-inset,0px) - var(--dsh-composer-dock-inset,0px) - var(--dsh-composer-dock-inset,0px) - var(--dsh-composer-dock-inset,0px));border:.5px solid var(--dsw-alias-border-l1);background:var(--dsw-specific-tip);color:var(--dsw-alias-label-primary);border-radius:12px;flex:none;margin:0 auto;padding:8px 12px;font-size:13px;line-height:20px}.hbTdJq_timer{font-variant-numeric:tabular-nums;flex:none;font-weight:500}.hbTdJq_recDot,.hbTdJq_speaking{border-radius:999px;flex:none;width:10px;height:10px;animation:1.2s ease-in-out infinite hbTdJq_blink}.hbTdJq_recDot{background:var(--dsw-alias-state-error-primary)}.hbTdJq_speaking{background:var(--dsw-alias-brand-primary)}.hbTdJq_meter{background:var(--dsw-alias-bg-layer-3);border-radius:999px;flex:0 120px;min-width:60px;height:6px;position:relative;overflow:hidden}.hbTdJq_meterFill{transform-origin:0;border-radius:inherit;background:var(--dsw-alias-state-success-primary);transition:transform 90ms linear;position:absolute;inset:0}.hbTdJq_transcript{background:var(--dsw-alias-bg-layer-1);white-space:pre-wrap;border-radius:8px;max-height:96px;padding:6px 8px;overflow:auto}.hbTdJq_toggle{color:var(--dsw-alias-label-secondary);cursor:pointer;align-items:center;gap:4px;font-size:12px;display:inline-flex}.hbTdJq_liveButton{corner-shape:round;background:var(--dsw-specific-selector);height:28px;color:var(--dsw-alias-label-primary);font:inherit;cursor:pointer;border:none;border-radius:999px;flex:none;align-items:center;gap:6px;padding:0 10px;font-size:13px;display:inline-flex}.hbTdJq_liveButton:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover-solid)}.hbTdJq_liveButton:disabled{opacity:.6;cursor:default}.hbTdJq_liveButton:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}.hbTdJq_liveDot{background:var(--dsw-alias-state-success-primary);border-radius:999px;width:8px;height:8px}.hbTdJq_unverified .hbTdJq_liveDot{background:var(--dsw-alias-state-warn-primary)}.hbTdJq_liveActive .hbTdJq_liveDot{background:var(--dsw-alias-state-error-primary);animation:1.2s ease-in-out infinite hbTdJq_blink}@keyframes hbTdJq_blink{0%,to{opacity:1}50%{opacity:.35}}@media (prefers-reduced-motion:reduce){.hbTdJq_recDot,.hbTdJq_speaking,.hbTdJq_liveActive .hbTdJq_liveDot{animation:none}.hbTdJq_meterFill{transition:none}}.hbTdJq_resultGroup{flex-direction:column;gap:8px;display:flex}.hbTdJq_segments{flex-direction:column;gap:4px;max-height:280px;margin:0;padding:0;list-style:none;display:flex;overflow:auto}.hbTdJq_segment{align-items:baseline;gap:8px;display:flex}.hbTdJq_segmentTime{color:var(--dsw-alias-label-tertiary);font-variant-numeric:tabular-nums;flex:none;font-size:12px}.hbTdJq_speaker{background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-secondary);border-radius:6px;flex:none;padding:0 6px;font-size:12px}.hbTdJq_segmentText,.hbTdJq_transcriptText{white-space:pre-wrap;word-break:break-word}.hbTdJq_taskChip{background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);border-radius:999px;flex:none;padding:2px 8px;font-size:12px;font-weight:500}.hbTdJq_param{align-items:center;gap:6px;min-width:0;display:inline-flex}.hbTdJq_paramWide{flex:220px}.hbTdJq_select,.hbTdJq_numberInput,.hbTdJq_textInput{border:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);height:28px;color:var(--dsw-alias-label-primary);font:inherit;border-radius:8px;padding:0 8px;font-size:12px}.hbTdJq_numberInput{width:72px}.hbTdJq_textInput{flex:auto;min-width:0}.hbTdJq_referenceBox{border:.5px dashed var(--dsw-alias-border-l2);border-radius:10px;flex-direction:column;gap:6px;padding:6px 8px;display:flex}.hbTdJq_iconButton{width:24px;height:24px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:6px;flex:none;place-items:center;display:grid}.hbTdJq_iconButton:hover{background:var(--dsw-alias-interactive-bg-hover)}.hbTdJq_partial{opacity:.65}.hbTdJq_liveChoice{flex-direction:column;gap:2px;min-width:0;max-width:320px;display:flex}.hbTdJq_wordList{flex-wrap:wrap;gap:4px 8px;max-height:120px;margin:0;padding:0;list-style:none;display:flex;overflow:auto}.hbTdJq_word{align-items:baseline;gap:4px;display:inline-flex}.hbTdJq_hiddenParams{color:var(--dsw-alias-text-tertiary);font-size:12px}.hbTdJq_video{background:#000;border-radius:8px;width:100%;max-height:320px}.hbTdJq_thumb{object-fit:contain;border-radius:6px;max-width:128px;max-height:72px}";
+		const css = ".hbTdJq_replies{flex-direction:column;gap:8px;margin:4px 0 8px;display:flex}.hbTdJq_reply{border:.5px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);border-radius:12px;flex-direction:column;gap:6px;padding:8px 12px;font-size:13px;line-height:20px;display:flex}.hbTdJq_replyHead,.hbTdJq_row{flex-wrap:wrap;align-items:center;gap:8px;min-height:28px;display:flex}.hbTdJq_nowrap{flex-wrap:nowrap}.hbTdJq_replyTitle,.hbTdJq_title{flex:none;font-weight:500}.hbTdJq_wrapTitle{overflow-wrap:anywhere;flex:auto;min-width:0}.hbTdJq_turnOption{align-items:flex-start;gap:6px;display:flex}.hbTdJq_turnOption>input{flex:none;margin-top:2px}.hbTdJq_turnOption>span{flex:auto;min-width:0}.hbTdJq_caption{color:var(--dsw-alias-label-secondary);font-size:12px}.hbTdJq_warn{color:var(--dsw-alias-state-warn-label)}.hbTdJq_truncate{text-overflow:ellipsis;white-space:nowrap;flex:auto;min-width:0;overflow:hidden}.hbTdJq_spacer{flex:auto}.hbTdJq_player{width:100%;height:36px;display:block}.hbTdJq_errorText{color:var(--dsw-alias-state-error-primary);font-size:12px}.hbTdJq_bar{box-sizing:border-box;width:calc(100% - var(--dsh-composer-side-clearance,0px) - var(--dsh-composer-side-clearance,0px) - var(--dsh-composer-dock-inset,0px) - var(--dsh-composer-dock-inset,0px) - var(--dsh-composer-dock-inset,0px) - var(--dsh-composer-dock-inset,0px));max-width:calc(var(--dsh-composer-card-max-width,100%) - var(--dsh-composer-dock-inset,0px) - var(--dsh-composer-dock-inset,0px) - var(--dsh-composer-dock-inset,0px) - var(--dsh-composer-dock-inset,0px));border:.5px solid var(--dsw-alias-border-l1);background:var(--dsw-specific-tip);color:var(--dsw-alias-label-primary);border-radius:12px;flex:none;margin:0 auto;padding:8px 12px;font-size:13px;line-height:20px}.hbTdJq_timer{font-variant-numeric:tabular-nums;flex:none;font-weight:500}.hbTdJq_recDot,.hbTdJq_speaking{border-radius:999px;flex:none;width:10px;height:10px;animation:1.2s ease-in-out infinite hbTdJq_blink}.hbTdJq_recDot{background:var(--dsw-alias-state-error-primary)}.hbTdJq_speaking{background:var(--dsw-alias-brand-primary)}.hbTdJq_meter{background:var(--dsw-alias-bg-layer-3);border-radius:999px;flex:0 120px;min-width:60px;height:6px;position:relative;overflow:hidden}.hbTdJq_meterFill{transform-origin:0;border-radius:inherit;background:var(--dsw-alias-state-success-primary);transition:transform 90ms linear;position:absolute;inset:0}.hbTdJq_transcript{background:var(--dsw-alias-bg-layer-1);white-space:pre-wrap;border-radius:8px;max-height:96px;padding:6px 8px;overflow:auto}.hbTdJq_toggle{color:var(--dsw-alias-label-secondary);cursor:pointer;align-items:center;gap:4px;font-size:12px;display:inline-flex}.hbTdJq_liveButton{corner-shape:round;background:var(--dsw-specific-selector);height:28px;color:var(--dsw-alias-label-primary);font:inherit;cursor:pointer;border:none;border-radius:999px;flex:none;align-items:center;gap:6px;padding:0 10px;font-size:13px;display:inline-flex}.hbTdJq_liveButton:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover-solid)}.hbTdJq_liveButton:disabled{opacity:.6;cursor:default}.hbTdJq_liveButton:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}.hbTdJq_liveDot{background:var(--dsw-alias-state-success-primary);border-radius:999px;width:8px;height:8px}.hbTdJq_unverified .hbTdJq_liveDot{background:var(--dsw-alias-state-warn-primary)}.hbTdJq_liveActive .hbTdJq_liveDot{background:var(--dsw-alias-state-error-primary);animation:1.2s ease-in-out infinite hbTdJq_blink}@keyframes hbTdJq_blink{0%,to{opacity:1}50%{opacity:.35}}@media (prefers-reduced-motion:reduce){.hbTdJq_recDot,.hbTdJq_speaking,.hbTdJq_liveActive .hbTdJq_liveDot{animation:none}.hbTdJq_meterFill{transition:none}}.hbTdJq_resultGroup{flex-direction:column;gap:8px;display:flex}.hbTdJq_segments{flex-direction:column;gap:4px;max-height:280px;margin:0;padding:0;list-style:none;display:flex;overflow:auto}.hbTdJq_segment{align-items:baseline;gap:8px;display:flex}.hbTdJq_segmentTime{color:var(--dsw-alias-label-tertiary);font-variant-numeric:tabular-nums;flex:none;font-size:12px}.hbTdJq_speaker{background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-secondary);border-radius:6px;flex:none;padding:0 6px;font-size:12px}.hbTdJq_segmentText,.hbTdJq_transcriptText{white-space:pre-wrap;word-break:break-word}.hbTdJq_taskChip{background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);border-radius:999px;flex:none;padding:2px 8px;font-size:12px;font-weight:500}.hbTdJq_param{align-items:center;gap:6px;min-width:0;display:inline-flex}.hbTdJq_paramWide{flex:220px}.hbTdJq_select,.hbTdJq_numberInput,.hbTdJq_textInput{border:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);height:28px;color:var(--dsw-alias-label-primary);font:inherit;border-radius:8px;padding:0 8px;font-size:12px}.hbTdJq_numberInput{width:72px}.hbTdJq_textInput{flex:auto;min-width:0}.hbTdJq_referenceBox{border:.5px dashed var(--dsw-alias-border-l2);border-radius:10px;flex-direction:column;gap:6px;padding:6px 8px;display:flex}.hbTdJq_iconButton{width:24px;height:24px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:6px;flex:none;place-items:center;display:grid}.hbTdJq_iconButton:hover{background:var(--dsw-alias-interactive-bg-hover)}.hbTdJq_partial{opacity:.65}.hbTdJq_liveChoice{flex-direction:column;gap:2px;min-width:0;max-width:320px;display:flex}.hbTdJq_wordList{flex-wrap:wrap;gap:4px 8px;max-height:120px;margin:0;padding:0;list-style:none;display:flex;overflow:auto}.hbTdJq_word{align-items:baseline;gap:4px;display:inline-flex}.hbTdJq_hiddenParams{color:var(--dsw-alias-text-tertiary);font-size:12px}.hbTdJq_video{background:#000;border-radius:8px;width:100%;max-height:320px}.hbTdJq_thumb{object-fit:contain;border-radius:6px;max-width:128px;max-height:72px}";
 		const tagId = "dsh-voice-capture/audio.module.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
 			const tag = document.createElement("style");
@@ -3816,14 +3949,22 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 			"transcript": "hbTdJq_transcript",
 			"transcriptText": "hbTdJq_transcriptText",
 			"truncate": "hbTdJq_truncate",
+			"turnOption": "hbTdJq_turnOption",
 			"unverified": "hbTdJq_unverified",
 			"video": "hbTdJq_video",
 			"warn": "hbTdJq_warn",
 			"word": "hbTdJq_word",
-			"wordList": "hbTdJq_wordList"
+			"wordList": "hbTdJq_wordList",
+			"wrapTitle": "hbTdJq_wrapTitle"
 		};
 		//#endregion
 		//#region src/client/audio/TaskStrip.tsx
+		/** Turn modes with localized names (others show the host's mode id). */
+		const KNOWN_TURN_MODES = new Set([
+			"native-duplex",
+			"server-vad",
+			"no-turn-detection"
+		]);
 		/** Tasks whose request text comes from the composer and is sent by this strip's action. */
 		const TEXT_REQUEST_TASKS = new Set([
 			"tts",
@@ -3908,7 +4049,7 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 		* Renders nothing for models the audio adapter does not serve, and for plain
 		* chat models without parameters.
 		*/
-		function TaskStrip({ t, useFeatures, useTaskInputs, useReferenceVoice, useGate, useVideoProgress, useOfflineJobs, useInput, inputActions, setValue, pickReference, clearReference, setConsent, setReferenceText, startReference, stopReference, keepReference, discardRecordedReference, generate, cancelGenerate, dismissTaskError, loadValues, openLibrary }) {
+		function TaskStrip({ t, useFeatures, useTaskInputs, useReferenceVoice, useGate, useVideoProgress, useOfflineJobs, useTurnModes, useInput, inputActions, setValue, pickReference, clearReference, setConsent, setReferenceText, startReference, stopReference, keepReference, discardRecordedReference, generate, cancelGenerate, dismissTaskError, loadValues, openLibrary, setTurnMode }) {
 			const model = useFeatures((features) => features.model);
 			const selection = useFeatures((features) => features.selection);
 			const candidates = useFeatures((features) => features.liveCandidates);
@@ -3918,6 +4059,7 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 			const draft = useInput((state) => state.draft);
 			const videoJob = useVideoProgress((snapshot) => snapshot);
 			const offlineJobState = useOfflineJobs((snapshot) => snapshot);
+			const turnChoices = useTurnModes((snapshot) => snapshot);
 			const fileInput = (0, react.useRef)(null);
 			const latestDraft = (0, react.useRef)(draft);
 			latestDraft.current = draft;
@@ -3938,16 +4080,20 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 				return offerOf(v, param, choices === "failed" ? [] : choices);
 			};
 			const params = view.input.referenceText === "none" ? view.params : view.params.filter((p) => !REFERENCE_PARAMS.has(p.key));
-			const shown = params.filter((p) => rendersControl(offerOfParam(view, p)));
+			const shown = params.filter((p) => rendersControl(offerOfParam(view, p)) && !hidesTurnParam(model, p.key));
 			const notOffered = params.filter((p) => offerOfParam(view, p) === "not-offered");
 			const unlistedKeys = params.filter((p) => offerOfParam(view, p) === "unlisted").map((p) => p.key);
 			const unknownKeys = params.filter((p) => offerOfParam(view, p) === "unknown").map((p) => p.key);
+			const turnCandidates = candidates.filter((c) => c.available).map((c) => ({
+				candidate: c,
+				modes: turnModesOf(c.entry)
+			})).filter((c) => c.modes !== void 0);
 			const liveOptions = liveViews.map((l) => ({
 				...l,
-				params: l.view.params.filter((p) => rendersControl(offerOfParam(l.view, p)))
+				params: l.view.params.filter((p) => rendersControl(offerOfParam(l.view, p)) && !hidesTurnParam(l.candidate.entry, p.key))
 			})).filter((l) => l.params.length > 0);
 			const extraSlots = EXTRA_SLOTS.filter((slot) => view.input[slot] !== "none");
-			if (view.task === "chat" && shown.length === 0 && !showsReference && liveOptions.length === 0) return null;
+			if (view.task === "chat" && shown.length === 0 && !showsReference && liveOptions.length === 0 && turnCandidates.length === 0) return null;
 			const blocked = gateBlocks(gate);
 			const values = inputs.values[model.id] ?? {};
 			const hasValue = (param) => {
@@ -4064,6 +4210,38 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 						job,
 						t
 					}, job.jobId)),
+					turnCandidates.map(({ candidate, modes }) => {
+						const selected = chosenTurnMode(modes, turnChoices[candidate.model.model]).mode;
+						return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+							className: audio_module_css_default.referenceBox,
+							role: "radiogroup",
+							"aria-label": t("live.turnMode.label", { model: candidate.model.model }),
+							"data-testid": "dsh-voice-capture-turn-mode",
+							"data-model": candidate.model.model,
+							"data-default": modes.default,
+							"data-selected": selected,
+							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+								className: audio_module_css_default.row,
+								children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+									className: audio_module_css_default.caption,
+									children: t("live.turnMode.label", { model: candidate.model.model })
+								})
+							}), modes.modes.map((option) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", {
+								className: audio_module_css_default.turnOption,
+								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
+									type: "radio",
+									name: `dsh-voice-capture-turn-${candidate.model.model}`,
+									value: option.mode,
+									checked: selected === option.mode,
+									onChange: () => {
+										setTurnMode(candidate.model.model, option.mode);
+									},
+									"data-testid": "dsh-voice-capture-turn-mode-option",
+									"data-mode": option.mode
+								}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", { children: [KNOWN_TURN_MODES.has(option.mode) ? t(`live.turn.choice.${option.mode}`) : option.mode, option.meaning === void 0 ? "" : ` — ${option.meaning}`] })]
+							}, option.mode))]
+						}, `turn-${candidate.model.model}`);
+					}),
 					liveOptions.map(({ candidate, params: liveParams, view: liveView }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("details", {
 						className: audio_module_css_default.referenceBox,
 						"data-testid": "dsh-voice-capture-live-options",
@@ -4984,6 +5162,9 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 		const IDLE$1 = {
 			phase: "idle",
 			liveId: void 0,
+			waitingMic: false,
+			turn: void 0,
+			requestedTurnMode: void 0,
 			evidence: "unsupported",
 			kind: "conversation",
 			task: void 0,
@@ -5072,6 +5253,12 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 			queue = [];
 			seq = 0;
 			sending;
+			/**
+			* Identity of the newest start. Dismiss, close, dispose, a failure or a host `closed` / `error` event invalidates it, so a
+			* start still awaiting the microphone or the host never brings an ended session back to `live` (pre16 finding 12:29:
+			* a late microphone permission revived a dismissed session without a liveId → CLIENT_BACKLOG, 0 frames sent).
+			*/
+			startToken = 0;
 			abort;
 			meter;
 			capturedSamples = 0;
@@ -5128,7 +5315,7 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 			* @param kind - panel kind from the live model's task view.
 			* @param busy - reports unfinished work on the same server; a reason refuses the open instead of letting it time out.
 			*/
-			async start(sessionId, model, evidence, bargeIn, kind = "conversation", busy) {
+			async start(sessionId, model, evidence, bargeIn, kind = "conversation", busy, turnMode, preflight) {
 				if (this.active) return;
 				if (this.micBusy()) {
 					this.set({
@@ -5141,6 +5328,8 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 					});
 					return;
 				}
+				const token = ++this.startToken;
+				const stale = () => token !== this.startToken;
 				this.sessionId = sessionId;
 				this.seq = 0;
 				this.queue.length = 0;
@@ -5158,9 +5347,11 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 					evidence,
 					kind,
 					model,
-					maxQueued: MAX_QUEUED_FRAMES
+					maxQueued: MAX_QUEUED_FRAMES,
+					requestedTurnMode: turnMode?.mode
 				});
 				const busyReason = await busy?.();
+				if (stale()) return;
 				if (busyReason !== void 0) {
 					this.set({
 						...this.snapshot,
@@ -5173,6 +5364,36 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 					return;
 				}
 				if (this.snapshot.phase !== "opening") return;
+				const refused = await preflight?.();
+				if (stale() || this.snapshot.phase !== "opening") return;
+				if (refused !== void 0) {
+					this.set({
+						...this.snapshot,
+						phase: "error",
+						error: {
+							code: refused.code,
+							message: refused.message
+						}
+					});
+					return;
+				}
+				if (kind !== "text-input" && this.backend.prepare !== void 0) {
+					this.set({
+						...this.snapshot,
+						waitingMic: true
+					});
+					try {
+						await this.backend.prepare();
+					} catch (error) {
+						if (!stale()) this.fail(error);
+						return;
+					}
+					if (stale() || this.snapshot.phase !== "opening") return;
+					this.set({
+						...this.snapshot,
+						waitingMic: false
+					});
+				}
 				let opened;
 				try {
 					opened = await requestJson(this.fetchImpl, `${ROUTE_PREFIX}/live/open`, {
@@ -5182,15 +5403,15 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 							sessionId,
 							provider: model.provider,
 							model: model.model,
-							...bargeIn ? { overlapPolicy: "barge_in_on_speech" } : {}
+							...turnMode !== void 0 ? turnMode.send : bargeIn ? { overlapPolicy: "barge_in_on_speech" } : {}
 						}),
 						signal: this.abort.signal
 					});
 				} catch (error) {
-					this.fail(error);
+					if (!stale()) this.fail(error);
 					return;
 				}
-				if (this.snapshot.phase !== "opening") {
+				if (stale() || this.snapshot.phase !== "opening") {
 					await this.post("close", opened.liveId, void 0).catch(() => void 0);
 					return;
 				}
@@ -5201,7 +5422,8 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 					kind: openedKind,
 					task: opened.task,
 					wire: opened.wire,
-					server: serverFacts(opened.capabilities) ?? this.snapshot.server
+					server: serverFacts(opened.capabilities) ?? this.snapshot.server,
+					turn: turnSummaryOf(opened.turn) ?? this.snapshot.turn
 				});
 				if (openedKind === "text-input") {
 					if (opened.input.encoding !== "text") {
@@ -5230,8 +5452,9 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 				const frameSamples = Math.max(1, Math.round(sampleRate * opened.input.frameMs / 1e3));
 				this.frame = new Float32Array(Math.min(frameSamples, Math.floor((opened.input.maxFrameBytes ?? frameSamples * 2) / 2)));
 				this.frameFill = 0;
+				let capture;
 				try {
-					this.capture = await this.backend.open({
+					capture = await this.backend.open({
 						deviceId: "",
 						sampleRate,
 						onFrames: (chunk) => this.onFrames(chunk),
@@ -5241,11 +5464,17 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 					});
 				} catch (error) {
 					await this.post("close", opened.liveId, void 0).catch(() => void 0);
-					this.fail(error);
+					if (!stale()) this.fail(error);
 					return;
 				}
-				if (this.capture.sampleRate !== sampleRate) {
-					await this.capture.close();
+				if (stale() || this.snapshot.phase !== "opening" || this.snapshot.liveId !== opened.liveId) {
+					await capture.close();
+					await this.post("close", opened.liveId, void 0).catch(() => void 0);
+					return;
+				}
+				this.capture = capture;
+				if (capture.sampleRate !== sampleRate) {
+					await capture.close();
 					this.capture = void 0;
 					await this.post("close", opened.liveId, void 0).catch(() => void 0);
 					this.fail(new AudioRouteError(0, "RATE_MISMATCH", `capture context did not run at ${sampleRate} Hz`));
@@ -5484,10 +5713,13 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 			async close() {
 				const liveId = this.snapshot.liveId;
 				if (this.snapshot.phase === "opening") {
+					this.startToken++;
 					this.abort?.abort();
+					if (liveId !== void 0) this.post("close", liveId, void 0).catch(() => void 0);
 					this.set({
 						...this.snapshot,
-						phase: "closed"
+						phase: "closed",
+						waitingMic: false
 					});
 					return;
 				}
@@ -5559,6 +5791,7 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 			/** Return a closed or failed panel to idle. */
 			dismiss() {
 				if (this.active) return;
+				this.startToken++;
 				this.set(IDLE$1);
 			}
 			/**
@@ -5701,9 +5934,11 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 						}
 						if (state === "ready" && event.resumed !== true) {
 							const facts = serverFacts(event.capabilities);
-							if (facts !== void 0) this.set({
+							const turn = turnSummaryOf(event.turn);
+							if (facts !== void 0 || turn !== void 0) this.set({
 								...this.snapshot,
-								server: facts
+								server: facts ?? this.snapshot.server,
+								turn: turn ?? this.snapshot.turn
 							});
 							return;
 						}
@@ -5718,6 +5953,7 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 							return;
 						}
 						if (state === "closed" || state === "error") {
+							this.startToken++;
 							clearInterval(this.meter);
 							this.capture?.close();
 							this.capture = void 0;
@@ -5761,6 +5997,7 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 			}
 			/** Release capture and close the session on unload. */
 			async dispose() {
+				this.startToken++;
 				const liveId = this.snapshot.liveId;
 				const wasActive = this.active;
 				clearInterval(this.meter);
@@ -5891,6 +6128,7 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 				return text === "" ? void 0 : JSON.parse(text);
 			}
 			fail(error) {
+				this.startToken++;
 				clearInterval(this.meter);
 				this.capture?.close();
 				this.capture = void 0;
@@ -7302,6 +7540,8 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 			onReport;
 			onReportEnd;
 			reportOrigins;
+			/** Origins whose audio is silenced locally (Live after the user pressed End live session) until allowed again. */
+			silencedOrigins = /* @__PURE__ */ new Set();
 			/**
 			* @param createOutput - lazily creates the output on the first scheduled chunk.
 			* @param now - client monotonic clock in ms.
@@ -7384,6 +7624,14 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 							origin: event.origin,
 							task: typeof event.task === "string" ? event.task : void 0
 						});
+						if (event.origin !== void 0 && this.silencedOrigins.has(event.origin)) {
+							this.stream.timeline.stopAt = this.wallNow();
+							this.stream.stopped = true;
+							this.set({
+								...this.snapshot,
+								phase: "stopped"
+							});
+						}
 						return;
 					case "audio.format": {
 						const stream = this.current(event.streamId);
@@ -7502,6 +7750,22 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 					timeline: summarizeTimeline(stream.timeline)
 				});
 				this.maybeFinalize(stream);
+			}
+			/**
+			* Silence one origin at once and keep later streams of it silent (End live session: local playback stops without waiting
+			* for the network close; the host's cancelled end may come seconds later).
+			* @param origin - stream origin, e.g. `live`.
+			*/
+			silenceOrigin(origin) {
+				this.silencedOrigins.add(origin);
+				if (this.stream?.origin === origin) this.stop();
+			}
+			/**
+			* Allow an origin again (a new Live session starts).
+			* @param origin - stream origin.
+			*/
+			allowOrigin(origin) {
+				this.silencedOrigins.delete(origin);
 			}
 			/**
 			* Toggle automatic playback of incoming replies.
@@ -8139,6 +8403,7 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 			const fallback = duplex !== void 0 && duplex.state === "unsupported";
 			const bargeInState = live.observed.bargeIn?.state ?? live.server?.bargeIn?.state ?? bargeIn;
 			const openResponse = conversation && live.responses.some((response) => response.status === "created");
+			const turnLabel = turnLabelOf(live.turn);
 			const bufferedSeconds = live.queued * live.frameMs / 1e3;
 			const maxSeconds = live.maxQueued * live.frameMs / 1e3;
 			const waitedMs = live.inputEndedAt === void 0 ? 0 : now - live.inputEndedAt;
@@ -8153,16 +8418,16 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 				"data-task": live.task,
 				children: [
 					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-						className: cx(audio_module_css_default.row, audio_module_css_default.nowrap),
+						className: cx(audio_module_css_default.row, live.phase !== "error" && audio_module_css_default.nowrap),
 						children: [
 							live.phase === "live" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 								className: audio_module_css_default.recDot,
 								"aria-hidden": "true"
 							}),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-								className: audio_module_css_default.title,
+								className: cx(audio_module_css_default.title, live.phase === "error" && audio_module_css_default.wrapTitle),
 								"aria-live": "polite",
-								children: live.phase === "opening" ? t("live.opening") : live.phase === "live" ? t(LIVE_TITLE[live.kind]) : live.phase === "awaiting" ? t("live.awaiting") : live.phase === "closing" ? t("live.closing") : live.phase === "closed" ? t("live.closed") : t("live.error", { detail: errorText(live, t) })
+								children: live.phase === "opening" ? t(live.waitingMic ? "live.waitingMic" : "live.opening") : live.phase === "live" ? t(LIVE_TITLE[live.kind]) : live.phase === "awaiting" ? t("live.awaiting") : live.phase === "closing" ? t("live.closing") : live.phase === "closed" ? t("live.closed") : t("live.error", { detail: errorText(live, t) })
 							}),
 							(live.phase === "live" || live.phase === "awaiting") && !textInput && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 								className: audio_module_css_default.timer,
@@ -8195,6 +8460,16 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 						"data-state": duplex?.state ?? "unreported",
 						"data-level": duplex?.implementationLevel,
 						children: nativeDuplex ? t("live.duplex.native", { level: duplex.implementationLevel ?? "" }) : fallback ? t("live.duplex.fallback", { level: duplex.implementationLevel ?? duplex.detail ?? "" }) : t("live.duplex.unknown")
+					}),
+					conversation && live.liveId !== void 0 && live.phase !== "error" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+						className: cx(audio_module_css_default.caption, turnLabel === "unreported" && audio_module_css_default.warn),
+						role: "status",
+						"data-testid": "dsh-voice-capture-live-turn",
+						"data-mode": turnLabel,
+						"data-requested": live.requestedTurnMode ?? "",
+						"data-turn-detection": live.turn?.turnDetection ?? "",
+						"data-overlap-policy": live.turn?.overlapPolicy ?? "",
+						children: turnLabel === "other" ? t("live.turn.label.other", { mode: live.turn?.mode ?? "" }) : t(`live.turn.label.${turnLabel}`)
 					}),
 					live.phase === "live" && !textInput && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 						className: cx(audio_module_css_default.caption, live.framesAcked === 0 && audio_module_css_default.warn),
@@ -8744,7 +9019,7 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 			"uiConversation"
 		];
 		/** Plugin version named in playback reports (keep equal to package.json). */
-		const PLUGIN_VERSION = "0.3.5";
+		const PLUGIN_VERSION = "0.3.8";
 		/** Longest reference voice recording. */
 		const REFERENCE_MAX_MS = 3e4;
 		/** Interval of playback acknowledgements sent from the real player position during Live mode. */
@@ -8912,6 +9187,35 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 					}))
 				})
 			};
+			/** Live turn mode choices per Session (explicit user action; the default is the host's `turnModes.default`). */
+			const turnChoices = /* @__PURE__ */ new Map();
+			const turnChoiceFor = (sessionId) => {
+				let entry = turnChoices.get(sessionId);
+				if (entry === void 0) {
+					entry = {
+						snapshot: {},
+						listeners: /* @__PURE__ */ new Set()
+					};
+					turnChoices.set(sessionId, entry);
+				}
+				const e = entry;
+				return {
+					getSnapshot: () => e.snapshot,
+					subscribe: (listener) => {
+						e.listeners.add(listener);
+						return () => {
+							e.listeners.delete(listener);
+						};
+					},
+					set: (model, mode) => {
+						e.snapshot = {
+							...e.snapshot,
+							[model]: mode
+						};
+						for (const l of [...e.listeners]) l();
+					}
+				};
+			};
 			const playerFor = (sessionId) => {
 				let player = players.get(sessionId);
 				if (player === void 0) {
@@ -9046,13 +9350,15 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 				if (modelId === void 0 || modelId === current.model.id) return {
 					provider: current.selection.provider,
 					model: current.model.id,
-					view: taskView(current.model)
+					view: taskView(current.model),
+					...ownsTurnKeys(current.model) ? { omitKeys: TURN_KEYS } : {}
 				};
 				const candidate = current.liveCandidates.find((c) => c.model.model === modelId);
 				return candidate === void 0 ? void 0 : {
 					provider: candidate.model.provider,
 					model: candidate.model.model,
-					view: taskView(candidate.entry)
+					view: taskView(candidate.entry),
+					...ownsTurnKeys(candidate.entry) ? { omitKeys: TURN_KEYS } : {}
 				};
 			};
 			const releaseFeed = (sessionId) => {
@@ -9195,12 +9501,34 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 					const release = attachFeed(sessionId);
 					(async () => {
 						const view = taskView(candidate.entry);
-						if (!await taskInputs.applyParams(sessionId, {
-							provider: candidate.model.provider,
-							model: candidate.model.model,
-							view
-						})) return;
-						await live?.start(sessionId, candidate.model, candidate.evidence, false, candidate.kind, () => serverBusy(candidate.model.provider, sessionId));
+						const turnModes = turnModesOf(candidate.entry);
+						const turn = turnModes === void 0 ? void 0 : chosenTurnMode(turnModes, turnChoiceFor(sessionId).getSnapshot()[candidate.model.model]);
+						const paramsOptions = ownsTurnKeys(candidate.entry) ? {
+							omitKeys: TURN_KEYS,
+							force: turnModes !== void 0,
+							extra: turn?.send
+						} : {};
+						const preflight = async () => {
+							let refusal;
+							return await taskInputs.applyParams(sessionId, {
+								provider: candidate.model.provider,
+								model: candidate.model.model,
+								view
+							}, {
+								...paramsOptions,
+								onRefused: (r) => {
+									refusal = r;
+								}
+							}) ? void 0 : refusal ?? {
+								code: "PARAMS_FAILED",
+								message: ""
+							};
+						};
+						playerFor(sessionId).allowOrigin("live");
+						await live?.start(sessionId, candidate.model, candidate.evidence, false, candidate.kind, () => serverBusy(candidate.model.provider, sessionId), turn === void 0 ? void 0 : {
+							mode: turn.mode,
+							send: turn.send
+						}, preflight);
 					})().finally(release);
 				},
 				endLiveInput: () => {
@@ -9213,6 +9541,7 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 					return live?.sendText(text, done, params, endSession ?? done) ?? Promise.resolve(false);
 				},
 				closeLive: () => {
+					playerFor(sessionId).silenceOrigin("live");
 					live?.close().finally(() => {
 						capabilities.load(true);
 					});
@@ -9268,6 +9597,9 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 				},
 				loadValues: (url) => loadValues(url),
 				openLibrary: () => board.openLibrary(sessionId),
+				setTurnMode: (model, mode) => {
+					turnChoiceFor(sessionId).set(model, mode);
+				},
 				cancelGenerate: () => {
 					taskInputs.cancel(sessionId);
 				},
@@ -9276,6 +9608,7 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 				},
 				hooks: {
 					features: featuresFor(sessionId),
+					turnModes: turnChoiceFor(sessionId),
 					taskInputs: taskInputs.source(sessionId),
 					referenceVoice: referenceRecorder.source(sessionId),
 					gate: gateFor(sessionId),

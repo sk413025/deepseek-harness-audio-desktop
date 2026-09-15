@@ -189,6 +189,8 @@ export class ProgressivePlayer {
   private readonly onReport: ((streamId: string, event: PlaybackReportEvent) => void) | undefined
   private readonly onReportEnd: ((streamId: string) => void) | undefined
   private readonly reportOrigins: ReadonlySet<string> | undefined
+  /** Origins whose audio is silenced locally (Live after the user pressed End live session) until allowed again. */
+  private readonly silencedOrigins = new Set<string>()
 
   /**
    * @param createOutput - lazily creates the output on the first scheduled chunk.
@@ -237,6 +239,12 @@ export class ProgressivePlayer {
           },
         }
         this.set({ ...IDLE, autoplay: this.snapshot.autoplay, phase: 'receiving', streamId: event.streamId, origin: event.origin, task: typeof event.task === 'string' ? event.task : undefined })
+        if (event.origin !== undefined && this.silencedOrigins.has(event.origin)) {
+          // A late stream of a closed Live session: never audible.
+          this.stream.timeline.stopAt = this.wallNow()
+          this.stream.stopped = true
+          this.set({ ...this.snapshot, phase: 'stopped' })
+        }
         return
       case 'audio.format': {
         const stream = this.current(event.streamId)
@@ -345,6 +353,24 @@ export class ProgressivePlayer {
     stream.stopped = true
     this.set({ ...this.snapshot, phase: 'stopped', timeline: summarizeTimeline(stream.timeline) })
     this.maybeFinalize(stream)
+  }
+
+  /**
+   * Silence one origin at once and keep later streams of it silent (End live session: local playback stops without waiting
+   * for the network close; the host's cancelled end may come seconds later).
+   * @param origin - stream origin, e.g. `live`.
+   */
+  silenceOrigin(origin: string): void {
+    this.silencedOrigins.add(origin)
+    if (this.stream?.origin === origin) this.stop()
+  }
+
+  /**
+   * Allow an origin again (a new Live session starts).
+   * @param origin - stream origin.
+   */
+  allowOrigin(origin: string): void {
+    this.silencedOrigins.delete(origin)
   }
 
   /**

@@ -52,12 +52,13 @@ import { LiveDock } from './audio/LiveDock.tsx'
 import { ReplyBar } from './audio/ReplyBar.tsx'
 import { PlaybackTimelineStore, summarizeTimeline } from './audio/playback-timeline.ts'
 import { PlaybackReporter } from './audio/playback-report.ts'
+import { TURN_KEYS, chosenTurnMode, ownsTurnKeys, turnModesOf } from './audio/turn-mode.ts'
 
 /** Services this plugin waits for. */
 export const inject = ['slots', 'locale', 'fileUpload', 'sessions', 'uiConversation']
 
 /** Plugin version named in playback reports (keep equal to package.json). */
-const PLUGIN_VERSION = '0.3.5'
+const PLUGIN_VERSION = '0.3.8'
 
 /** Longest reference voice recording. */
 const REFERENCE_MAX_MS = 30_000
@@ -181,6 +182,21 @@ export function apply(ctx: Context): void {
       reports: [...reporters.entries()].filter(([id]) => sessionId === undefined || id === sessionId).map(([id, reporter]) => ({ sessionId: id, streams: reporter.state() })),
     }),
   }
+  /** Live turn mode choices per Session (explicit user action; the default is the host's `turnModes.default`). */
+  const turnChoices = new Map<SessionId, { snapshot: Readonly<Record<string, string>>; readonly listeners: Set<() => void> }>()
+  const turnChoiceFor = (sessionId: SessionId) => {
+    let entry = turnChoices.get(sessionId)
+    if (entry === undefined) {
+      entry = { snapshot: {}, listeners: new Set() }
+      turnChoices.set(sessionId, entry)
+    }
+    const e = entry
+    return {
+      getSnapshot: () => e.snapshot,
+      subscribe: (listener: () => void) => { e.listeners.add(listener); return () => { e.listeners.delete(listener) } },
+      set: (model: string, mode: string) => { e.snapshot = { ...e.snapshot, [model]: mode }; for (const l of [...e.listeners]) l() },
+    }
+  }
   const playerFor = (sessionId: SessionId): ProgressivePlayer => {
     let player = players.get(sessionId)
     if (player === undefined) {
@@ -297,9 +313,9 @@ export function apply(ctx: Context): void {
   const paramsTarget = (sessionId: SessionId, modelId?: string) => {
     const current = featuresFor(sessionId).getSnapshot()
     if (current.model === undefined || current.selection === undefined) return undefined
-    if (modelId === undefined || modelId === current.model.id) return { provider: current.selection.provider, model: current.model.id, view: taskView(current.model) }
+    if (modelId === undefined || modelId === current.model.id) return { provider: current.selection.provider, model: current.model.id, view: taskView(current.model), ...(ownsTurnKeys(current.model) ? { omitKeys: TURN_KEYS } : {}) }
     const candidate = current.liveCandidates.find(c => c.model.model === modelId)
-    return candidate === undefined ? undefined : { provider: candidate.model.provider, model: candidate.model.model, view: taskView(candidate.entry) }
+    return candidate === undefined ? undefined : { provider: candidate.model.provider, model: candidate.model.model, view: taskView(candidate.entry), ...(ownsTurnKeys(candidate.entry) ? { omitKeys: TURN_KEYS } : {}) }
   }
   const releaseFeed = (sessionId: SessionId): void => {
     const feed = feeds.get(sessionId)
@@ -428,8 +444,19 @@ export function apply(ctx: Context): void {
       void (async () => {
         // Parameters set for this live model travel as session params (the live wire has no prompt to carry a block).
         const view = taskView(candidate.entry)
-        if (!(await taskInputs.applyParams(sessionId, { provider: candidate.model.provider, model: candidate.model.model, view }))) return
-        await live?.start(sessionId, candidate.model, candidate.evidence, false, candidate.kind, () => serverBusy(candidate.model.provider, sessionId))
+        // Omni-duplex: one turn mode choice owns turnDetection/overlapPolicy; other controls never carry them. With host
+        // turnModes (≥ 0.4.12) the session params set is always posted with exactly the chosen mode's `send` (native: nothing,
+        // which also clears a stale stored turnDetection; server VAD: turnDetection), and live/open carries the same `send`.
+        const turnModes = turnModesOf(candidate.entry)
+        const turn = turnModes === undefined ? undefined : chosenTurnMode(turnModes, turnChoiceFor(sessionId).getSnapshot()[candidate.model.model])
+        const paramsOptions = ownsTurnKeys(candidate.entry) ? { omitKeys: TURN_KEYS, force: turnModes !== undefined, extra: turn?.send } : {}
+        const preflight = async () => {
+          let refusal: { readonly code: string; readonly message: string } | undefined
+          const applied = await taskInputs.applyParams(sessionId, { provider: candidate.model.provider, model: candidate.model.model, view }, { ...paramsOptions, onRefused: (r) => { refusal = r } })
+          return applied ? undefined : refusal ?? { code: 'PARAMS_FAILED', message: '' }
+        }
+        playerFor(sessionId).allowOrigin('live')
+        await live?.start(sessionId, candidate.model, candidate.evidence, false, candidate.kind, () => serverBusy(candidate.model.provider, sessionId), turn === undefined ? undefined : { mode: turn.mode, send: turn.send }, preflight)
       })().finally(release)
     },
     endLiveInput: () => { void live?.endInput() },
@@ -440,7 +467,12 @@ export function apply(ctx: Context): void {
       const params = candidate === undefined ? undefined : resolveOptions(taskView(candidate.entry).params, taskInputs.source(sessionId).getSnapshot().values[candidate.model.model] ?? {}, false)
       return live?.sendText(text, done, params, endSession ?? done) ?? Promise.resolve(false)
     },
-    closeLive: () => { void live?.close().finally(() => { void capabilities.load(true) }) },
+    closeLive: () => {
+      // End live session: the reply audio stops now, not when the host's close completes (real MiniCPM 14:30: host waits for
+      // session.closed up to 2 s, 0.87 s of sound after Close). Late Live audio of this session stays silent until the next start.
+      playerFor(sessionId).silenceOrigin('live')
+      void live?.close().finally(() => { void capabilities.load(true) })
+    },
     liveControl: (type) => { void live?.control(type) },
     dismissLive: () => { live?.dismiss() },
     openLibrary: () => board.openLibrary(sessionId),
@@ -468,9 +500,10 @@ export function apply(ctx: Context): void {
     },
     loadValues: (url) => loadValues(url),
     openLibrary: () => board.openLibrary(sessionId),
+    setTurnMode: (model, mode) => { turnChoiceFor(sessionId).set(model, mode) },
     cancelGenerate: () => { taskInputs.cancel(sessionId) },
     dismissTaskError: () => { taskInputs.dismissError(sessionId) },
-    hooks: { features: featuresFor(sessionId), taskInputs: taskInputs.source(sessionId), referenceVoice: referenceRecorder!.source(sessionId), gate: gateFor(sessionId), videoProgress: videoProgressFor(sessionId), offlineJobs: offlineJobsFor(sessionId) },
+    hooks: { features: featuresFor(sessionId), turnModes: turnChoiceFor(sessionId), taskInputs: taskInputs.source(sessionId), referenceVoice: referenceRecorder!.source(sessionId), gate: gateFor(sessionId), videoProgress: videoProgressFor(sessionId), offlineJobs: offlineJobsFor(sessionId) },
   })
 
   ctx.slots.inject('conversation.input.left', () => ctx.slots.register({

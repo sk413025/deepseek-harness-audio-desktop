@@ -3,6 +3,8 @@ import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import { clockText, cx } from '../format.ts'
 import type { LiveDockProps } from '../slots.ts'
 import type { LiveSnapshot } from './live.ts'
+import { turnLabelOf } from './turn-mode.ts'
+import type { TurnLabel } from './turn-mode.ts'
 import css from './audio.module.css'
 
 type EndedCode = 'IDLE_TIMEOUT' | 'RESYNC_REQUIRED' | 'RESUME_REJECTED' | 'BACKEND_DISCONNECTED'
@@ -38,16 +40,18 @@ export function LiveDock({
   const fallback = duplex !== undefined && duplex.state === 'unsupported'
   const bargeInState = live.observed.bargeIn?.state ?? live.server?.bargeIn?.state ?? bargeIn
   const openResponse = conversation && live.responses.some(response => response.status === 'created')
+  // The turn mode that ran, from the host's summary only (never inferred from the choice or from native duplex facts).
+  const turnLabel = turnLabelOf(live.turn)
   const bufferedSeconds = (live.queued * live.frameMs) / 1000
   const maxSeconds = (live.maxQueued * live.frameMs) / 1000
   const waitedMs = live.inputEndedAt === undefined ? 0 : now - live.inputEndedAt
   const noReplyYet = live.phase === 'awaiting' && live.responses.length === 0 && live.turns.length === 0 && waitedMs >= NO_REPLY_HINT_MS
   return (
     <section className={css.bar} aria-label={t(PANEL_LABEL[live.kind])} data-testid="dsh-voice-capture-live-panel" data-phase={live.phase} data-evidence={live.evidence} data-kind={live.kind} data-task={live.task}>
-      <div className={cx(css.row, css.nowrap)}>
+      <div className={cx(css.row, live.phase !== 'error' && css.nowrap)}>
         {live.phase === 'live' && <span className={css.recDot} aria-hidden="true" />}
-        <span className={css.title} aria-live="polite">
-          {live.phase === 'opening' ? t('live.opening')
+        <span className={cx(css.title, live.phase === 'error' && css.wrapTitle)} aria-live="polite">
+          {live.phase === 'opening' ? t(live.waitingMic ? 'live.waitingMic' : 'live.opening')
             : live.phase === 'live' ? t(LIVE_TITLE[live.kind])
               : live.phase === 'awaiting' ? t('live.awaiting')
                 : live.phase === 'closing' ? t('live.closing')
@@ -75,6 +79,19 @@ export function LiveDock({
             : fallback
               ? t('live.duplex.fallback', { level: duplex.implementationLevel ?? duplex.detail ?? '' })
               : t('live.duplex.unknown')}
+        </div>
+      )}
+      {conversation && live.liveId !== undefined && live.phase !== 'error' && (
+        <div
+          className={cx(css.caption, turnLabel === 'unreported' && css.warn)}
+          role="status"
+          data-testid="dsh-voice-capture-live-turn"
+          data-mode={turnLabel}
+          data-requested={live.requestedTurnMode ?? ''}
+          data-turn-detection={live.turn?.turnDetection ?? ''}
+          data-overlap-policy={live.turn?.overlapPolicy ?? ''}
+        >
+          {turnLabel === 'other' ? t('live.turn.label.other', { mode: live.turn?.mode ?? '' }) : t(`live.turn.label.${turnLabel as Exclude<TurnLabel, 'other'>}`)}
         </div>
       )}
       {live.phase === 'live' && !textInput && (

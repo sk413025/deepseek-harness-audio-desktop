@@ -39,6 +39,10 @@ export interface CapabilityModel {
   readonly input?: { readonly formats?: readonly string[] }
   readonly output?: { readonly text?: boolean; readonly audio?: boolean }
   readonly capabilities: Partial<Record<CapabilityName, CapabilityEntry>>
+  /** Transport wire of a realtime model (e.g. `omni-duplex`). */
+  readonly wire?: string
+  /** Host ≥ 0.4.12 duplex turn modes (§K.18); parsed by `turn-mode.ts`. */
+  readonly turnModes?: unknown
   readonly limits?: { readonly maxAudioBytes?: number; readonly liveMaxSeconds?: number; readonly liveFrameMaxBytes?: number }
 }
 

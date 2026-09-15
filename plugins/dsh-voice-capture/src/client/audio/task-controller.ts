@@ -82,6 +82,8 @@ export interface ParamsTarget {
   readonly provider: string
   readonly model: string
   readonly view: TaskView
+  /** Keys never posted as session params for this model (an omni-duplex turn mode owns them). */
+  readonly omitKeys?: ReadonlySet<string>
 }
 
 /** Largest accepted reference file (bytes). */
@@ -161,16 +163,21 @@ export class TaskInputsController {
    * Apply the user-set values with `POST session-params` (TASK_CONTRACT 0.2 §D).
    * @param sessionId - Session id.
    * @param target - selected adapter model.
-   * @returns whether the host accepted them (true when nothing was set).
+   * @param options - `omitKeys`: keys never posted for this model (an omni-duplex turn mode owns them); `force`: post even an
+   *   empty set, which replaces (clears) a stale stored set such as an earlier `turnDetection`; `extra`: fields added verbatim
+   *   (a turn mode's `send`); `onRefused`: receives the host's code and message when the set is not applied.
+   * @returns whether the host accepted them (true when nothing was set and nothing was forced).
    */
-  async applyParams(sessionId: SessionId, target: ParamsTarget): Promise<boolean> {
+  async applyParams(sessionId: SessionId, target: ParamsTarget, options: { readonly omitKeys?: ReadonlySet<string>; readonly force?: boolean; readonly extra?: Readonly<Record<string, string>>; readonly onRefused?: (refusal: { readonly code: string; readonly message: string }) => void } = {}): Promise<boolean> {
     const state = this.state(sessionId)
     clearTimeout(state.paramsTimer)
     state.paramsTimer = undefined
     if (this.fetchImpl === undefined) return true
-    const values = state.snapshot.values[target.model] ?? {}
-    const params = this.requestOptions(values, target.view)
-    if (Object.keys(values).length === 0) return true
+    const all = state.snapshot.values[target.model] ?? {}
+    const omit = options.omitKeys ?? target.omitKeys
+    const values = omit === undefined ? all : Object.fromEntries(Object.entries(all).filter(([key]) => !omit.has(key)))
+    const params = { ...this.requestOptions(values, target.view), ...options.extra }
+    if (Object.keys(values).length === 0 && Object.keys(options.extra ?? {}).length === 0 && options.force !== true) return true
     const run = ++state.paramsRun
     this.update(sessionId, { params: 'applying', paramsDetail: undefined })
     try {
@@ -184,6 +191,7 @@ export class TaskInputsController {
     } catch (error) {
       const status = (error as { status?: number }).status
       const code = (error as { code?: string }).code
+      options.onRefused?.({ code: code ?? 'PARAMS_FAILED', message: error instanceof Error ? error.message : String(error) })
       if (run === state.paramsRun) {
         this.update(sessionId, {
           params: status === 404 || status === 405 ? 'unsupported' : 'failed',

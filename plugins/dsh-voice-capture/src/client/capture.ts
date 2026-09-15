@@ -94,6 +94,12 @@ export interface CaptureBackend {
    * @throws {CaptureError} on permission, device, or platform failures.
    */
   open(options: CaptureOpenOptions): Promise<CaptureSession>
+  /**
+   * Ask for microphone access without capturing (the granted tracks stop at once), so a permission prompt is answered
+   * before a server session with an idle timeout is opened.
+   * @throws {CaptureError} on permission, device, or platform failures.
+   */
+  prepare?(): Promise<void>
 }
 
 const WORKLET_NAME = 'dsh-voice-capture-tap'
@@ -176,6 +182,15 @@ export function browserCaptureBackend(): CaptureBackend {
       if (media?.addEventListener === undefined) return () => {}
       media.addEventListener('devicechange', listener)
       return () => { media.removeEventListener('devicechange', listener) }
+    },
+    async prepare() {
+      let stream: MediaStream
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      } catch (error) {
+        throw classifyMediaError(error)
+      }
+      for (const track of stream.getTracks()) track.stop()
     },
     async open({ deviceId, onFrames, onEnded, sampleRate }) {
       // Create the context inside the user's click, before the permission prompt can outlast the

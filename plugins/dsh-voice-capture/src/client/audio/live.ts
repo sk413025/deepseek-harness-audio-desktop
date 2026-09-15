@@ -9,6 +9,8 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { AudioRouteError, ROUTE_PREFIX, requestJson, routeUrl } from './api.ts'
 import type { CapabilityState, FetchLike } from './api.ts'
 import type { CaptureBackend, CaptureSession } from '../capture.ts'
+import { turnSummaryOf } from './turn-mode.ts'
+import type { TurnSummary } from './turn-mode.ts'
 import { CaptureError } from '../capture.ts'
 import type { ModelChoice } from './capabilities.ts'
 
@@ -99,6 +101,12 @@ const PCM16_ENCODINGS: ReadonlySet<string> = new Set(['pcm_s16le', 'pcm16', 's16
 export interface LiveSnapshot {
   readonly phase: LivePhase
   readonly liveId: string | undefined
+  /** Opening waits for the microphone permission (asked before the host session is opened). */
+  readonly waitingMic: boolean
+  /** Turn settings the host actually sent (`turn` of live/open or `live.state ready`, host ≥ 0.4.12); undefined = not reported. */
+  readonly turn: TurnSummary | undefined
+  /** The turn mode this panel asked for (`send` of the chosen mode); undefined when no mode choice was offered. */
+  readonly requestedTurnMode: string | undefined
   /** Capability evidence layer at open time (label source). */
   readonly evidence: CapabilityState
   /** Live transcription (no speech), duplex conversation, turn-based voice reply, or streamed text-to-speech. */
@@ -242,7 +250,7 @@ interface CloseResult {
 export type LogLiveExchange = (sessionId: SessionId, input: LiveInputRecording) => Promise<{ readonly ok: true } | { readonly ok: false; readonly detail: string }>
 
 const IDLE: LiveSnapshot = {
-  phase: 'idle', liveId: undefined, evidence: 'unsupported', kind: 'conversation', task: undefined, wire: undefined, server: undefined, model: undefined, elapsedMs: 0, level: 0,
+  phase: 'idle', liveId: undefined, waitingMic: false, turn: undefined, requestedTurnMode: undefined, evidence: 'unsupported', kind: 'conversation', task: undefined, wire: undefined, server: undefined, model: undefined, elapsedMs: 0, level: 0,
   framesSent: 0, framesAcked: 0, bytesSent: 0, accepted: 0, acceptedWhileCapturing: 0,
   captureStartedAt: undefined, firstAcceptedAt: undefined, inputEndedAt: undefined,
   responses: [], transcript: '', turns: [], textChunks: 0, textDone: false, speech: undefined, error: undefined, reconnecting: false, resumes: 0, notice: undefined,
@@ -266,6 +274,8 @@ interface OpenResult {
   readonly task?: string
   readonly wire?: string
   readonly capabilities?: unknown
+  /** Host ≥ 0.4.12 turn settings actually sent. */
+  readonly turn?: unknown
   /** Audio input the UI must send (always PCM16; `wireEncoding` is the host's concern), or `encoding: "text"` for `live/text`. */
   readonly input: { readonly encoding: string; readonly sampleRate?: number; readonly channels?: number; readonly frameMs?: number; readonly maxFrameBytes?: number; readonly wireEncoding?: string; readonly route?: string }
 }
@@ -310,6 +320,12 @@ export class LiveController {
   private readonly queue: Uint8Array[] = []
   private seq = 0
   private sending: Promise<void> | undefined
+  /**
+   * Identity of the newest start. Dismiss, close, dispose, a failure or a host `closed` / `error` event invalidates it, so a
+   * start still awaiting the microphone or the host never brings an ended session back to `live` (pre16 finding 12:29:
+   * a late microphone permission revived a dismissed session without a liveId → CLIENT_BACKLOG, 0 frames sent).
+   */
+  private startToken = 0
   private abort: AbortController | undefined
   private meter: ReturnType<typeof setInterval> | undefined
   private capturedSamples = 0
@@ -369,12 +385,14 @@ export class LiveController {
    * @param kind - panel kind from the live model's task view.
    * @param busy - reports unfinished work on the same server; a reason refuses the open instead of letting it time out.
    */
-  async start(sessionId: SessionId, model: ModelChoice, evidence: CapabilityState, bargeIn: boolean, kind: LiveKind = 'conversation', busy?: () => Promise<string | undefined>): Promise<void> {
+  async start(sessionId: SessionId, model: ModelChoice, evidence: CapabilityState, bargeIn: boolean, kind: LiveKind = 'conversation', busy?: () => Promise<string | undefined>, turnMode?: { readonly mode: string; readonly send: Readonly<Record<string, string>> }, preflight?: () => Promise<{ readonly code: string; readonly message: string } | undefined>): Promise<void> {
     if (this.active) return
     if (this.micBusy()) {
       this.set({ ...IDLE, phase: 'error', error: { code: 'MIC_BUSY', message: '' } })
       return
     }
+    const token = ++this.startToken
+    const stale = (): boolean => token !== this.startToken
     this.sessionId = sessionId
     this.seq = 0
     this.queue.length = 0
@@ -386,31 +404,54 @@ export class LiveController {
     this.ackedResponse = undefined
     this.retiredResponses.clear()
     this.lastTextParams = undefined
-    this.set({ ...IDLE, phase: 'opening', evidence, kind, model, maxQueued: MAX_QUEUED_FRAMES })
+    this.set({ ...IDLE, phase: 'opening', evidence, kind, model, maxQueued: MAX_QUEUED_FRAMES, requestedTurnMode: turnMode?.mode })
     const busyReason = await busy?.()
+    if (stale()) return
     if (busyReason !== undefined) {
       this.set({ ...this.snapshot, phase: 'error', error: { code: 'SERVER_BUSY', message: busyReason } })
       return
     }
     if (this.snapshot.phase !== 'opening') return
+    // Session params for this model (e.g. clearing a stored turnDetection): a host refusal such as INVALID_PARAM_COMBINATION
+    // is shown in this panel verbatim, before any microphone prompt or live/open.
+    const refused = await preflight?.()
+    if (stale() || this.snapshot.phase !== 'opening') return
+    if (refused !== undefined) {
+      this.set({ ...this.snapshot, phase: 'error', error: { code: refused.code, message: refused.message } })
+      return
+    }
+    // Microphone permission first: the host starts its idle timeout at live/open, and a permission prompt answered later
+    // than that would find the session already closed.
+    if (kind !== 'text-input' && this.backend.prepare !== undefined) {
+      this.set({ ...this.snapshot, waitingMic: true })
+      try {
+        await this.backend.prepare()
+      } catch (error) {
+        if (!stale()) this.fail(error)
+        return
+      }
+      if (stale() || this.snapshot.phase !== 'opening') return
+      this.set({ ...this.snapshot, waitingMic: false })
+    }
     let opened: OpenResult
     try {
       opened = await requestJson<OpenResult>(this.fetchImpl, `${ROUTE_PREFIX}/live/open`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ sessionId, provider: model.provider, model: model.model, ...(bargeIn ? { overlapPolicy: 'barge_in_on_speech' } : {}) }),
+        // A turn mode choice posts exactly its `send` (native: nothing; server VAD: turnDetection) and never overlapPolicy.
+        body: JSON.stringify({ sessionId, provider: model.provider, model: model.model, ...(turnMode !== undefined ? turnMode.send : bargeIn ? { overlapPolicy: 'barge_in_on_speech' } : {}) }),
         signal: this.abort.signal,
       })
     } catch (error) {
-      this.fail(error)
+      if (!stale()) this.fail(error)
       return
     }
-    if (this.snapshot.phase !== 'opening') {
+    if (stale() || this.snapshot.phase !== 'opening') {
       await this.post('close', opened.liveId, undefined).catch(() => undefined)
       return
     }
     const openedKind = liveKindOf(opened.task) ?? (opened.input.encoding === 'text' ? 'text-input' : this.snapshot.kind === 'text-input' ? 'conversation' : this.snapshot.kind)
-    this.set({ ...this.snapshot, liveId: opened.liveId, kind: openedKind, task: opened.task, wire: opened.wire, server: serverFacts(opened.capabilities) ?? this.snapshot.server })
+    this.set({ ...this.snapshot, liveId: opened.liveId, kind: openedKind, task: opened.task, wire: opened.wire, server: serverFacts(opened.capabilities) ?? this.snapshot.server, turn: turnSummaryOf(opened.turn) ?? this.snapshot.turn })
     if (openedKind === 'text-input') {
       if (opened.input.encoding !== 'text') {
         await this.post('close', opened.liveId, undefined).catch(() => undefined)
@@ -431,8 +472,9 @@ export class LiveController {
     const frameSamples = Math.max(1, Math.round(sampleRate * opened.input.frameMs / 1000))
     this.frame = new Float32Array(Math.min(frameSamples, Math.floor((opened.input.maxFrameBytes ?? frameSamples * 2) / 2)))
     this.frameFill = 0
+    let capture: CaptureSession
     try {
-      this.capture = await this.backend.open({
+      capture = await this.backend.open({
         deviceId: '',
         sampleRate,
         onFrames: chunk => this.onFrames(chunk),
@@ -440,11 +482,19 @@ export class LiveController {
       })
     } catch (error) {
       await this.post('close', opened.liveId, undefined).catch(() => undefined)
-      this.fail(error)
+      if (!stale()) this.fail(error)
       return
     }
-    if (this.capture.sampleRate !== sampleRate) {
-      await this.capture.close()
+    if (stale() || this.snapshot.phase !== 'opening' || this.snapshot.liveId !== opened.liveId) {
+      // The session ended (host idle close, dismissed, closed) while the microphone was opening: release the microphone
+      // and the host session instead of reviving the panel.
+      await capture.close()
+      await this.post('close', opened.liveId, undefined).catch(() => undefined)
+      return
+    }
+    this.capture = capture
+    if (capture.sampleRate !== sampleRate) {
+      await capture.close()
       this.capture = undefined
       await this.post('close', opened.liveId, undefined).catch(() => undefined)
       this.fail(new AudioRouteError(0, 'RATE_MISMATCH', `capture context did not run at ${sampleRate} Hz`))
@@ -620,8 +670,11 @@ export class LiveController {
   async close(): Promise<void> {
     const liveId = this.snapshot.liveId
     if (this.snapshot.phase === 'opening') {
+      this.startToken++
       this.abort?.abort()
-      this.set({ ...this.snapshot, phase: 'closed' })
+      // A host session already opened for this start (the microphone was still opening) is closed too.
+      if (liveId !== undefined) void this.post('close', liveId, undefined).catch(() => undefined)
+      this.set({ ...this.snapshot, phase: 'closed', waitingMic: false })
       return
     }
     if (this.snapshot.phase === 'live') await this.endInput()
@@ -678,6 +731,7 @@ export class LiveController {
   /** Return a closed or failed panel to idle. */
   dismiss(): void {
     if (this.active) return
+    this.startToken++
     this.set(IDLE)
   }
 
@@ -790,7 +844,8 @@ export class LiveController {
         }
         if (state === 'ready' && event.resumed !== true) {
           const facts = serverFacts(event.capabilities)
-          if (facts !== undefined) this.set({ ...this.snapshot, server: facts })
+          const turn = turnSummaryOf(event.turn)
+          if (facts !== undefined || turn !== undefined) this.set({ ...this.snapshot, server: facts ?? this.snapshot.server, turn: turn ?? this.snapshot.turn })
           return
         }
         if (state === 'ready' && event.resumed === true) {
@@ -799,6 +854,7 @@ export class LiveController {
           return
         }
         if (state === 'closed' || state === 'error') {
+          this.startToken++
           clearInterval(this.meter)
           void this.capture?.close()
           this.capture = undefined
@@ -833,6 +889,7 @@ export class LiveController {
 
   /** Release capture and close the session on unload. */
   async dispose(): Promise<void> {
+    this.startToken++
     const liveId = this.snapshot.liveId
     const wasActive = this.active
     clearInterval(this.meter)
@@ -957,6 +1014,7 @@ export class LiveController {
   }
 
   private fail(error: unknown): void {
+    this.startToken++
     clearInterval(this.meter)
     void this.capture?.close()
     this.capture = undefined

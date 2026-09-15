@@ -10,7 +10,13 @@ import type { OfferState, OptionFact } from './options.ts'
 import { gateBlocks } from './gate.ts'
 import { jobsOf, recoveryActions } from './offline-jobs.ts'
 import type { OfflineJobState } from './offline-jobs.ts'
+import { chosenTurnMode, hidesTurnParam, turnModesOf } from './turn-mode.ts'
+import type { TurnModes } from './turn-mode.ts'
 import css from './audio.module.css'
+
+/** Turn modes with localized names (others show the host's mode id). */
+const KNOWN_TURN_MODES: ReadonlySet<string> = new Set(['native-duplex', 'server-vad', 'no-turn-detection'])
+type KnownTurnMode = 'native-duplex' | 'server-vad' | 'no-turn-detection'
 
 /** Tasks whose request text comes from the composer and is sent by this strip's action. */
 const TEXT_REQUEST_TASKS: ReadonlySet<string> = new Set(['tts', 'voice-clone', 'music-generation', 'sound-generation', 'video-generation'])
@@ -65,9 +71,9 @@ const REFERENCE_PARAMS: ReadonlySet<string> = new Set(['refText'])
  * chat models without parameters.
  */
 export function TaskStrip({
-  t, useFeatures, useTaskInputs, useReferenceVoice, useGate, useVideoProgress, useOfflineJobs, useInput, inputActions,
+  t, useFeatures, useTaskInputs, useReferenceVoice, useGate, useVideoProgress, useOfflineJobs, useTurnModes, useInput, inputActions,
   setValue, pickReference, clearReference, setConsent, setReferenceText, startReference, stopReference,
-  keepReference, discardRecordedReference, generate, cancelGenerate, dismissTaskError, loadValues, openLibrary,
+  keepReference, discardRecordedReference, generate, cancelGenerate, dismissTaskError, loadValues, openLibrary, setTurnMode,
 }: TaskStripProps) {
   const model = useFeatures(features => features.model)
   const selection = useFeatures(features => features.selection)
@@ -78,6 +84,7 @@ export function TaskStrip({
   const draft = useInput(state => state.draft)
   const videoJob = useVideoProgress(snapshot => snapshot)
   const offlineJobState = useOfflineJobs(snapshot => snapshot)
+  const turnChoices = useTurnModes(snapshot => snapshot)
   const fileInput = useRef<HTMLInputElement | null>(null)
   const latestDraft = useRef(draft)
   latestDraft.current = draft
@@ -96,15 +103,17 @@ export function TaskStrip({
     return offerOf(v, param, choices === 'failed' ? [] : choices)
   }
   const params = view.input.referenceText === 'none' ? view.params : view.params.filter(p => !REFERENCE_PARAMS.has(p.key))
-  const shown = params.filter(p => rendersControl(offerOfParam(view, p)))
+  const shown = params.filter(p => rendersControl(offerOfParam(view, p)) && !hidesTurnParam(model, p.key))
   const notOffered = params.filter(p => offerOfParam(view, p) === 'not-offered')
   const unlistedKeys = params.filter(p => offerOfParam(view, p) === 'unlisted').map(p => p.key)
   const unknownKeys = params.filter(p => offerOfParam(view, p) === 'unknown').map(p => p.key)
+  // Omni-duplex models: one turn mode choice (host turnModes) instead of separate turnDetection / overlapPolicy controls.
+  const turnCandidates = candidates.filter(c => c.available).map(c => ({ candidate: c, modes: turnModesOf(c.entry) })).filter((c): c is { candidate: typeof c.candidate; modes: TurnModes } => c.modes !== undefined)
   const liveOptions = liveViews
-    .map(l => ({ ...l, params: l.view.params.filter(p => rendersControl(offerOfParam(l.view, p))) }))
+    .map(l => ({ ...l, params: l.view.params.filter(p => rendersControl(offerOfParam(l.view, p)) && !hidesTurnParam(l.candidate.entry, p.key)) }))
     .filter(l => l.params.length > 0)
   const extraSlots = EXTRA_SLOTS.filter(slot => view.input[slot] !== 'none')
-  if (view.task === 'chat' && shown.length === 0 && !showsReference && liveOptions.length === 0) return null
+  if (view.task === 'chat' && shown.length === 0 && !showsReference && liveOptions.length === 0 && turnCandidates.length === 0) return null
 
   const blocked = gateBlocks(gate)
   const values = inputs.values[model.id] ?? {}
@@ -183,6 +192,22 @@ export function TaskStrip({
       {view.adapterTask === 'tts.offline-job' && jobsOf(offlineJobState, selection?.provider, model.id).slice(-1).map(job => (
         <OfflineJobLine key={job.jobId} job={job} t={t} />
       ))}
+      {turnCandidates.map(({ candidate, modes }) => {
+        const selected = chosenTurnMode(modes, turnChoices[candidate.model.model]).mode
+        return (
+          <div key={`turn-${candidate.model.model}`} className={css.referenceBox} role="radiogroup" aria-label={t('live.turnMode.label', { model: candidate.model.model })}
+            data-testid="dsh-voice-capture-turn-mode" data-model={candidate.model.model} data-default={modes.default} data-selected={selected}>
+            <div className={css.row}><span className={css.caption}>{t('live.turnMode.label', { model: candidate.model.model })}</span></div>
+            {modes.modes.map(option => (
+              <label key={option.mode} className={css.turnOption}>
+                <input type="radio" name={`dsh-voice-capture-turn-${candidate.model.model}`} value={option.mode} checked={selected === option.mode}
+                  onChange={() => { setTurnMode(candidate.model.model, option.mode) }} data-testid="dsh-voice-capture-turn-mode-option" data-mode={option.mode} />
+                <span>{KNOWN_TURN_MODES.has(option.mode) ? t(`live.turn.choice.${option.mode as KnownTurnMode}`) : option.mode}{option.meaning === undefined ? '' : ` — ${option.meaning}`}</span>
+              </label>
+            ))}
+          </div>
+        )
+      })}
       {liveOptions.map(({ candidate, params: liveParams, view: liveView }) => (
         <details key={candidate.model.model} className={css.referenceBox} data-testid="dsh-voice-capture-live-options" data-model={candidate.model.model}>
           <summary className={css.caption}>{t('task.liveOptions', { model: candidate.model.model })}</summary>
