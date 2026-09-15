@@ -146,16 +146,22 @@ async function checkRunningApp(instance, port, boot) {
       const served = await page.evaluate(`(async () => { const r = await fetch(${JSON.stringify(entry.url)}); const b = new Uint8Array(await r.arrayBuffer()); let s = ''; for (let i = 0; i < b.length; i += 32768) s += String.fromCharCode(...b.subarray(i, i + 32768)); return { status: r.status, type: r.headers.get('content-type'), base64: btoa(s) } })()`)
       const bytes = Buffer.from(served.base64, 'base64')
       const released = tarballs.get(name)?.files.get('lib/client.js')
-      // The host rewrites the trailing `//# sourceMappingURL=` comment to its own versioned URL (run 34927273171:
-      // served bundles were 55/61/59 B longer). Compare the code with that single comment line removed on both sides,
-      // and record exactly where the bytes differ so any other rewrite stays visible.
-      const stripMap = (buffer) => buffer.toString('utf8').replace(/\n?\/\/# sourceMappingURL=[^\n]*\n?$/, '')
+      // Host serving format observed in run 34927945033: the released bundle up to its final "\n//# sourceMappingURL="
+      // line, then ";\n//# sourceMappingURL=/plugins/??<id>/client.js.map&rev=<rev>\n". Accept exactly that envelope
+      // around byte-identical code; any other difference fails.
       const exact = released !== undefined && sha256(bytes) === sha256(released)
-      const codeEqual = released !== undefined && stripMap(bytes) === stripMap(released)
+      const releasedText = released?.toString('utf8') ?? ''
+      const mapAt = releasedText.lastIndexOf('\n//# sourceMappingURL=')
+      const code = mapAt >= 0 ? releasedText.slice(0, mapAt) : releasedText
+      const servedText = bytes.toString('utf8')
+      const suffix = released !== undefined && servedText.startsWith(code) ? servedText.slice(code.length) : null
+      const escapedId = name.split('').map(ch => /[A-Za-z0-9]/.test(ch) ? ch : `\\${ch}`).join('')
+      const envelope = new RegExp('^\\n?;\\n//# sourceMappingURL=/plugins/\\?\\?' + escapedId + '/client\\.js\\.map&rev=[A-Za-z0-9._-]+\\n?$')
+      const codeEqual = suffix !== null && envelope.test(suffix)
       const firstDiff = released === undefined ? -1 : (() => { const n = Math.min(bytes.length, released.length); for (let i = 0; i < n; i++) if (bytes[i] !== released[i]) return i; return n })()
       report.add(`app.client.${name}`, exact || codeEqual ? 'pass' : 'fail', L,
-        exact ? `served ${entry.url} == released lib/client.js (${released.length} B)` : codeEqual ? `served bundle == released lib/client.js except the host-rewritten sourceMappingURL comment (code sha ${sha256(stripMap(released)).slice(0, 12)}…)` : 'served client bundle code differs from the released lib/client.js',
-        { status: served.status, contentType: served.type, servedBytes: bytes.length, releasedBytes: released?.length ?? null, servedSha256: sha256(bytes), releasedSha256: released ? sha256(released) : null,
+        exact ? `served ${entry.url} == released lib/client.js (${released.length} B)` : codeEqual ? `served bundle = released lib/client.js code (${Buffer.byteLength(code)} B, sha ${sha256(code).slice(0, 12)}…) + host envelope ${JSON.stringify(suffix)}` : 'served client bundle differs from the released lib/client.js beyond the host sourceMappingURL envelope',
+        { status: served.status, contentType: served.type, servedBytes: bytes.length, releasedBytes: released?.length ?? null, servedSha256: sha256(bytes), releasedSha256: released ? sha256(released) : null, hostSuffix: suffix,
           firstDiffOffset: firstDiff, servedTail: bytes.subarray(Math.max(0, firstDiff - 40)).toString('utf8').slice(0, 200), releasedTail: released ? released.subarray(Math.max(0, firstDiff - 40)).toString('utf8').slice(0, 200) : null })
     }
     // Host routes of bundled plugins.
@@ -245,7 +251,7 @@ async function lifecyclePhase() {
     const page = main.value
     const shot = name => page.screenshot({ path: join(outDir, `ui-${name}.png`) }).catch(() => undefined)
     const clickText = async (pattern) => {
-      const target = page.getByRole('button', { name: pattern }).or(page.getByText(pattern, { exact: false })).first()
+      const target = page.getByRole('button', { name: pattern }).or(page.getByText(pattern, { exact: false })).filter({ visible: true }).first()
       if (await target.count() === 0) return false
       await target.click({ timeout: 10_000 })
       return true
@@ -258,6 +264,14 @@ async function lifecyclePhase() {
         await page.getByText('Internal Testing Notice').waitFor({ state: 'hidden', timeout: 10_000 }).catch(() => undefined)
         report.add('ui.first-run-notice', dismissed && await page.getByText('Internal Testing Notice').count() === 0 ? 'pass' : 'warn', U, 'first-run "Internal Testing Notice" dismissed with Continue')
       } else report.add('ui.first-run-notice', 'info', U, 'no first-run notice shown')
+      // Second first-run dialog (run 34927945033): "Add an API key to get started". Never enter a key; choose later.
+      const keyDialog = page.getByText('Add an API key to get started')
+      await keyDialog.waitFor({ state: 'visible', timeout: 5_000 }).catch(() => undefined)
+      if (await keyDialog.count() > 0) {
+        await page.getByRole('button', { name: 'Configure later' }).click({ timeout: 10_000 })
+        await keyDialog.waitFor({ state: 'hidden', timeout: 10_000 }).catch(() => undefined)
+        report.add('ui.api-key-dialog', await keyDialog.count() === 0 ? 'pass' : 'warn', U, 'first-run API key dialog closed with "Configure later" (no key entered)')
+      } else report.add('ui.api-key-dialog', 'info', U, 'no API key dialog shown')
       await shot('after-notice')
       const composer = { audioModeChip: await page.locator('[data-testid=dsh-audio-mode-chip]').count(), mic: await page.locator('[data-testid=dsh-voice-capture-mic]').count() }
       report.add('ui.start-composer', composer.audioModeChip > 0 ? 'pass' : 'warn', U, `start page composer: release-kit audio mode chip ${composer.audioModeChip}, voice-capture mic ${composer.mic}`, composer)
