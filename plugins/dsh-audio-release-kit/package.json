@@ -1,0 +1,40 @@
+{
+  "name": "dsh-audio-release-kit",
+  "version": "0.2.2",
+  "description": "DeepSeek Harness Audio (Local Build) release kit: no-tools audio preset, audio server settings card and an \"audio mode\" composer chip. Contacts no model server on its own.",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src/index.js",
+    "lib/client.js",
+    "lib/client.js.map",
+    "presets",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "agentPresets": "./presets",
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-settings-plugins",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-api-workspace-controller",
+        "@deepseek-ai/dsh-client-ui-workspace"
+      ]
+    }
+  }
+}

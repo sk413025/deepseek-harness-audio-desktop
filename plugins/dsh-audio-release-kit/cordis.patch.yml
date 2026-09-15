@@ -1,0 +1,5 @@
+# dsh-audio-release-kit bundle layer. The row itself does nothing at runtime; the package ships
+# read-only agent presets through `dsh.agentPresets` (Desktop host local patch 0004).
+- insert:
+    - id: audio-release-kit
+      name: dsh-audio-release-kit

@@ -1,0 +1,2 @@
+name: DGX audio (no tools)
+description: For audio models served through dsh-dgx-audio (vLLM / vLLM-Omni). These models do not call tools, so no tools are mounted. Record or attach audio, then pick an audio model.
