@@ -1,6 +1,6 @@
 {
   "name": "dsh-dgx-audio",
-  "version": "0.4.9",
+  "version": "0.4.10",
   "description": "DeepSeek Harness plugin: capability-aware audio adapter for OpenAI-compatible vLLM / vLLM-Omni servers (complete-clip audio, SSE text streaming, progressive audio feed, host-mediated realtime duplex); dependency-free",
   "private": true,
   "type": "module",

@@ -25,6 +25,30 @@ export const RESUME_RETRY_DELAYS_MS = Object.freeze([0, 500, 1500])
 /** Window in which a server outcome (response.done, error, echo) is attributed to a sent control. */
 export const CONTROL_OUTCOME_MS = 3000
 
+/**
+ * Fields of a server `playback.acknowledged`. vLLM-Omni's realtime handler wraps the native event as
+ * `{type, event: {item_id: "item_<response_id>", played_ms, committed_ms, truncate, playback, history_committed}}`
+ * (realtime_output.py / serving.py at 58adeec); older or flat shapes put the fields at the top level.
+ */
+export function playbackAckOf(event) {
+  const inner = event?.event !== null && typeof event?.event === 'object' ? event.event : event ?? {}
+  const itemId = typeof inner.item_id === 'string' ? inner.item_id : null
+  const responseId = typeof inner.response_id === 'string' ? inner.response_id
+    : typeof event?.response_id === 'string' ? event.response_id
+      : itemId?.startsWith('item_') ? itemId.slice(5) : null
+  const num = v => (Number.isFinite(v) ? v : null)
+  const playback = inner.playback !== null && typeof inner.playback === 'object' ? inner.playback : null
+  return {
+    responseId,
+    itemId,
+    playedMs: num(inner.played_ms) ?? num(playback?.played_ms),
+    committedMs: num(inner.committed_ms) ?? num(playback?.committed_ms),
+    truncate: inner.truncate === true,
+    historyCommitted: typeof inner.history_committed === 'boolean' ? inner.history_committed : null,
+    playback: playback === null ? null : { generatedMs: num(playback.generated_ms), sentMs: num(playback.sent_ms), playedMs: num(playback.played_ms), committedMs: num(playback.committed_ms) },
+  }
+}
+
 export class LiveError extends Error {
   constructor(code, message, status) {
     super(message)
@@ -261,6 +285,11 @@ class LiveSession {
    * feed event and `live/close` `observations[]`. Per-connection acceptance must use the latter (CONTRACT §5, TASK_CONTRACT §K.9).
    */
   observe(key, observation, responseId) {
+    // 0.4.10 (§K.16): the server-reported implementation level is a fact of this connection, not of one observation.
+    // Every fullDuplex event carries it, so a later "verified" event never reads as "not reported" to a per-key UI.
+    if (key === 'fullDuplex' && observation.implementationLevel === undefined && this.implementationLevel !== undefined) {
+      observation = { ...observation, implementationLevel: this.implementationLevel }
+    }
     const at = new Date().toISOString()
     const observedBy = { liveId: this.liveId, sessionId: this.sessionId, model: this.model.id, at, ...(responseId ? { responseId } : {}) }
     this.deps.capabilities.observe(this.route, this.model, key, { ...observation, observedBy })
@@ -273,6 +302,7 @@ class LiveSession {
     if (caps === null || typeof caps !== 'object') return
     const level = typeof caps.implementation_level === 'string' ? caps.implementation_level : undefined
     if (level !== undefined) {
+      this.implementationLevel = level
       this.observe('fullDuplex', level === 'model_native_duplex'
         ? { state: 'advertised', source: 'server-session', implementationLevel: level, detail: 'session.created implementation_level' }
         : { state: 'unsupported', source: 'server-session', implementationLevel: level, detail: `server implementation_level ${level}` })
@@ -443,7 +473,10 @@ class LiveSession {
       case 'playback-ack': {
         const playedMs = Number(control.playedMs)
         if (typeof control.responseId !== 'string' || !(playedMs >= 0)) throw new LiveError('BAD_REQUEST', 'playback-ack needs responseId and playedMs', 400)
-        this.client.send({ type: 'playback.ack', response_id: control.responseId, item_id: `item_${control.responseId}`, played_ms: Math.round(playedMs), committed_ms: Math.round(playedMs) })
+        if (control.truncate !== undefined && typeof control.truncate !== 'boolean') throw new LiveError('BAD_REQUEST', 'truncate must be a boolean', 400)
+        if (record !== undefined) { record.playedMs = Math.round(playedMs); if (control.truncate === true) record.truncate = true }
+        // truncate: true = "this is what was actually heard" after the user stopped playback (vLLM-Omni truncating ack).
+        this.client.send({ type: 'playback.ack', response_id: control.responseId, item_id: `item_${control.responseId}`, played_ms: Math.round(playedMs), committed_ms: Math.round(playedMs), ...(control.truncate === true ? { truncate: true } : {}) })
         break
       }
       default:
@@ -640,12 +673,20 @@ class LiveSession {
           }
           break
         }
-        case 'playback.acknowledged':
+        case 'playback.acknowledged': {
           this.evidence.acks += 1
-          this.publish({ type: 'live.playback.ack', responseId: event.response_id ?? null, playedMs: event.played_ms ?? null, committedMs: event.committed_ms ?? null })
-          for (const pending of this.pendingControls(['playback-ack']).filter(c => c.targetResponseId === (event.response_id ?? null)).slice(-1)) this.resolveControl(pending, 'acknowledged')
-          this.observe('playbackAck', { state: 'verified', source: 'live', detail: 'playback.acknowledged echo' }, event.response_id)
+          const ack = playbackAckOf(event)
+          this.publish({ type: 'live.playback.ack', responseId: ack.responseId, itemId: ack.itemId, playedMs: ack.playedMs, committedMs: ack.committedMs, truncate: ack.truncate, historyCommitted: ack.historyCommitted, playback: ack.playback })
+          // Each ack answers one playback.ack: resolve the oldest pending one for that response (same playedMs first).
+          const candidates = this.pendingControls(['playback-ack']).filter(c => ack.responseId === null || c.targetResponseId === ack.responseId).reverse()
+          const pending = candidates.find(c => ack.playedMs !== null && c.playedMs === ack.playedMs) ?? candidates[0]
+          if (pending !== undefined) this.resolveControl(pending, 'acknowledged', { playedMs: ack.playedMs, committedMs: ack.committedMs, ...(ack.truncate ? { truncate: true } : {}), ...(ack.historyCommitted !== null ? { historyCommitted: ack.historyCommitted } : {}) })
+          if (!this.playbackAckObserved) {
+            this.playbackAckObserved = true
+            this.observe('playbackAck', { state: 'verified', source: 'live', detail: 'playback.acknowledged echo' }, ack.responseId ?? undefined)
+          }
           break
+        }
         case 'output_audio_buffer.cleared':
         case 'response.epoch': {
           const epoch = event.epoch ?? event.metadata?.epoch
