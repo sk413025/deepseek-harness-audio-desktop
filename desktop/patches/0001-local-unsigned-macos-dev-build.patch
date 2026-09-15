@@ -1,0 +1,77 @@
+diff --git a/apps/desktop/electron-builder.config.mjs b/apps/desktop/electron-builder.config.mjs
+index c47bd6d..474b5c4 100644
+--- a/apps/desktop/electron-builder.config.mjs
++++ b/apps/desktop/electron-builder.config.mjs
+@@ -30,8 +30,11 @@ export function createElectronBuilderConfig(
+   const resolvedArch = env.DSH_DESKTOP_TARGET_ARCH ?? hostArch
+   const packagesMacOS = targetPlatform === 'darwin' || (targetPlatform === undefined && hostPlatform === 'darwin')
+   const packagesWindows = targetPlatform === 'win32'
+-  const macOSSigning = packagesMacOS ? resolveMacOSSigningEnvironment(env) : undefined
+-  if (packagesMacOS) resolveMacOSNotarizationEnvironment(env)
++  // LOCAL PATCH (sbplab): DSH_DESKTOP_LOCAL_UNSIGNED=1 builds an ad-hoc signed, non-notarized local development
++  // app directory without Developer ID credentials. Release packaging without the variable is unchanged.
++  const localUnsigned = packagesMacOS && env.DSH_DESKTOP_LOCAL_UNSIGNED === '1'
++  const macOSSigning = packagesMacOS && !localUnsigned ? resolveMacOSSigningEnvironment(env) : undefined
++  if (packagesMacOS && !localUnsigned) resolveMacOSNotarizationEnvironment(env)
+   const windowsSigner = packagesWindows
+     ? createWindowsTokenSigner({
+         certificateFile: env.DSH_DESKTOP_WINDOWS_CER_FILE,
+@@ -61,24 +64,33 @@ export function createElectronBuilderConfig(
+       { from: buildPaths.runtime, to: 'runtime' },
+       { from: buildPaths.seed, to: 'seed' },
+     ],
+-    mac: {
+-      category: 'public.app-category.developer-tools',
+-      identity: macOSSigning?.signingIdentity,
+-      forceCodeSigning: true,
+-      hardenedRuntime: true,
+-      notarize: true,
+-      target: ['dmg', 'zip'],
+-    },
++    mac: localUnsigned
++      ? {
++          category: 'public.app-category.developer-tools',
++          identity: '-',
++          forceCodeSigning: false,
++          hardenedRuntime: false,
++          notarize: false,
++          target: ['dir'],
++        }
++      : {
++          category: 'public.app-category.developer-tools',
++          identity: macOSSigning?.signingIdentity,
++          forceCodeSigning: true,
++          hardenedRuntime: true,
++          notarize: true,
++          target: ['dmg', 'zip'],
++        },
+     dmg: {
+       sign: true,
+       writeUpdateInfo: false,
+     },
+     afterSign: context => {
+-      if (context.electronPlatformName !== 'darwin') return
++      if (context.electronPlatformName !== 'darwin' || localUnsigned) return
+       verifyMacOSSignatureAfterSign(context, macOSSigning ?? resolveMacOSSigningEnvironment(env))
+     },
+     artifactBuildCompleted: artifact => {
+-      if (!artifact.file.endsWith('.dmg')) return
++      if (!artifact.file.endsWith('.dmg') || localUnsigned) return
+       return notarizeMacOSDiskImageArtifact(
+         artifact,
+         env,
+diff --git a/apps/desktop/scripts/prepare-seed.ts b/apps/desktop/scripts/prepare-seed.ts
+index 73da078..279b07b 100644
+--- a/apps/desktop/scripts/prepare-seed.ts
++++ b/apps/desktop/scripts/prepare-seed.ts
+@@ -162,7 +162,9 @@ async function main(): Promise<void> {
+     const targetPlatform = process.env.DSH_DESKTOP_TARGET_PLATFORM ?? process.platform
+     let signedMachOFiles: number | undefined
+     let macOSSigning: ReturnType<typeof resolveMacOSSigningEnvironment> | undefined
+-    if (targetPlatform === 'darwin') {
++    // LOCAL PATCH (sbplab): DSH_DESKTOP_LOCAL_UNSIGNED=1 skips Developer ID signing of seed Mach-O objects
++    // for an unsigned local development build; the official release path is unchanged.
++    if (targetPlatform === 'darwin' && process.env.DSH_DESKTOP_LOCAL_UNSIGNED !== '1') {
+       macOSSigning = resolveMacOSSigningEnvironment(process.env)
+       const signing = await signMacOSSeedStore(
+         STORE_ROOT,

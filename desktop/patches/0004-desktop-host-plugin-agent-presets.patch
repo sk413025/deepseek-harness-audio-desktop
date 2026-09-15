@@ -1,0 +1,151 @@
+diff --git a/apps/desktop-host/src/index.ts b/apps/desktop-host/src/index.ts
+index e85badb..971c7a6 100644
+--- a/apps/desktop-host/src/index.ts
++++ b/apps/desktop-host/src/index.ts
+@@ -25,6 +25,7 @@ import type {} from '@deepseek-ai/dsh-api-gateway'
+ import type { ConnectionFetchHandler } from '@deepseek-ai/dsh-client-connection'
+ import type {} from '@deepseek-ai/dsh-client-modules'
+ import { renderIndexInjections, type IndexInjection } from '@deepseek-ai/dsh-host-webserver'
++import { pluginPresetRoots } from './plugin-presets.ts'
+ import {
+   DESKTOP_HOST_PROTOCOL_VERSION,
+   DESKTOP_PIPE_CHUNK_BYTES,
+@@ -169,7 +170,11 @@ function desktopPatches(projectDir: string, allowLinkedPackages: boolean): Patch
+       id: 'agent-presets',
+       config: {
+         ...(agentPresets.config ?? {}) as Record<string, unknown>,
+-        roots: [{ path: join(dshRoot, 'config', 'agent-presets'), trust: 'system' }],
++        roots: [
++          { path: join(dshRoot, 'config', 'agent-presets'), trust: 'system' },
++          // LOCAL PATCH (sbplab): read-only presets shipped by installed profile packages (`dsh.agentPresets`).
++          ...pluginPresetRoots(projectDir, profile.layers, allowLinkedPackages),
++        ],
+       },
+     }])
+   }
+diff --git a/apps/desktop-host/src/plugin-presets.ts b/apps/desktop-host/src/plugin-presets.ts
+new file mode 100644
+index 0000000..72ca44f
+--- /dev/null
++++ b/apps/desktop-host/src/plugin-presets.ts
+@@ -0,0 +1,62 @@
++/**
++ * LOCAL PATCH (sbplab): agent presets contributed by installed Desktop profile packages.
++ *
++ * Desktop pins the agent-presets roots to the dsh package's shipped presets, so a plugin whose
++ * models cannot use the default tool-mounting presets (for example audio models without tool
++ * calling) had no way to ship a matching preset. A profile package may declare
++ * `dsh.agentPresets: "./presets"`; that directory becomes an additional read-only `system` root.
++ */
++
++import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs'
++import { join, resolve, sep } from 'node:path'
++
++/** One agent-presets root entry. */
++export interface PluginPresetRoot {
++  readonly path: string
++  readonly trust: 'system'
++}
++
++/** The part of a resolved profile layer this module reads. */
++export interface PresetLayer {
++  readonly packageName: string
++  readonly packageDir: string
++}
++
++function inside(root: string, target: string): boolean {
++  return target === root || target.startsWith(root + sep)
++}
++
++/**
++ * Collect preset roots declared by profile packages.
++ * @param projectDir - active Desktop profile directory; roots must stay inside it unless linked packages are allowed.
++ * @param layers - resolved profile layers in bundle order.
++ * @param allowLinkedPackages - development mode accepts linked packages outside the profile.
++ * @returns existing preset directories, in bundle order, without duplicates.
++ */
++export function pluginPresetRoots(
++  projectDir: string,
++  layers: readonly PresetLayer[],
++  allowLinkedPackages = false,
++): readonly PluginPresetRoot[] {
++  const profile = realpathSync(projectDir)
++  const roots: PluginPresetRoot[] = []
++  for (const layer of layers) {
++    let manifest: unknown
++    try {
++      manifest = JSON.parse(readFileSync(join(layer.packageDir, 'package.json'), 'utf8'))
++    } catch {
++      continue
++    }
++    const dsh = typeof manifest === 'object' && manifest !== null ? (manifest as { dsh?: unknown }).dsh : undefined
++    const declared = typeof dsh === 'object' && dsh !== null ? (dsh as { agentPresets?: unknown }).agentPresets : undefined
++    if (typeof declared !== 'string' || declared === '') continue
++    const candidate = resolve(layer.packageDir, declared)
++    if (!existsSync(candidate) || !statSync(candidate).isDirectory()) continue
++    const real = realpathSync(candidate)
++    if (!inside(realpathSync(layer.packageDir), real)) continue
++    if (!allowLinkedPackages && !inside(profile, real)) continue
++    if (roots.some(root => root.path === real)) continue
++    roots.push({ path: real, trust: 'system' })
++  }
++  return roots
++}
+diff --git a/apps/desktop-host/tests/plugin-presets.spec.ts b/apps/desktop-host/tests/plugin-presets.spec.ts
+new file mode 100644
+index 0000000..7f92430
+--- /dev/null
++++ b/apps/desktop-host/tests/plugin-presets.spec.ts
+@@ -0,0 +1,52 @@
++// LOCAL PATCH (sbplab): agent presets contributed by Desktop profile packages.
++import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { afterEach, describe, expect, it } from 'vitest'
++import { pluginPresetRoots } from '../src/plugin-presets.ts'
++
++const roots: string[] = []
++afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
++
++function pkg(profile: string, name: string, manifest: Record<string, unknown>, presetDir?: string): string {
++  const dir = join(profile, 'node_modules', name)
++  mkdirSync(dir, { recursive: true })
++  writeFileSync(join(dir, 'package.json'), JSON.stringify({ name, version: '1.0.0', ...manifest }))
++  if (presetDir !== undefined) mkdirSync(join(dir, presetDir, 'audio-no-tools'), { recursive: true })
++  return dir
++}
++
++describe('plugin-contributed agent preset roots', () => {
++  it('adds declared preset directories inside the profile as read-only system roots', () => {
++    const base = mkdtempSync(join(tmpdir(), 'dsh presets 測試-'))
++    roots.push(base)
++    const profile = join(base, 'profile')
++    const kit = pkg(profile, 'kit', { dsh: { agentPresets: './presets' } }, 'presets')
++    const plain = pkg(profile, 'plain', { dsh: { bundle: { patch: './p.yml' } } })
++    const missing = pkg(profile, 'missing', { dsh: { agentPresets: './nope' } })
++    const escaping = pkg(profile, 'escaping', { dsh: { agentPresets: '../kit/presets' } })
++    const result = pluginPresetRoots(profile, [
++      { packageName: 'plain', packageDir: plain },
++      { packageName: 'kit', packageDir: kit },
++      { packageName: 'missing', packageDir: missing },
++      { packageName: 'escaping', packageDir: escaping },
++    ])
++    expect(result).toHaveLength(1)
++    expect(result[0]?.trust).toBe('system')
++    expect(result[0]?.path.endsWith(join('node_modules', 'kit', 'presets'))).toBe(true)
++  })
++
++  it('rejects linked packages outside the profile unless development allows them', () => {
++    const base = mkdtempSync(join(tmpdir(), 'dsh presets linked-'))
++    roots.push(base)
++    const profile = join(base, 'profile')
++    mkdirSync(join(profile, 'node_modules'), { recursive: true })
++    const outside = join(base, 'outside-kit')
++    mkdirSync(join(outside, 'presets'), { recursive: true })
++    writeFileSync(join(outside, 'package.json'), JSON.stringify({ name: 'kit', dsh: { agentPresets: './presets' } }))
++    symlinkSync(outside, join(profile, 'node_modules', 'kit'))
++    const layer = [{ packageName: 'kit', packageDir: join(profile, 'node_modules', 'kit') }]
++    expect(pluginPresetRoots(profile, layer)).toEqual([])
++    expect(pluginPresetRoots(profile, layer, true)).toHaveLength(1)
++  })
++})

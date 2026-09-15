@@ -1,0 +1,1576 @@
+diff --git a/apps/desktop/electron-builder.config.mjs b/apps/desktop/electron-builder.config.mjs
+index 474b5c4..3664286 100644
+--- a/apps/desktop/electron-builder.config.mjs
++++ b/apps/desktop/electron-builder.config.mjs
+@@ -50,7 +50,19 @@ export function createElectronBuilderConfig(
+   const buildPaths = desktopTargetBuildPaths(update.target)
+   return {
+     appId,
+-    productName: 'DeepSeek Harness',
++    // LOCAL PATCH (sbplab): local builds may carry a distinct, truthful product name (e.g. a custom audio build).
++    productName: localUnsigned && env.DSH_DESKTOP_LOCAL_PRODUCT_NAME ? env.DSH_DESKTOP_LOCAL_PRODUCT_NAME : 'DeepSeek Harness',
++    // LOCAL PATCH (sbplab): a custom distribution also carries its product name and optional profile inside the
++    // packaged package.json, so Electron's app name, userData and single-instance lock (and the Desktop profile)
++    // are distinct from any other DeepSeek Harness Desktop installed on the same machine.
++    ...(localUnsigned && env.DSH_DESKTOP_LOCAL_PRODUCT_NAME
++      ? {
++          extraMetadata: {
++            productName: env.DSH_DESKTOP_LOCAL_PRODUCT_NAME,
++            ...(env.DSH_DESKTOP_LOCAL_PROFILE ? { dshDesktopProfile: env.DSH_DESKTOP_LOCAL_PROFILE } : {}),
++          },
++        }
++      : {}),
+     artifactName: 'deepseek-harness-${version}-${os}-${arch}.${ext}',
+     directories: { output: buildPaths.artifacts },
+     asar: true,
+@@ -67,6 +79,10 @@ export function createElectronBuilderConfig(
+     mac: localUnsigned
+       ? {
+           category: 'public.app-category.developer-tools',
++          // LOCAL PATCH (sbplab): truthful microphone purpose shown by macOS before the first recording.
++          extendInfo: {
++            NSMicrophoneUsageDescription: 'DeepSeek Harness records audio only while you use the microphone button in a conversation. 只有在您於對話中按下麥克風按鈕時才會錄音。',
++          },
+           identity: '-',
+           forceCodeSigning: false,
+           hardenedRuntime: false,
+diff --git a/apps/desktop/renderer/plugin-manager.css b/apps/desktop/renderer/plugin-manager.css
+index 89d1c1f..3ec87b6 100644
+--- a/apps/desktop/renderer/plugin-manager.css
++++ b/apps/desktop/renderer/plugin-manager.css
+@@ -106,3 +106,49 @@ li {
+   display: flex;
+   gap: 8px;
+ }
++
++/* LOCAL PATCH (sbplab): local package files, bundled plugins and restore failures. */
++.file-install {
++  display: flex;
++  align-items: center;
++  gap: 12px;
++  margin-top: 12px;
++}
++
++.file-install button {
++  flex: none;
++  white-space: nowrap;
++}
++
++.hint {
++  margin: 0;
++  color: GrayText;
++  font-size: 0.9em;
++}
++
++.package-source {
++  margin-left: 8px;
++  padding: 1px 7px;
++  border: 1px solid ButtonBorder;
++  border-radius: 999px;
++  color: GrayText;
++  font-size: 0.8em;
++  white-space: nowrap;
++}
++
++li.is-disabled .package-name,
++li.is-failed .package-name {
++  color: GrayText;
++}
++
++.package-message {
++  display: block;
++  margin-top: 4px;
++  color: GrayText;
++  font-size: 0.85em;
++  overflow-wrap: anywhere;
++}
++
++.package-identity {
++  min-width: 0;
++}
+diff --git a/apps/desktop/renderer/plugin-manager.html b/apps/desktop/renderer/plugin-manager.html
+index 03fbb4b..45ea61b 100644
+--- a/apps/desktop/renderer/plugin-manager.html
++++ b/apps/desktop/renderer/plugin-manager.html
+@@ -23,6 +23,10 @@
+           <button id="install" type="submit"></button>
+         </div>
+       </form>
++      <div class="file-install">
++        <button id="install-file" class="quiet" type="button" aria-describedby="install-file-hint"></button>
++        <p id="install-file-hint" class="hint"></p>
++      </div>
+       <p id="status" role="status" aria-live="polite"></p>
+       <section aria-labelledby="installed-heading">
+         <h2 id="installed-heading"></h2>
+diff --git a/apps/desktop/renderer/plugin-manager.js b/apps/desktop/renderer/plugin-manager.js
+index a50de3a..938af2a 100644
+--- a/apps/desktop/renderer/plugin-manager.js
++++ b/apps/desktop/renderer/plugin-manager.js
+@@ -13,6 +13,8 @@ async function main() {
+   document.querySelector('#install').textContent = messages.install
+   document.querySelector('#installed-heading').textContent = messages.installed
+   document.querySelector('#empty').textContent = messages.noPlugins
++  document.querySelector('#install-file').textContent = messages.installFromFile
++  document.querySelector('#install-file-hint').textContent = messages.installFromFileHint
+ 
+   const list = document.querySelector('#plugins')
+   const empty = document.querySelector('#empty')
+@@ -26,33 +28,65 @@ async function main() {
+     status.textContent = statusMessage
+   }
+ 
++  function button(label, onClick) {
++    const control = document.createElement('button')
++    control.type = 'button'
++    control.textContent = label
++    control.addEventListener('click', onClick)
++    return control
++  }
++
++  const sourceLabel = { bundled: messages.sourceBundled, local: messages.sourceLocal, registry: messages.sourceRegistry }
++
+   async function render() {
+     const plugins = await api.plugins.list()
+     list.replaceChildren(...plugins.map(plugin => {
+       const item = document.createElement('li')
++      item.classList.toggle('is-disabled', plugin.state === 'disabled')
++      item.classList.toggle('is-failed', plugin.state === 'restore-failed')
+       const identity = document.createElement('span')
++      identity.className = 'package-identity'
++      const name = document.createElement('span')
++      name.className = 'package-name'
++      name.textContent = plugin.name
+       const version = document.createElement('span')
+       version.className = 'package-version'
+       version.textContent = plugin.version
+-      identity.append(document.createTextNode(plugin.name), version)
+-      const remove = document.createElement('button')
+-      remove.type = 'button'
+-      remove.textContent = messages.remove
+-      remove.addEventListener('click', () => void run(
+-        () => api.plugins.remove(plugin.name),
+-        message('removing', { name: plugin.name }),
+-      ))
+-      const update = document.createElement('button')
+-      update.type = 'button'
+-      update.textContent = messages.update
+-      update.addEventListener('click', () => {
+-        const next = window.prompt(message('targetVersion', { name: plugin.name }), plugin.version)?.trim()
+-        if (next === undefined || next === '' || next === plugin.version) return
+-        void run(() => api.plugins.update(plugin.name, next), message('updating', { name: plugin.name }))
+-      })
++      const source = document.createElement('span')
++      source.className = 'package-source'
++      source.textContent = plugin.state === 'disabled'
++        ? `${sourceLabel[plugin.source] ?? plugin.source} · ${messages.stateDisabled}`
++        : sourceLabel[plugin.source] ?? plugin.source
++      identity.append(name, version, source)
++      if (plugin.state === 'restore-failed') {
++        const detail = document.createElement('span')
++        detail.className = 'package-message'
++        detail.textContent = message('restoreFailed', { message: plugin.message ?? '' })
++        identity.append(detail)
++      }
+       const actions = document.createElement('span')
+       actions.className = 'package-actions'
+-      actions.append(update, remove)
++      if (plugin.state === 'restore-failed') {
++        actions.append(button(messages.dismiss, () => void run(() => api.plugins.remove(plugin.name), message('removing', { name: plugin.name }))))
++      } else if (plugin.state === 'disabled') {
++        actions.append(button(messages.enable, () => void run(
++          () => api.plugins.setBundledEnabled(plugin.name, true),
++          message('enabling', { name: plugin.name }),
++        )))
++      } else {
++        if (plugin.source === 'registry') {
++          actions.append(button(messages.update, () => {
++            const next = window.prompt(message('targetVersion', { name: plugin.name }), plugin.version)?.trim()
++            if (next === undefined || next === '' || next === plugin.version) return
++            void run(() => api.plugins.update(plugin.name, next), message('updating', { name: plugin.name }))
++          }))
++        }
++        const bundled = plugin.source === 'bundled'
++        actions.append(button(bundled ? messages.disable : messages.remove, () => void run(
++          () => api.plugins.remove(plugin.name),
++          message(bundled ? 'disabling' : 'removing', { name: plugin.name }),
++        )))
++      }
+       item.append(identity, actions)
+       return item
+     }))
+@@ -93,6 +127,17 @@ async function main() {
+       input.value = ''
+     }, message('installing', { spec }))
+   })
++  document.querySelector('#install-file').addEventListener('click', () => {
++    setBusy(true, messages.installingFile)
++    void api.plugins.addLocal().then(async (installed) => {
++      await render()
++      status.textContent = installed ? messages.operationComplete : ''
++    }).catch((error) => {
++      status.textContent = error instanceof Error ? error.message : String(error)
++    }).finally(() => {
++      setBusy(false, status.textContent)
++    })
++  })
+   refresh.addEventListener('click', () => void load(messages.refreshing, messages.refreshed))
+ 
+   await load(messages.loadingPlugins, '')
+diff --git a/apps/desktop/scripts/prepare-seed.ts b/apps/desktop/scripts/prepare-seed.ts
+index 279b07b..d820a8a 100644
+--- a/apps/desktop/scripts/prepare-seed.ts
++++ b/apps/desktop/scripts/prepare-seed.ts
+@@ -5,7 +5,13 @@ import { createHash } from 'node:crypto'
+ import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+ import { tmpdir } from 'node:os'
+ import { delimiter, dirname, join, relative, resolve, sep } from 'node:path'
+-import { createSeedMetadata } from '../src/project-manager.ts'
++import {
++  createSeedMetadata,
++  DESKTOP_BUNDLED_PLUGINS_FILE,
++  DESKTOP_LOCAL_PACKAGES_DIR,
++  inspectLocalPackage,
++  localPackageFileName,
++} from '../src/project-manager.ts'
+ import { DESKTOP_HOST_PROTOCOL_VERSION } from '../src/host-protocol.ts'
+ import { parseDesktopRelease, type DesktopRelease } from '../src/release.ts'
+ import {
+@@ -125,6 +131,37 @@ function inventory(root: string): readonly { path: string; bytes: number; sha256
+   })
+ }
+ 
++/**
++ * LOCAL PATCH (sbplab): add plugin package files from DSH_DESKTOP_BUNDLED_PLUGINS_DIR to the seed so
++ * the lockfile installs them offline on first launch and on every application update.
++ */
++function addBundledPlugins(): void {
++  const directory = process.env.DSH_DESKTOP_BUNDLED_PLUGINS_DIR
++  if (directory === undefined || directory === '') return
++  const tarballs = readdirSync(directory).filter(name => name.endsWith('.tgz')).sort()
++  if (tarballs.length === 0) throw new Error(`desktop seed: no plugin packages in ${directory}`)
++  const manifestPath = join(SEED_ROOT, 'package.json')
++  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
++    dependencies: Record<string, string>
++    dsh: { profile: { bundles: string[] } }
++  }
++  mkdirSync(join(SEED_ROOT, DESKTOP_LOCAL_PACKAGES_DIR), { recursive: true })
++  const rows = tarballs.map((tarball) => {
++    const source = resolve(directory, tarball)
++    const identity = inspectLocalPackage(source)
++    if (identity.name in manifest.dependencies) throw new Error(`desktop seed: bundled plugin ${identity.name} collides with a core package`)
++    const file = localPackageFileName(identity.name, identity.version, identity.sha256)
++    copyFileSync(source, join(SEED_ROOT, DESKTOP_LOCAL_PACKAGES_DIR, file))
++    manifest.dependencies[identity.name] = `file:./${DESKTOP_LOCAL_PACKAGES_DIR}/${file}`
++    return { name: identity.name, version: identity.version, file, sha256: identity.sha256 }
++  }).sort((left, right) => left.name.localeCompare(right.name))
++  if (new Set(rows.map(row => row.name)).size !== rows.length) throw new Error('desktop seed: duplicate bundled plugin package names')
++  manifest.dsh.profile.bundles.push(...rows.map(row => row.name))
++  writeFileSync(manifestPath, `${JSON.stringify(manifest, undefined, 2)}\n`, { mode: 0o600 })
++  writeFileSync(join(SEED_ROOT, DESKTOP_BUNDLED_PLUGINS_FILE), `${JSON.stringify({ schemaVersion: 1, plugins: rows }, undefined, 2)}\n`, { mode: 0o600 })
++  process.stdout.write(`desktop seed: bundled ${rows.map(row => `${row.name}@${row.version}`).join(', ')}\n`)
++}
++
+ async function verifyOfflineInstallation(release: DesktopRelease): Promise<void> {
+   const installedModules = join(SEED_ROOT, 'node_modules')
+   try {
+@@ -149,6 +186,7 @@ async function main(): Promise<void> {
+     copyFileSync(join(PACKAGE_SET_ROOT, DESKTOP_PACKAGE_SET_FILE), join(SEED_ROOT, DESKTOP_PACKAGE_SET_FILE))
+     cpSync(join(PACKAGE_SET_ROOT, DESKTOP_PACKAGES_DIR), join(SEED_ROOT, DESKTOP_PACKAGES_DIR), { recursive: true })
+     createSeedMetadata(SEED_ROOT, release)
++    addBundledPlugins()
+     await runPnpm(['install', '--lockfile-only'])
+     verifyDesktopCoreLockfile(
+       readFileSync(join(SEED_ROOT, 'pnpm-lock.yaml'), 'utf8'),
+diff --git a/apps/desktop/src/ipc.ts b/apps/desktop/src/ipc.ts
+index 4fb946a..1200d3f 100644
+--- a/apps/desktop/src/ipc.ts
++++ b/apps/desktop/src/ipc.ts
+@@ -1,6 +1,6 @@
+ /** Typed preload operations exposed only by the Electron shell. */
+ 
+-import type { DesktopPluginRecord } from './project-manager.ts'
++import type { DesktopPluginDetail } from './project-manager.ts'
+ import type { DesktopLocale } from './locale.ts'
+ 
+ /** IPC channel names kept private to the desktop application bundle. */
+@@ -10,6 +10,8 @@ export const DESKTOP_IPC = {
+   pluginsAdd: 'dsh-desktop:plugins-add',
+   pluginsRemove: 'dsh-desktop:plugins-remove',
+   pluginsUpdate: 'dsh-desktop:plugins-update',
++  pluginsAddLocal: 'dsh-desktop:plugins-add-local',
++  pluginsSetBundledEnabled: 'dsh-desktop:plugins-set-bundled-enabled',
+   updatesCheck: 'dsh-desktop:updates-check',
+   updatesInstall: 'dsh-desktop:updates-install',
+   updatesState: 'dsh-desktop:updates-state',
+@@ -27,10 +29,13 @@ export interface DshDesktopApi {
+   readonly protocolVersion: 1
+   locale(): Promise<DesktopLocale>
+   readonly plugins: {
+-    list(): Promise<readonly DesktopPluginRecord[]>
++    list(): Promise<readonly DesktopPluginDetail[]>
+     add(spec: string): Promise<void>
+     remove(name: string): Promise<void>
+     update(name: string, version: string): Promise<void>
++    /** Ask the shell to choose a local plugin package file; resolves false when the user cancels. */
++    addLocal(): Promise<boolean>
++    setBundledEnabled(name: string, enabled: boolean): Promise<void>
+   }
+   readonly updates: {
+     check(): Promise<DesktopUpdateState>
+diff --git a/apps/desktop/src/locale.ts b/apps/desktop/src/locale.ts
+index b666cfd..cb01f1e 100644
+--- a/apps/desktop/src/locale.ts
++++ b/apps/desktop/src/locale.ts
+@@ -34,6 +34,20 @@ export const en = {
+   refreshing: 'Refreshing…',
+   refreshed: 'Plugin list refreshed.',
+   loadingPlugins: 'Reading Desktop plugins…',
++  installFromFile: 'Install from File…',
++  installFromFileHint: 'Choose a Harness plugin package (.tgz). Package files are kept inside the Desktop profile and restored after app updates.',
++  pluginPackageFilter: 'Harness plugin package',
++  installingFile: 'Installing plugin package file…',
++  sourceBundled: 'Included with app',
++  sourceLocal: 'Package file',
++  sourceRegistry: 'npm',
++  stateDisabled: 'Disabled',
++  disable: 'Disable',
++  enable: 'Enable',
++  disabling: 'Disabling {name}…',
++  enabling: 'Enabling {name}…',
++  restoreFailed: 'Not restored after the app update: {message}',
++  dismiss: 'Dismiss',
+ } as const
+ 
+ /** Every Desktop locale supplies the complete English key set. */
+@@ -73,17 +87,84 @@ export const zh = {
+   refreshing: '正在刷新…',
+   refreshed: '插件列表已刷新。',
+   loadingPlugins: '正在读取桌面插件…',
++  installFromFile: '从文件安装…',
++  installFromFileHint: '选择 Harness 插件包（.tgz）。插件包文件保存在桌面端配置目录中，应用更新后会自动恢复。',
++  pluginPackageFilter: 'Harness 插件包',
++  installingFile: '正在安装插件包文件…',
++  sourceBundled: '随应用附带',
++  sourceLocal: '文件安装',
++  sourceRegistry: 'npm',
++  stateDisabled: '已停用',
++  disable: '停用',
++  enable: '启用',
++  disabling: '正在停用 {name}…',
++  enabling: '正在启用 {name}…',
++  restoreFailed: '应用更新后未能恢复：{message}',
++  dismiss: '忽略',
++} as const satisfies DesktopMessages
++
++/** LOCAL PATCH (sbplab): Traditional Chinese shell copy for zh-TW / zh-HK / zh-Hant systems. */
++export const zhTW = {
++  application: '應用程式',
++  startupFailed: 'DeepSeek Harness 無法啟動',
++  pluginsMenu: '桌面外掛…',
++  pluginsMenuPackagedOnly: '桌面外掛…（打包後的 App 才可使用）',
++  checkUpdatesMenu: '檢查更新…',
++  updateCheckFailedTitle: '檢查更新失敗',
++  unknownError: '未知錯誤',
++  updateCheckTitle: '檢查更新',
++  updateCurrent: '目前已是最新版本。',
++  updateTitle: 'DeepSeek Harness 更新',
++  updateAvailable: '有可用的更新',
++  updateDetail: 'DeepSeek Harness {version}\n\n新版本包含相符的 dsh，安裝後會重新啟動。',
++  installAndRestart: '安裝並重新啟動',
++  later: '稍後',
++  updateFailedTitle: '更新失敗',
++  pluginManagerTitle: '桌面外掛',
++  pluginWindowTitle: 'DeepSeek Harness — 桌面外掛',
++  pluginManagerDescription: '外掛只安裝在桌面版自己的 node_modules，並由內建的 pnpm 管理。',
++  refresh: '重新整理',
++  npmPackage: 'npm 套件',
++  install: '安裝',
++  installed: '已安裝',
++  noPlugins: '尚未安裝桌面外掛。',
++  remove: '移除',
++  update: '更新',
++  targetVersion: '輸入 {name} 的目標版本',
++  removing: '正在移除 {name}…',
++  updating: '正在更新 {name}…',
++  installing: '正在安裝 {spec}…',
++  operationComplete: '完成，桌面後端已重新啟動。',
++  refreshing: '正在重新整理…',
++  refreshed: '外掛清單已更新。',
++  loadingPlugins: '正在讀取桌面外掛…',
++  installFromFile: '從檔案安裝…',
++  installFromFileHint: '選擇 Harness 外掛套件檔（.tgz）。套件檔會保存在桌面版設定檔目錄中，App 更新後自動還原。',
++  pluginPackageFilter: 'Harness 外掛套件',
++  installingFile: '正在安裝外掛套件檔…',
++  sourceBundled: '隨 App 附帶',
++  sourceLocal: '檔案安裝',
++  sourceRegistry: 'npm',
++  stateDisabled: '已停用',
++  disable: '停用',
++  enable: '啟用',
++  disabling: '正在停用 {name}…',
++  enabling: '正在啟用 {name}…',
++  restoreFailed: 'App 更新後未能還原：{message}',
++  dismiss: '略過',
+ } as const satisfies DesktopMessages
+ 
+ /** Locale payload exposed to the Desktop-owned renderer. */
+ export interface DesktopLocale {
+-  readonly id: 'en' | 'zh-CN'
++  readonly id: 'en' | 'zh-CN' | 'zh-TW'
+   readonly messages: DesktopMessages
+ }
+ 
+ /** Resolve Electron's locale to one shipped Desktop dictionary. */
+ export function resolveDesktopLocale(locale: string): DesktopLocale {
+-  return locale.toLowerCase().startsWith('zh')
++  const normalized = locale.toLowerCase()
++  if (/^zh-(?:tw|hk|mo|hant)/u.test(normalized)) return { id: 'zh-TW', messages: zhTW }
++  return normalized.startsWith('zh')
+     ? { id: 'zh-CN', messages: zh }
+     : { id: 'en', messages: en }
+ }
+diff --git a/apps/desktop/src/main.ts b/apps/desktop/src/main.ts
+index 8bc9fdc..9365557 100644
+--- a/apps/desktop/src/main.ts
++++ b/apps/desktop/src/main.ts
+@@ -1,5 +1,6 @@
+ /** Electron shell: desktop project ownership, custom protocol, windows, and lifecycle. */
+ 
++import { readFileSync } from 'node:fs'
+ import { readFile, writeFile } from 'node:fs/promises'
+ import { extname, join, normalize, resolve, sep } from 'node:path'
+ import { fileURLToPath } from 'node:url'
+@@ -10,8 +11,10 @@ import {
+   ipcMain,
+   Menu,
+   protocol,
++  session,
+   type IpcMainInvokeEvent,
+ } from 'electron'
++import { decidePermissionCheck, decidePermissionRequest } from './permissions.ts'
+ import { resolveDesktopPaths } from './paths.ts'
+ import { DesktopProjectManager, type DesktopProjectHooks } from './project-manager.ts'
+ import { DesktopHostProcess } from './host-process.ts'
+@@ -130,9 +133,30 @@ async function serveShellAsset(request: Request): Promise<Response> {
+   }
+ }
+ 
++/**
++ * LOCAL PATCH (sbplab): optional distribution profile baked into the packaged package.json (`dshDesktopProfile`).
++ * Official builds carry none and keep `profiles/desktop`.
++ */
++function distributionProfile(): string {
++  try {
++    const manifest = JSON.parse(readFileSync(join(app.getAppPath(), 'package.json'), 'utf8')) as { dshDesktopProfile?: unknown }
++    return typeof manifest.dshDesktopProfile === 'string' ? manifest.dshDesktopProfile : 'desktop'
++  } catch {
++    return 'desktop'
++  }
++}
++
+ async function main(): Promise<void> {
++  // LOCAL PATCH (sbplab): audio capture only for the app origin; other permissions keep Electron's default.
++  session.defaultSession.setPermissionRequestHandler((_contents, permission, callback, details) => {
++    const media = details as { mediaTypes?: string[], requestingUrl?: string, isMainFrame?: boolean }
++    callback(decidePermissionRequest({ permission, requestingUrl: media.requestingUrl, mediaTypes: media.mediaTypes, isMainFrame: media.isMainFrame }))
++  })
++  session.defaultSession.setPermissionCheckHandler((_contents, permission, requestingOrigin, details) => (
++    decidePermissionCheck(permission, requestingOrigin, (details as { mediaType?: string }).mediaType)
++  ))
+   const resources = runtimeResources()
+-  const paths = resolveDesktopPaths()
++  const paths = resolveDesktopPaths(undefined, distributionProfile())
+   const development = developmentProject()
+   const activeProject = development ?? paths.profile
+   const hostInspectPort = developmentHostInspectPort(development !== undefined)
+@@ -245,7 +269,7 @@ async function main(): Promise<void> {
+   ipcMain.handle(DESKTOP_IPC.pluginsList, (event) => {
+     assertDesktopSender(event, ['shell'])
+     if (development !== undefined) return []
+-    return manager.listPlugins()
++    return manager.listPluginDetails()
+   })
+   ipcMain.handle(DESKTOP_IPC.pluginsAdd, (event, spec: unknown) => {
+     if (typeof spec !== 'string') throw new Error('dsh desktop: plugin spec must be a string')
+@@ -261,6 +285,27 @@ async function main(): Promise<void> {
+     }
+     return mutate(event, { type: 'plugin-update', name, version })
+   })
++  // LOCAL PATCH (sbplab): local plugin package files and bundled plugin enablement.
++  ipcMain.handle(DESKTOP_IPC.pluginsAddLocal, async (event) => {
++    assertDesktopSender(event, ['shell'])
++    const owner = BrowserWindow.fromWebContents(event.sender)
++    const options: Electron.OpenDialogOptions = {
++      title: messages.installFromFile,
++      properties: ['openFile'],
++      filters: [{ name: messages.pluginPackageFilter, extensions: ['tgz'] }],
++    }
++    const selection = owner === null ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(owner, options)
++    const path = selection.filePaths[0]
++    if (selection.canceled || path === undefined) return false
++    await mutate(event, { type: 'plugin-add-local', path })
++    return true
++  })
++  ipcMain.handle(DESKTOP_IPC.pluginsSetBundledEnabled, (event, name: unknown, enabled: unknown) => {
++    if (typeof name !== 'string' || typeof enabled !== 'boolean') {
++      throw new Error('dsh desktop: bundled plugin name must be a string and enabled a boolean')
++    }
++    return mutate(event, { type: 'plugin-set-bundled-enabled', name, enabled })
++  })
+   ipcMain.handle(DESKTOP_IPC.updatesCheck, async (event) => {
+     assertDesktopSender(event, ['shell'])
+     return updates.check()
+diff --git a/apps/desktop/src/paths.ts b/apps/desktop/src/paths.ts
+index 4f88392..5b53cd5 100644
+--- a/apps/desktop/src/paths.ts
++++ b/apps/desktop/src/paths.ts
+@@ -11,6 +11,8 @@ export interface DesktopPaths {
+   readonly rollback: string
+   readonly pending: string
+   readonly lock: string
++  /** LOCAL PATCH (sbplab): disabled bundled plugins and last update-restore failures. */
++  readonly pluginState: string
+   readonly pnpm: {
+     readonly root: string
+     readonly store: string
+@@ -26,16 +28,20 @@ export interface DesktopPaths {
+  * @param dshHome - Harness home shared with npm-installed dsh.
+  * @returns immutable desktop path set.
+  */
+-export function resolveDesktopPaths(dshHome: string = resolveDshHome()): DesktopPaths {
+-  const root = join(dshHome, 'desktop')
++export function resolveDesktopPaths(dshHome: string = resolveDshHome(), profileName = 'desktop'): DesktopPaths {
++  // LOCAL PATCH (sbplab): a custom distribution may own a separate profile (`profiles/<name>`, `<name>/`) so two
++  // Desktop distributions on one machine never re-seed or rewrite each other's package graph.
++  if (!/^desktop(?:-[a-z0-9]+)*$/u.test(profileName)) throw new Error(`dsh desktop: invalid desktop profile name ${JSON.stringify(profileName)}`)
++  const root = join(dshHome, profileName)
+   const pnpm = join(root, 'pnpm')
+   return {
+     root,
+-    profile: join(dshHome, 'profiles', 'desktop'),
++    profile: join(dshHome, 'profiles', profileName),
+     staging: join(root, 'staging'),
+     rollback: join(root, 'rollback', 'profile'),
+     pending: join(root, 'pending.json'),
+     lock: join(root, 'lock'),
++    pluginState: join(root, 'plugin-state.json'),
+     pnpm: {
+       root: pnpm,
+       store: join(pnpm, 'store'),
+diff --git a/apps/desktop/src/permissions.ts b/apps/desktop/src/permissions.ts
+new file mode 100644
+index 0000000..b9a149a
+--- /dev/null
++++ b/apps/desktop/src/permissions.ts
+@@ -0,0 +1,52 @@
++/**
++ * LOCAL PATCH (sbplab): media permission policy for the Desktop shell.
++ *
++ * Electron grants every permission request by default. Audio capture for the shared voice UI is allowed only for the
++ * app's own `dsh-app://app` origin and only for audio (no camera/screen). All other permission kinds keep Electron's
++ * default decision. macOS still shows its own microphone prompt on first use.
++ */
++
++/** The request details this policy reads. */
++export interface MediaPermissionRequest {
++  readonly permission: string
++  readonly requestingUrl?: string | undefined
++  readonly mediaTypes?: readonly string[] | undefined
++  readonly isMainFrame?: boolean | undefined
++}
++
++const APP_ORIGIN = 'dsh-app://app'
++
++function fromAppOrigin(url: string | undefined): boolean {
++  if (url === undefined) return false
++  try {
++    const parsed = new URL(url)
++    return `${parsed.protocol}//${parsed.host}` === APP_ORIGIN
++  } catch {
++    // An unparsable requesting URL cannot be the app origin.
++    return false
++  }
++}
++
++/**
++ * Decide a permission request.
++ * @param request - Electron's permission name plus request details.
++ * @returns true to grant, false to deny.
++ */
++export function decidePermissionRequest(request: MediaPermissionRequest): boolean {
++  if (request.permission !== 'media') return true
++  const types = request.mediaTypes ?? []
++  const audioOnly = types.length > 0 && types.every(type => type === 'audio')
++  return audioOnly && request.isMainFrame !== false && fromAppOrigin(request.requestingUrl)
++}
++
++/**
++ * Decide a synchronous permission check (e.g. `navigator.permissions`, device enumeration labels).
++ * @param permission - Electron's permission name.
++ * @param requestingOrigin - origin performing the check.
++ * @param mediaType - media type for `media` checks.
++ * @returns true when allowed.
++ */
++export function decidePermissionCheck(permission: string, requestingOrigin: string, mediaType?: string): boolean {
++  if (permission !== 'media') return true
++  return (mediaType === undefined || mediaType === 'audio' || mediaType === 'unknown') && fromAppOrigin(requestingOrigin)
++}
+diff --git a/apps/desktop/src/preload.ts b/apps/desktop/src/preload.ts
+index 2fc4dc8..f6cc8e9 100644
+--- a/apps/desktop/src/preload.ts
++++ b/apps/desktop/src/preload.ts
+@@ -11,6 +11,8 @@ const api: DshDesktopApi = {
+     add: spec => ipcRenderer.invoke(DESKTOP_IPC.pluginsAdd, spec) as Promise<void>,
+     remove: name => ipcRenderer.invoke(DESKTOP_IPC.pluginsRemove, name) as Promise<void>,
+     update: (name, version) => ipcRenderer.invoke(DESKTOP_IPC.pluginsUpdate, name, version) as Promise<void>,
++    addLocal: () => ipcRenderer.invoke(DESKTOP_IPC.pluginsAddLocal) as Promise<boolean>,
++    setBundledEnabled: (name, enabled) => ipcRenderer.invoke(DESKTOP_IPC.pluginsSetBundledEnabled, name, enabled) as Promise<void>,
+   },
+   updates: {
+     check: () => ipcRenderer.invoke(DESKTOP_IPC.updatesCheck) as Promise<DesktopUpdateState>,
+diff --git a/apps/desktop/src/project-manager.ts b/apps/desktop/src/project-manager.ts
+index b9b94f7..0487341 100644
+--- a/apps/desktop/src/project-manager.ts
++++ b/apps/desktop/src/project-manager.ts
+@@ -1,6 +1,6 @@
+ /** Transactional owner of the reserved desktop profile and its private pnpm state. */
+ 
+-import { spawn } from 'node:child_process'
++import { spawn, spawnSync } from 'node:child_process'
+ import { createHash, randomUUID } from 'node:crypto'
+ import {
+   constants,
+@@ -17,6 +17,7 @@ import {
+   readFileSync,
+   renameSync,
+   rmSync,
++  statSync,
+   unlinkSync,
+   writeFileSync,
+   writeSync,
+@@ -35,6 +36,18 @@ import type { DesktopPaths } from './paths.ts'
+ import { parseDesktopRelease, type DesktopRelease } from './release.ts'
+ import { extractPnpmStoreArchives, mergePnpmStore } from './seed-store.ts'
+ 
++/**
++ * LOCAL PATCH (sbplab): plugin package files kept inside the profile. pnpm records `file:` tarballs
++ * relative to the project in the lockfile, so they must move with every staging copy.
++ */
++export const DESKTOP_LOCAL_PACKAGES_DIR = 'desktop-local-packages'
++
++/** LOCAL PATCH (sbplab): seed-owned inventory of plugins bundled with this application build. */
++export const DESKTOP_BUNDLED_PLUGINS_FILE = 'desktop-bundled-plugins.json'
++
++/** LOCAL PATCH (sbplab): user profile patch layer honored by the desktop host. */
++const PROFILE_PATCH_FILE = 'cordis.patch.yml'
++
+ /** Files the package transaction copies between active and staging projects. */
+ const DESKTOP_PROJECT_FILES = [
+   'package.json',
+@@ -42,6 +55,8 @@ const DESKTOP_PROJECT_FILES = [
+   'pnpm-workspace.yaml',
+   'desktop-release.json',
+   DESKTOP_PACKAGE_SET_FILE,
++  DESKTOP_BUNDLED_PLUGINS_FILE,
++  PROFILE_PATCH_FILE,
+ ] as const
+ 
+ /** Desktop plugin record derived from the installed profile. */
+@@ -87,11 +102,50 @@ export interface DesktopProjectHooks {
+   afterActivate(): Promise<void>
+ }
+ 
++/** Where an installed desktop plugin came from (LOCAL PATCH, sbplab). */
++export type DesktopPluginSource = 'bundled' | 'local' | 'registry'
++
++/** Plugin inventory row for the plugin manager, including disabled and unrestored plugins. */
++export interface DesktopPluginDetail extends DesktopPluginRecord {
++  readonly source: DesktopPluginSource
++  readonly state: 'enabled' | 'disabled' | 'restore-failed'
++  readonly message?: string
++}
++
++/** One plugin package shipped inside the application seed. */
++export interface DesktopBundledPlugin {
++  readonly name: string
++  readonly version: string
++  readonly file: string
++  readonly sha256: string
++}
++
++interface DesktopRestoreFailure {
++  readonly name: string
++  readonly version: string
++  readonly source: DesktopPluginSource
++  readonly message: string
++}
++
++interface DesktopPluginState {
++  readonly schemaVersion: 1
++  readonly disabledBundled: readonly string[]
++  readonly restoreFailures: readonly DesktopRestoreFailure[]
++}
++
+ /** Supported dependency mutation. */
+ export type DesktopProjectMutation =
+   | { readonly type: 'plugin-add'; readonly spec: string }
+   | { readonly type: 'plugin-remove'; readonly name: string }
+   | { readonly type: 'plugin-update'; readonly name: string; readonly version: string }
++  | { readonly type: 'plugin-add-local'; readonly path: string }
++  | { readonly type: 'plugin-set-bundled-enabled'; readonly name: string; readonly enabled: boolean }
++
++/** What a mutation changed, used to update plugin state only after activation commits. */
++interface DesktopMutationOutcome {
++  readonly name: string
++  readonly disableBundled?: boolean
++}
+ 
+ interface DesktopSeedIntegrityRecord {
+   readonly path: string
+@@ -107,6 +161,9 @@ const WORKSPACE_SETTINGS = 'nodeLinker: hoisted\nautoInstallPeers: false\nstrict
+ const PACKAGE_NAME_PATTERN = /^(?:@[a-z0-9][a-z0-9._~-]*\/[a-z0-9][a-z0-9._~-]*|[a-z0-9][a-z0-9._~-]*)$/u
+ const VERSION_PATTERN = /^[0-9A-Za-z][0-9A-Za-z.+_-]*$/u
+ const MAX_PNPM_DIAGNOSTIC_BYTES = 64 * 1024
++const MAX_LOCAL_PACKAGE_BYTES = 64 * 1024 * 1024
++const LOCAL_PACKAGE_FILE_PATTERN = /^[0-9A-Za-z][0-9A-Za-z._+-]*\.tgz$/u
++const LOCAL_SPEC_PATTERN = /^file:(?:\.\/)?desktop-local-packages\/([^/\\]+)$/u
+ const DESKTOP_REGISTRY = 'https://registry.npmjs.org/'
+ 
+ function errorOf(reason: unknown, fallback: string): Error {
+@@ -201,6 +258,110 @@ function copyMetadata(source: string, target: string): void {
+     force: false,
+     errorOnExist: true,
+   })
++  if (existsSync(join(source, DESKTOP_LOCAL_PACKAGES_DIR))) {
++    cpSync(join(source, DESKTOP_LOCAL_PACKAGES_DIR), join(target, DESKTOP_LOCAL_PACKAGES_DIR), {
++      recursive: true,
++      force: false,
++      errorOnExist: true,
++    })
++  }
++}
++
++/**
++ * Read the seed/profile inventory of bundled plugin packages.
++ * @param projectDir - seed or profile directory.
++ * @returns validated bundled plugin rows, empty when the build bundles none.
++ */
++export function readBundledPlugins(projectDir: string): readonly DesktopBundledPlugin[] {
++  const path = join(projectDir, DESKTOP_BUNDLED_PLUGINS_FILE)
++  if (!existsSync(path)) return []
++  const value = readJson(path)
++  if (!isRecord(value) || value.schemaVersion !== 1 || !Array.isArray(value.plugins)) {
++    throw new Error(`desktop project: invalid bundled plugin inventory ${path}`)
++  }
++  return value.plugins.map((row) => {
++    if (!isRecord(row) || typeof row.name !== 'string' || typeof row.version !== 'string'
++      || typeof row.file !== 'string' || !LOCAL_PACKAGE_FILE_PATTERN.test(row.file)
++      || typeof row.sha256 !== 'string' || !/^[a-f0-9]{64}$/u.test(row.sha256)) {
++      throw new Error(`desktop project: invalid bundled plugin row in ${path}`)
++    }
++    assertPackageName(row.name)
++    assertVersion(row.version)
++    return { name: row.name, version: row.version, file: row.file, sha256: row.sha256 }
++  })
++}
++
++function bundledFingerprint(projectDir: string): string {
++  const path = join(projectDir, DESKTOP_BUNDLED_PLUGINS_FILE)
++  return existsSync(path) ? readFileSync(path, 'utf8') : ''
++}
++
++/** File name a local package takes inside the profile: stable per exact content. */
++export function localPackageFileName(name: string, version: string, sha256: string): string {
++  return `${name.replace(/^@/u, '').replace('/', '-')}-${version}-${sha256.slice(0, 12)}.tgz`
++}
++
++function localPackageSpec(file: string): string {
++  return `file:./${DESKTOP_LOCAL_PACKAGES_DIR}/${file}`
++}
++
++function localFileOfSpec(spec: string | undefined): string | undefined {
++  const file = spec === undefined ? undefined : LOCAL_SPEC_PATTERN.exec(spec)?.[1]
++  return file !== undefined && LOCAL_PACKAGE_FILE_PATTERN.test(file) ? file : undefined
++}
++
++function sha256OfFile(path: string): string {
++  return createHash('sha256').update(readFileSync(path)).digest('hex')
++}
++
++/**
++ * Validate a user-selected plugin package file before it enters desktop state.
++ * @param path - absolute path to an npm package tarball.
++ * @returns package identity and content hash.
++ */
++export function inspectLocalPackage(path: string): DesktopPluginRecord & { readonly sha256: string } {
++  if (!isAbsolute(path) || !path.endsWith('.tgz')) {
++    throw new Error('desktop project: choose a plugin package file (.tgz)')
++  }
++  const stat = statSync(path)
++  if (!stat.isFile() || stat.size === 0 || stat.size > MAX_LOCAL_PACKAGE_BYTES) {
++    throw new Error(`desktop project: ${basename(path)} is not a plugin package of at most 64 MiB`)
++  }
++  const extracted = spawnSync('tar', ['-xzOf', path, 'package/package.json'], {
++    encoding: 'utf8',
++    maxBuffer: 1024 * 1024,
++    timeout: 30_000,
++  })
++  if (extracted.status !== 0) {
++    throw new Error(`desktop project: ${basename(path)} is not an npm package tarball`)
++  }
++  let manifest: unknown
++  try {
++    manifest = JSON.parse(extracted.stdout)
++  } catch {
++    throw new Error(`desktop project: ${basename(path)} has an unreadable package.json`)
++  }
++  if (!isRecord(manifest) || typeof manifest.name !== 'string' || typeof manifest.version !== 'string') {
++    throw new Error(`desktop project: ${basename(path)} has no package name or version`)
++  }
++  assertPackageName(manifest.name)
++  assertVersion(manifest.version)
++  const dsh = isRecord(manifest.dsh) ? manifest.dsh : undefined
++  const bundle = isRecord(dsh?.bundle) ? dsh.bundle : undefined
++  if (typeof bundle?.patch !== 'string' || bundle.patch === '') {
++    throw new Error(`desktop project: ${manifest.name}@${manifest.version} is not a Harness plugin (no dsh.bundle.patch)`)
++  }
++  return { name: manifest.name, version: manifest.version, sha256: sha256OfFile(path) }
++}
++
++function pluginSource(projectDir: string, name: string): DesktopPluginSource {
++  const file = localFileOfSpec(projectManifest(projectDir).dependencies[name])
++  if (file === undefined) return 'registry'
++  return readBundledPlugins(projectDir).some(plugin => plugin.name === name && plugin.file === file) ? 'bundled' : 'local'
++}
++
++function byName(left: DesktopPluginRecord, right: DesktopPluginRecord): number {
++  return left.name.localeCompare(right.name)
+ }
+ 
+ function seedFiles(root: string): readonly DesktopSeedIntegrityRecord[] {
+@@ -368,6 +529,25 @@ export class DesktopProjectManager {
+     return pluginRecords(this.paths.profile)
+   }
+ 
++  /** Read the plugin manager inventory: enabled, disabled bundled and unrestored plugins (LOCAL PATCH, sbplab). */
++  listPluginDetails(): readonly DesktopPluginDetail[] {
++    if (!existsSync(this.paths.profile)) return []
++    const state = this.readPluginState()
++    const enabled: DesktopPluginDetail[] = pluginRecords(this.paths.profile).map(plugin => ({
++      ...plugin,
++      source: pluginSource(this.paths.profile, plugin.name),
++      state: 'enabled',
++    }))
++    const names = new Set(enabled.map(plugin => plugin.name))
++    const disabled: DesktopPluginDetail[] = readBundledPlugins(this.paths.profile)
++      .filter(plugin => !names.has(plugin.name) && state.disabledBundled.includes(plugin.name))
++      .map(plugin => ({ name: plugin.name, version: plugin.version, source: 'bundled', state: 'disabled' }))
++    const failed: DesktopPluginDetail[] = state.restoreFailures
++      .filter(failure => !names.has(failure.name))
++      .map(failure => ({ ...failure, state: 'restore-failed' }))
++    return [...enabled, ...disabled, ...failed]
++  }
++
+   /** Read the exact dsh version installed in the active desktop project. */
+   dshVersion(): string {
+     if (!existsSync(this.paths.profile)) throw new Error('desktop project: active profile is not installed')
+@@ -402,32 +582,40 @@ export class DesktopProjectManager {
+       }
+       if (existsSync(this.paths.profile) && this.releaseVersion() === target.version
+         && this.dshVersion() === target.version
+-        && this.installedPackageVersion(DESKTOP_HOST_PACKAGE) === target.version) {
++        && this.installedPackageVersion(DESKTOP_HOST_PACKAGE) === target.version
++        && bundledFingerprint(this.paths.profile) === bundledFingerprint(seedDir)) {
+         verifyDesktopCorePackageSet(this.paths.profile, target.version)
+         return false
+       }
+       this.mergeSeedPnpmState(seedDir)
+       const stagingProfile = this.newStagingProfile()
+       try {
++        let failures: readonly DesktopRestoreFailure[] = []
+         if (existsSync(this.paths.profile)) {
+-          const plugins = pluginRecords(this.paths.profile)
++          const previousManifest = projectManifest(this.paths.profile)
++          const plugins = pluginRecords(this.paths.profile).map(plugin => ({
++            ...plugin,
++            source: pluginSource(this.paths.profile, plugin.name),
++            spec: previousManifest.dependencies[plugin.name],
++          }))
+           copyMetadata(seedDir, stagingProfile)
+-          await this.runPnpm(stagingProfile, ['install', '--offline', '--frozen-lockfile', '--trust-lockfile'])
+-          if (plugins.length > 0) {
+-            await this.runPnpm(stagingProfile, [
+-              'add',
+-              ...plugins.map(plugin => `${plugin.name}@${plugin.version}`),
+-              '--save-exact',
+-              '--offline',
+-            ])
+-            writeProfilePlugins(stagingProfile, plugins)
++          if (existsSync(join(this.paths.profile, PROFILE_PATCH_FILE))) {
++            copyFileSync(join(this.paths.profile, PROFILE_PATCH_FILE), join(stagingProfile, PROFILE_PATCH_FILE))
+           }
++          await this.runPnpm(stagingProfile, ['install', '--offline', '--frozen-lockfile', '--trust-lockfile'])
++          failures = await this.restorePlugins(stagingProfile, this.paths.profile, plugins)
+         } else {
+           copyMetadata(seedDir, stagingProfile)
+           await this.runPnpm(stagingProfile, ['install', '--offline', '--frozen-lockfile', '--trust-lockfile'])
++          const disabled = this.readPluginState().disabledBundled
++          if (disabled.length > 0) {
++            writeProfilePlugins(stagingProfile, pluginRecords(stagingProfile).filter(plugin => !disabled.includes(plugin.name)))
++          }
+         }
+         await hooks.healthCheck(stagingProfile)
+         await this.activate(stagingProfile, hooks)
++        const state = this.readPluginState()
++        this.writePluginState({ ...state, restoreFailures: failures })
+         return true
+       } catch (error) {
+         removeOwnedDirectory(stagingProfile)
+@@ -441,13 +629,20 @@ export class DesktopProjectManager {
+     await this.withLock(async () => {
+       this.recover()
+       if (!existsSync(this.paths.profile)) throw new Error('desktop project: active profile is not installed')
++      if (mutation.type === 'plugin-remove' && !profilePluginNames(this.paths.profile).includes(mutation.name)
++        && this.readPluginState().restoreFailures.some(failure => failure.name === mutation.name)) {
++        // Dismissing an unrestored plugin changes no package graph.
++        this.recordOutcome({ name: mutation.name })
++        return
++      }
+       verifyDesktopCorePackageSet(this.paths.profile, this.releaseVersion())
+       const stagingProfile = this.newStagingProfile()
+       try {
+         copyMetadata(this.paths.profile, stagingProfile)
+-        await this.applyMutation(stagingProfile, mutation)
++        const outcome = await this.applyMutation(stagingProfile, mutation)
+         await hooks.healthCheck(stagingProfile)
+         await this.activate(stagingProfile, hooks)
++        this.recordOutcome(outcome)
+       } catch (error) {
+         removeOwnedDirectory(stagingProfile)
+         throw error
+@@ -461,7 +656,7 @@ export class DesktopProjectManager {
+     return path
+   }
+ 
+-  private async applyMutation(projectDir: string, mutation: DesktopProjectMutation): Promise<void> {
++  private async applyMutation(projectDir: string, mutation: DesktopProjectMutation): Promise<DesktopMutationOutcome> {
+     switch (mutation.type) {
+       case 'plugin-add': {
+         const requestedName = packageNameFromSpec(mutation.spec)
+@@ -473,17 +668,40 @@ export class DesktopProjectManager {
+           projectDir,
+           [...current, installed].sort((left, right) => left.name.localeCompare(right.name)),
+         )
+-        return
++        return { name: installed.name }
+       }
+       case 'plugin-remove': {
+         assertPackageName(mutation.name)
+         if (!profilePluginNames(projectDir).includes(mutation.name)) {
+           throw new Error(`desktop project: plugin ${JSON.stringify(mutation.name)} is not installed`)
+         }
+-        const remaining = pluginRecords(projectDir).filter(plugin => plugin.name !== mutation.name)
++        // LOCAL PATCH (sbplab): the staging copy has no node_modules yet, so derive the remaining
++        // bundle names from the manifest and inspect them only after pnpm has installed the graph.
++        const remainingNames = profilePluginNames(projectDir).filter(name => name !== mutation.name)
++        const source = pluginSource(projectDir, mutation.name)
++        const bundled = readBundledPlugins(projectDir).find(plugin => plugin.name === mutation.name)
++        if (source === 'bundled') {
++          // Disabling a bundled plugin is offline: the package stays in the lockfile, only the bundle is dropped.
++          await this.runPnpm(projectDir, ['install', '--offline', '--frozen-lockfile', '--trust-lockfile'])
++          writeProfilePlugins(projectDir, remainingNames.map(name => inspectPlugin(projectDir, name)))
++          return { name: mutation.name, disableBundled: true }
++        }
++        if (source === 'local') {
++          const manifest = projectManifest(projectDir)
++          const file = localFileOfSpec(manifest.dependencies[mutation.name])
++          const dependencies = { ...manifest.dependencies }
++          if (bundled === undefined) delete dependencies[mutation.name]
++          else dependencies[mutation.name] = localPackageSpec(bundled.file)
++          writeJson(join(projectDir, 'package.json'), { ...manifest, dependencies })
++          if (file !== undefined && file !== bundled?.file) rmSync(join(projectDir, DESKTOP_LOCAL_PACKAGES_DIR, file), { force: true })
++          // Removing a local package needs no registry metadata (measured offline with an empty cache).
++          await this.runPnpm(projectDir, ['install', '--offline', '--trust-lockfile'])
++          writeProfilePlugins(projectDir, remainingNames.map(name => inspectPlugin(projectDir, name)))
++          return bundled === undefined ? { name: mutation.name } : { name: mutation.name, disableBundled: true }
++        }
+         await this.runPnpm(projectDir, ['remove', mutation.name])
+-        writeProfilePlugins(projectDir, remaining)
+-        return
++        writeProfilePlugins(projectDir, remainingNames.map(name => inspectPlugin(projectDir, name)))
++        return { name: mutation.name }
+       }
+       case 'plugin-update':
+         assertPackageName(mutation.name)
+@@ -491,6 +709,9 @@ export class DesktopProjectManager {
+         if (!profilePluginNames(projectDir).includes(mutation.name)) {
+           throw new Error(`desktop project: plugin ${JSON.stringify(mutation.name)} is not installed`)
+         }
++        if (pluginSource(projectDir, mutation.name) !== 'registry') {
++          throw new Error(`desktop project: ${mutation.name} is a package file; install the newer file instead`)
++        }
+         await this.runPnpm(projectDir, ['add', `${mutation.name}@${mutation.version}`, '--save-exact'])
+         {
+           const installed = inspectPlugin(projectDir, mutation.name)
+@@ -499,10 +720,166 @@ export class DesktopProjectManager {
+             pluginRecords(projectDir).map(plugin => plugin.name === installed.name ? installed : plugin),
+           )
+         }
+-        return
++        return { name: mutation.name }
++      case 'plugin-add-local': {
++        const selected = inspectLocalPackage(mutation.path)
++        const manifest = projectManifest(projectDir)
++        const previousFile = localFileOfSpec(manifest.dependencies[selected.name])
++        const file = localPackageFileName(selected.name, selected.version, selected.sha256)
++        const directory = join(projectDir, DESKTOP_LOCAL_PACKAGES_DIR)
++        mkdirSync(directory, { recursive: true, mode: 0o700 })
++        copyFileSync(mutation.path, join(directory, file))
++        if (sha256OfFile(join(directory, file)) !== selected.sha256) {
++          throw new Error(`desktop project: ${basename(mutation.path)} changed while it was being installed`)
++        }
++        const otherNames = profilePluginNames(projectDir).filter(name => name !== selected.name)
++        await this.runPnpm(projectDir, ['add', localPackageSpec(file), '--save-exact', '--prefer-offline', '--trust-lockfile'])
++        const installed = inspectPlugin(projectDir, selected.name)
++        if (installed.version !== selected.version) {
++          throw new Error(`desktop project: installed ${selected.name}@${installed.version} does not match the package file`)
++        }
++        const bundledFiles = new Set(readBundledPlugins(projectDir).map(plugin => plugin.file))
++        if (previousFile !== undefined && previousFile !== file && !bundledFiles.has(previousFile)) {
++          rmSync(join(directory, previousFile), { force: true })
++        }
++        writeProfilePlugins(projectDir, [...otherNames.map(name => inspectPlugin(projectDir, name)), installed].sort(byName))
++        return { name: installed.name, disableBundled: false }
++      }
++      case 'plugin-set-bundled-enabled': {
++        assertPackageName(mutation.name)
++        if (!readBundledPlugins(projectDir).some(plugin => plugin.name === mutation.name)) {
++          throw new Error(`desktop project: ${mutation.name} is not bundled with this application`)
++        }
++        await this.runPnpm(projectDir, ['install', '--offline', '--frozen-lockfile', '--trust-lockfile'])
++        const names = profilePluginNames(projectDir).filter(name => name !== mutation.name)
++        const next = mutation.enabled ? [...names, mutation.name] : names
++        writeProfilePlugins(projectDir, next.map(name => inspectPlugin(projectDir, name)).sort(byName))
++        return { name: mutation.name, disableBundled: !mutation.enabled }
++      }
+       default:
+         mutation satisfies never
++        throw new Error('desktop project: unsupported mutation')
++    }
++  }
++
++  private readPluginState(): DesktopPluginState {
++    if (!existsSync(this.paths.pluginState)) return { schemaVersion: 1, disabledBundled: [], restoreFailures: [] }
++    const value = readJson(this.paths.pluginState)
++    if (!isRecord(value) || value.schemaVersion !== 1 || !Array.isArray(value.disabledBundled)
++      || !Array.isArray(value.restoreFailures)) {
++      throw new Error(`desktop project: invalid plugin state ${this.paths.pluginState}`)
++    }
++    return {
++      schemaVersion: 1,
++      disabledBundled: value.disabledBundled.filter((name): name is string => typeof name === 'string'),
++      restoreFailures: value.restoreFailures.flatMap((row): DesktopRestoreFailure[] => (
++        isRecord(row) && typeof row.name === 'string' && typeof row.version === 'string'
++          && (row.source === 'bundled' || row.source === 'local' || row.source === 'registry')
++          && typeof row.message === 'string'
++          ? [{ name: row.name, version: row.version, source: row.source, message: row.message }]
++          : []
++      )),
++    }
++  }
++
++  private writePluginState(state: DesktopPluginState): void {
++    mkdirSync(this.paths.root, { recursive: true, mode: 0o700 })
++    const temporary = `${this.paths.pluginState}.${String(process.pid)}.tmp`
++    writeJson(temporary, state)
++    renameSync(temporary, this.paths.pluginState)
++  }
++
++  private recordOutcome(outcome: DesktopMutationOutcome): void {
++    const state = this.readPluginState()
++    const disabled = new Set(state.disabledBundled)
++    if (outcome.disableBundled === true) disabled.add(outcome.name)
++    if (outcome.disableBundled === false) disabled.delete(outcome.name)
++    this.writePluginState({
++      schemaVersion: 1,
++      disabledBundled: [...disabled].sort(),
++      restoreFailures: state.restoreFailures.filter(failure => failure.name !== outcome.name),
++    })
++  }
++
++  /** Run pnpm, returning a diagnostic instead of throwing, and roll manifest files back on failure. */
++  private async tryPnpm(projectDir: string, args: readonly string[]): Promise<string | undefined> {
++    const snapshot = ['package.json', 'pnpm-lock.yaml'].map((file) => {
++      const path = join(projectDir, file)
++      return { path, body: existsSync(path) ? readFileSync(path) : undefined }
++    })
++    try {
++      await this.runPnpm(projectDir, args)
++      return undefined
++    } catch (error) {
++      for (const { path, body } of snapshot) {
++        if (body === undefined) rmSync(path, { force: true })
++        else writeFileSync(path, body, { mode: 0o600 })
++      }
++      return errorOf(error, 'pnpm failed').message.slice(0, 600)
++    }
++  }
++
++  /**
++   * Re-add user plugins after a release seed replaced the project graph (LOCAL PATCH, sbplab).
++   * Bundled plugins come from the seed itself; local package files are copied from the previous
++   * profile; a plugin that cannot be restored is recorded instead of blocking application startup.
++   */
++  private async restorePlugins(
++    projectDir: string,
++    previousProfile: string,
++    previous: readonly (DesktopPluginRecord & { readonly source: DesktopPluginSource; readonly spec: string | undefined })[],
++  ): Promise<readonly DesktopRestoreFailure[]> {
++    const state = this.readPluginState()
++    const seedBundled = new Set(readBundledPlugins(projectDir).map(plugin => plugin.name))
++    const failures: DesktopRestoreFailure[] = []
++    const restored = new Set<string>()
++    const registry = previous.filter(plugin => plugin.source === 'registry' && !seedBundled.has(plugin.name))
++    if (registry.length > 0) {
++      const batch = await this.tryPnpm(projectDir, [
++        'add',
++        ...registry.map(plugin => `${plugin.name}@${plugin.version}`),
++        '--save-exact',
++        '--offline',
++      ])
++      if (batch === undefined) {
++        for (const plugin of registry) restored.add(plugin.name)
++      } else {
++        for (const plugin of registry) {
++          const error = await this.tryPnpm(projectDir, ['add', `${plugin.name}@${plugin.version}`, '--save-exact', '--offline'])
++          if (error === undefined) restored.add(plugin.name)
++          else failures.push({ name: plugin.name, version: plugin.version, source: 'registry', message: error })
++        }
++      }
++    }
++    for (const plugin of previous.filter(row => row.source === 'local')) {
++      const file = localFileOfSpec(plugin.spec)
++      const from = file === undefined ? undefined : join(previousProfile, DESKTOP_LOCAL_PACKAGES_DIR, file)
++      if (file === undefined || from === undefined || !existsSync(from)) {
++        failures.push({ name: plugin.name, version: plugin.version, source: 'local', message: 'the stored package file is missing' })
++        continue
++      }
++      mkdirSync(join(projectDir, DESKTOP_LOCAL_PACKAGES_DIR), { recursive: true, mode: 0o700 })
++      const target = join(projectDir, DESKTOP_LOCAL_PACKAGES_DIR, file)
++      if (!existsSync(target)) copyFileSync(from, target)
++      const spec = localPackageSpec(file)
++      let error = await this.tryPnpm(projectDir, ['add', spec, '--save-exact', '--offline', '--trust-lockfile'])
++      if (error !== undefined) error = await this.tryPnpm(projectDir, ['add', spec, '--save-exact', '--trust-lockfile'])
++      if (error === undefined) {
++        restored.add(plugin.name)
++      } else {
++        failures.push({ name: plugin.name, version: plugin.version, source: 'local', message: error })
++        if (!readBundledPlugins(projectDir).some(row => row.file === file)) rmSync(target, { force: true })
++      }
++    }
++    if (failures.length > 0) {
++      await this.runPnpm(projectDir, ['install', '--offline', '--frozen-lockfile', '--trust-lockfile'])
+     }
++    const names = new Set([
++      ...profilePluginNames(projectDir).filter(name => !state.disabledBundled.includes(name)),
++      ...restored,
++    ])
++    writeProfilePlugins(projectDir, [...names].map(name => inspectPlugin(projectDir, name)).sort(byName))
++    return failures
+   }
+ 
+   private mergeSeedPnpmState(seedDir: string): void {
+diff --git a/apps/desktop/tests/locale.spec.ts b/apps/desktop/tests/locale.spec.ts
+index de7a7a7..47a5e49 100644
+--- a/apps/desktop/tests/locale.spec.ts
++++ b/apps/desktop/tests/locale.spec.ts
+@@ -1,6 +1,6 @@
+ import { readFileSync } from 'node:fs'
+ import { describe, expect, it } from 'vitest'
+-import { en, formatDesktopMessage, resolveDesktopLocale, zh } from '../src/locale.ts'
++import { en, formatDesktopMessage, resolveDesktopLocale, zh, zhTW } from '../src/locale.ts'
+ 
+ describe('desktop locale dictionaries', () => {
+   it('ships the same key set in English and Chinese', () => {
+@@ -8,6 +8,11 @@ describe('desktop locale dictionaries', () => {
+     expect(resolveDesktopLocale('zh-Hans-CN')).toEqual({ id: 'zh-CN', messages: zh })
+     expect(resolveDesktopLocale('en-US')).toEqual({ id: 'en', messages: en })
+     expect(resolveDesktopLocale('fr-FR')).toEqual({ id: 'en', messages: en })
++    // LOCAL PATCH (sbplab): Traditional Chinese systems get the zh-TW dictionary.
++    expect(Object.keys(zhTW)).toEqual(Object.keys(en))
++    expect(resolveDesktopLocale('zh-TW')).toEqual({ id: 'zh-TW', messages: zhTW })
++    expect(resolveDesktopLocale('zh-Hant-TW')).toEqual({ id: 'zh-TW', messages: zhTW })
++    expect(resolveDesktopLocale('zh-HK')).toEqual({ id: 'zh-TW', messages: zhTW })
+   })
+ 
+   it('formats named values without consuming unknown placeholders', () => {
+diff --git a/apps/desktop/tests/permissions.spec.ts b/apps/desktop/tests/permissions.spec.ts
+new file mode 100644
+index 0000000..257e1a5
+--- /dev/null
++++ b/apps/desktop/tests/permissions.spec.ts
+@@ -0,0 +1,23 @@
++// LOCAL PATCH (sbplab): media permission policy.
++import { describe, expect, it } from 'vitest'
++import { decidePermissionCheck, decidePermissionRequest } from '../src/permissions.ts'
++
++describe('desktop media permission policy', () => {
++  it('allows audio capture only for the app origin main frame', () => {
++    expect(decidePermissionRequest({ permission: 'media', mediaTypes: ['audio'], requestingUrl: 'dsh-app://app/index.html', isMainFrame: true })).toBe(true)
++    expect(decidePermissionRequest({ permission: 'media', mediaTypes: ['audio', 'video'], requestingUrl: 'dsh-app://app/index.html' })).toBe(false)
++    expect(decidePermissionRequest({ permission: 'media', mediaTypes: ['video'], requestingUrl: 'dsh-app://app/index.html' })).toBe(false)
++    expect(decidePermissionRequest({ permission: 'media', mediaTypes: ['audio'], requestingUrl: 'https://example.test/' })).toBe(false)
++    expect(decidePermissionRequest({ permission: 'media', mediaTypes: ['audio'], requestingUrl: 'dsh-app://shell/plugin-manager.html' })).toBe(false)
++    expect(decidePermissionRequest({ permission: 'media', mediaTypes: ['audio'], requestingUrl: 'dsh-app://app/x', isMainFrame: false })).toBe(false)
++    expect(decidePermissionRequest({ permission: 'media', mediaTypes: [], requestingUrl: 'dsh-app://app/x' })).toBe(false)
++  })
++
++  it('keeps other permissions on the default decision', () => {
++    expect(decidePermissionRequest({ permission: 'clipboard-sanitized-write', requestingUrl: 'dsh-app://app/' })).toBe(true)
++    expect(decidePermissionCheck('fullscreen', 'dsh-app://app')).toBe(true)
++    expect(decidePermissionCheck('media', 'dsh-app://app', 'audio')).toBe(true)
++    expect(decidePermissionCheck('media', 'dsh-app://app', 'video')).toBe(false)
++    expect(decidePermissionCheck('media', 'https://example.test', 'audio')).toBe(false)
++  })
++})
+diff --git a/apps/desktop/tests/project-manager-local-plugins.spec.ts b/apps/desktop/tests/project-manager-local-plugins.spec.ts
+new file mode 100644
+index 0000000..7a7eebd
+--- /dev/null
++++ b/apps/desktop/tests/project-manager-local-plugins.spec.ts
+@@ -0,0 +1,334 @@
++// LOCAL PATCH (sbplab): bundled and local-file plugin lifecycle for the desktop project manager.
++import { spawnSync } from 'node:child_process'
++import { createHash } from 'node:crypto'
++import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, relative, sep } from 'node:path'
++import { afterEach, describe, expect, it } from 'vitest'
++import { resolveDesktopPaths } from '../src/paths.ts'
++import {
++  createSeedMetadata,
++  DESKTOP_BUNDLED_PLUGINS_FILE,
++  DESKTOP_LOCAL_PACKAGES_DIR,
++  DesktopProjectManager,
++  inspectLocalPackage,
++  localPackageFileName,
++  type DesktopProjectHooks,
++} from '../src/project-manager.ts'
++import { DESKTOP_HOST_PROTOCOL_VERSION } from '../src/host-protocol.ts'
++import { DESKTOP_PACKAGES_DIR, DESKTOP_PACKAGE_SET_FILE } from '../src/core-package-set.ts'
++import type { DesktopRelease } from '../src/release.ts'
++import { archivePnpmStore } from '../src/seed-store.ts'
++
++const roots: string[] = []
++
++function temporaryRoot(): string {
++  const root = mkdtempSync(join(tmpdir(), 'dsh desktop local 測試-'))
++  roots.push(root)
++  return root
++}
++
++afterEach(() => {
++  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
++  delete process.env.TEST_PNPM_LOG
++  delete process.env.TEST_PNPM_FAIL
++})
++
++function release(version = '1.0.0'): DesktopRelease {
++  return { schemaVersion: 1, version, hostProtocolVersion: DESKTOP_HOST_PROTOCOL_VERSION, nodeVersion: '24.17.0', pnpmVersion: '11.7.0' }
++}
++
++function hooks(): DesktopProjectHooks {
++  return { healthCheck: async () => {}, beforeActivate: async () => {}, afterActivate: async () => {} }
++}
++
++function sha256(path: string): string {
++  return createHash('sha256').update(readFileSync(path)).digest('hex')
++}
++
++/** Build a real npm-style tarball: package/package.json plus a bundle patch file. */
++function pluginTarball(root: string, name: string, version: string, options: { plugin?: boolean; marker?: string } = {}): string {
++  const source = mkdtempSync(join(root, 'tarball-src-'))
++  mkdirSync(join(source, 'package'), { recursive: true })
++  writeFileSync(join(source, 'package', 'package.json'), JSON.stringify({
++    name,
++    version,
++    marker: options.marker ?? '',
++    ...(options.plugin === false ? {} : { dsh: { bundle: { patch: './cordis.patch.yml' } } }),
++  }))
++  writeFileSync(join(source, 'package', 'cordis.patch.yml'), '[]\n')
++  const out = join(root, `${name.replace('/', '-').replace('@', '')}-${version}-${options.marker ?? 'a'}.tgz`)
++  const result = spawnSync('tar', ['-czf', out, '-C', source, 'package'])
++  if (result.status !== 0) throw new Error(String(result.stderr))
++  return out
++}
++
++function writeFakePnpm(root: string): string {
++  const path = join(root, 'pnpm.mjs')
++  writeFileSync(path, String.raw`
++import { spawnSync } from 'node:child_process'
++import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
++import { join } from 'node:path'
++const args = process.argv.slice(2)
++const project = process.cwd()
++const command = args.find(value => value === 'install' || value === 'add' || value === 'remove')
++if (process.env.TEST_PNPM_LOG) appendFileSync(process.env.TEST_PNPM_LOG, JSON.stringify({ args }) + '\n')
++if (process.env.TEST_PNPM_FAIL && command === 'add' && args.some(value => value.includes(process.env.TEST_PNPM_FAIL))) {
++  process.stderr.write('simulated offline metadata failure')
++  process.exit(1)
++}
++const manifestPath = join(project, 'package.json')
++const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
++const tarballManifest = file => JSON.parse(spawnSync('tar', ['-xzOf', file, 'package/package.json'], { encoding: 'utf8' }).stdout)
++const registryName = spec => spec.startsWith('@') ? spec.slice(0, spec.indexOf('@', 1)) : spec.split('@')[0]
++if (command === 'add') {
++  for (const spec of args.slice(args.indexOf('add') + 1).filter(value => !value.startsWith('-'))) {
++    if (spec.startsWith('file:')) manifest.dependencies[tarballManifest(join(project, spec.slice(5))).name] = spec
++    else manifest.dependencies[registryName(spec)] = spec.slice(registryName(spec).length + 1)
++  }
++}
++if (command === 'remove') delete manifest.dependencies[args[args.indexOf('remove') + 1]]
++writeFileSync(manifestPath, JSON.stringify(manifest))
++rmSync(join(project, 'node_modules'), { recursive: true, force: true })
++const release = JSON.parse(readFileSync(join(project, 'desktop-release.json'), 'utf8')).version
++for (const [name, spec] of Object.entries(manifest.dependencies)) {
++  const packageRoot = join(project, 'node_modules', ...name.split('/'))
++  if (spec.startsWith('file:./desktop-local-packages/')) {
++    const temporary = mkdtempSync(join(project, '.extract-'))
++    spawnSync('tar', ['-xzf', join(project, spec.slice(5)), '-C', temporary])
++    mkdirSync(join(packageRoot, '..'), { recursive: true })
++    cpSync(join(temporary, 'package'), packageRoot, { recursive: true })
++    rmSync(temporary, { recursive: true, force: true })
++    continue
++  }
++  mkdirSync(packageRoot, { recursive: true })
++  const core = spec.startsWith('file:./desktop-packages/')
++  writeFileSync(join(packageRoot, 'package.json'), JSON.stringify({
++    name, version: core ? release : spec, ...(core ? {} : { dsh: { bundle: { patch: './bundle.yml' } } }),
++  }))
++  if (!core) writeFileSync(join(packageRoot, 'bundle.yml'), '[]\n')
++  if (name === '@deepseek-ai/dsh-desktop-host') {
++    mkdirSync(join(packageRoot, 'lib'), { recursive: true })
++    writeFileSync(join(packageRoot, 'lib', 'index.js'), '')
++  }
++}
++writeFileSync(join(project, 'pnpm-lock.yaml'), 'lockfileVersion: 9\n' + JSON.stringify(manifest.dependencies) + '\n')
++`)
++  return path
++}
++
++function writeCorePackageSet(seed: string, version: string): void {
++  const packages = [
++    { name: '@deepseek-ai/dsh', file: `deepseek-ai-dsh-${version}.tgz`, body: Buffer.from(`dsh-${version}`) },
++    { name: '@deepseek-ai/dsh-desktop-host', file: `deepseek-ai-dsh-desktop-host-${version}.tgz`, body: Buffer.from(`host-${version}`) },
++  ]
++  mkdirSync(join(seed, DESKTOP_PACKAGES_DIR), { recursive: true })
++  for (const entry of packages) writeFileSync(join(seed, DESKTOP_PACKAGES_DIR, entry.file), entry.body)
++  writeFileSync(join(seed, DESKTOP_PACKAGE_SET_FILE), `${JSON.stringify({
++    schemaVersion: 1,
++    packages: packages.map(({ name, file, body }) => ({
++      name, version, file, bytes: body.byteLength, integrity: `sha512-${createHash('sha512').update(body).digest('base64')}`,
++    })),
++  })}\n`)
++}
++
++function writeIntegrity(seed: string): void {
++  const paths: string[] = []
++  const visit = (directory: string): void => {
++    for (const entry of readdirSync(directory, { withFileTypes: true })) {
++      const path = join(directory, entry.name)
++      if (entry.isDirectory()) visit(path)
++      else if (entry.name !== 'integrity.json') paths.push(path)
++    }
++  }
++  visit(seed)
++  const files = paths.sort().map(path => ({
++    path: relative(seed, path).split(sep).join('/'), bytes: statSync(path).size, sha256: sha256(path),
++  }))
++  writeFileSync(join(seed, 'integrity.json'), `${JSON.stringify({ schemaVersion: 2, files })}\n`)
++}
++
++/** A release seed that bundles the given plugin tarballs the way prepare-seed does. */
++function seedWithBundled(root: string, label: string, version: string, bundled: readonly string[]): string {
++  const seed = join(root, label)
++  writeCorePackageSet(seed, version)
++  createSeedMetadata(seed, release(version))
++  const manifest = JSON.parse(readFileSync(join(seed, 'package.json'), 'utf8')) as {
++    dependencies: Record<string, string>; dsh: { profile: { bundles: string[] } }
++  }
++  const rows = bundled.map((tarball) => {
++    const identity = inspectLocalPackage(tarball)
++    const file = localPackageFileName(identity.name, identity.version, identity.sha256)
++    mkdirSync(join(seed, DESKTOP_LOCAL_PACKAGES_DIR), { recursive: true })
++    writeFileSync(join(seed, DESKTOP_LOCAL_PACKAGES_DIR, file), readFileSync(tarball))
++    manifest.dependencies[identity.name] = `file:./${DESKTOP_LOCAL_PACKAGES_DIR}/${file}`
++    manifest.dsh.profile.bundles.push(identity.name)
++    return { name: identity.name, version: identity.version, file, sha256: identity.sha256 }
++  })
++  writeFileSync(join(seed, 'package.json'), `${JSON.stringify(manifest, undefined, 2)}\n`)
++  if (rows.length > 0) writeFileSync(join(seed, DESKTOP_BUNDLED_PLUGINS_FILE), `${JSON.stringify({ schemaVersion: 1, plugins: rows }, undefined, 2)}\n`)
++  writeFileSync(join(seed, 'pnpm-lock.yaml'), 'lockfileVersion: 9\n')
++  mkdirSync(join(seed, 'store'), { recursive: true })
++  writeFileSync(join(seed, 'store', `entry-${label}`), label)
++  archivePnpmStore(seed, join(seed, 'store'))
++  writeIntegrity(seed)
++  return seed
++}
++
++function bundles(profile: string): string[] {
++  return (JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8')) as { dsh: { profile: { bundles: string[] } } }).dsh.profile.bundles
++}
++
++function pnpmCalls(log: string): string[][] {
++  return existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n').map(line => (JSON.parse(line) as { args: string[] }).args) : []
++}
++
++describe('local plugin package inspection', () => {
++  it('accepts a Harness plugin tarball and rejects other files', () => {
++    const root = temporaryRoot()
++    const plugin = pluginTarball(root, '@lab/voice', '0.1.0')
++    expect(inspectLocalPackage(plugin)).toMatchObject({ name: '@lab/voice', version: '0.1.0', sha256: sha256(plugin) })
++    expect(() => inspectLocalPackage(pluginTarball(root, 'not-a-plugin', '1.0.0', { plugin: false }))).toThrow(/not a Harness plugin/u)
++    writeFileSync(join(root, 'garbage.tgz'), 'not gzip')
++    expect(() => inspectLocalPackage(join(root, 'garbage.tgz'))).toThrow(/not an npm package tarball/u)
++    expect(() => inspectLocalPackage('relative.tgz')).toThrow(/choose a plugin package file/u)
++    expect(localPackageFileName('@lab/voice', '0.1.0', 'a'.repeat(64))).toBe('lab-voice-0.1.0-aaaaaaaaaaaa.tgz')
++  })
++})
++
++describe('bundled and local plugin lifecycle', () => {
++  it('installs bundled plugins from the seed and disables/enables them offline', async () => {
++    const root = temporaryRoot()
++    const log = join(root, 'pnpm.jsonl')
++    const seed = seedWithBundled(root, 'seed', '1.0.0', [pluginTarball(root, '@lab/audio', '0.2.0')])
++    const paths = resolveDesktopPaths(join(root, '.dsh'))
++    const manager = new DesktopProjectManager(paths, { node: process.execPath, pnpm: writeFakePnpm(root) })
++    await manager.applyRelease(seed, '1.0.0', hooks())
++    expect(manager.listPluginDetails()).toEqual([{ name: '@lab/audio', version: '0.2.0', source: 'bundled', state: 'enabled' }])
++
++    process.env.TEST_PNPM_LOG = log
++    await manager.mutate({ type: 'plugin-remove', name: '@lab/audio' }, hooks())
++    expect(pnpmCalls(log).at(-1)).toEqual(expect.arrayContaining(['install', '--offline', '--frozen-lockfile', '--trust-lockfile']))
++    expect(bundles(paths.profile)).toEqual(['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'])
++    expect(existsSync(join(paths.profile, 'node_modules', '@lab', 'audio', 'package.json'))).toBe(true)
++    expect(manager.listPluginDetails()).toEqual([{ name: '@lab/audio', version: '0.2.0', source: 'bundled', state: 'disabled' }])
++    await expect(manager.applyRelease(seed, '1.0.0', hooks())).resolves.toBe(false)
++
++    await manager.mutate({ type: 'plugin-set-bundled-enabled', name: '@lab/audio', enabled: true }, hooks())
++    expect(manager.listPluginDetails()).toEqual([{ name: '@lab/audio', version: '0.2.0', source: 'bundled', state: 'enabled' }])
++    expect(pnpmCalls(log).every(args => !args.includes('remove'))).toBe(true)
++  })
++
++  it('removes a registry plugin through a staging copy without node_modules', async () => {
++    const root = temporaryRoot()
++    const seed = seedWithBundled(root, 'seed', '1.0.0', [])
++    const paths = resolveDesktopPaths(join(root, '.dsh'))
++    const manager = new DesktopProjectManager(paths, { node: process.execPath, pnpm: writeFakePnpm(root) })
++    await manager.applyRelease(seed, '1.0.0', hooks())
++    await manager.mutate({ type: 'plugin-add', spec: '@scope/one@1.0.0' }, hooks())
++    await manager.mutate({ type: 'plugin-add', spec: '@scope/two@2.0.0' }, hooks())
++    await manager.mutate({ type: 'plugin-remove', name: '@scope/one' }, hooks())
++    expect(manager.listPlugins()).toEqual([{ name: '@scope/two', version: '2.0.0' }])
++  })
++
++  it('stores a local package inside the profile, replaces it, and removes its file', async () => {
++    const root = temporaryRoot()
++    const seed = seedWithBundled(root, 'seed', '1.0.0', [])
++    const paths = resolveDesktopPaths(join(root, '.dsh'))
++    const manager = new DesktopProjectManager(paths, { node: process.execPath, pnpm: writeFakePnpm(root) })
++    await manager.applyRelease(seed, '1.0.0', hooks())
++    const first = pluginTarball(root, 'dsh-voice-capture', '0.1.0', { marker: 'first' })
++    await manager.mutate({ type: 'plugin-add-local', path: first }, hooks())
++    const firstFile = localPackageFileName('dsh-voice-capture', '0.1.0', sha256(first))
++    const manifest = JSON.parse(readFileSync(join(paths.profile, 'package.json'), 'utf8')) as { dependencies: Record<string, string> }
++    expect(manifest.dependencies['dsh-voice-capture']).toBe(`file:./${DESKTOP_LOCAL_PACKAGES_DIR}/${firstFile}`)
++    expect(existsSync(join(paths.profile, DESKTOP_LOCAL_PACKAGES_DIR, firstFile))).toBe(true)
++    expect(manager.listPluginDetails()).toEqual([{ name: 'dsh-voice-capture', version: '0.1.0', source: 'local', state: 'enabled' }])
++
++    const second = pluginTarball(root, 'dsh-voice-capture', '0.1.1', { marker: 'second' })
++    await manager.mutate({ type: 'plugin-add-local', path: second }, hooks())
++    expect(existsSync(join(paths.profile, DESKTOP_LOCAL_PACKAGES_DIR, firstFile))).toBe(false)
++    expect(manager.listPlugins()).toEqual([{ name: 'dsh-voice-capture', version: '0.1.1' }])
++    await expect(manager.mutate({ type: 'plugin-update', name: 'dsh-voice-capture', version: '0.2.0' }, hooks()))
++      .rejects.toThrow(/install the newer file/u)
++
++    await manager.mutate({ type: 'plugin-remove', name: 'dsh-voice-capture' }, hooks())
++    expect(manager.listPluginDetails()).toEqual([])
++    expect(readdirSync(join(paths.profile, DESKTOP_LOCAL_PACKAGES_DIR))).toEqual([])
++    // Reinstall after removal.
++    await manager.mutate({ type: 'plugin-add-local', path: second }, hooks())
++    expect(manager.listPlugins()).toEqual([{ name: 'dsh-voice-capture', version: '0.1.1' }])
++  })
++
++  it('restores local and bundled state across a release update and tolerates one unrestorable plugin', async () => {
++    const root = temporaryRoot()
++    const log = join(root, 'pnpm.jsonl')
++    const paths = resolveDesktopPaths(join(root, '.dsh'))
++    const manager = new DesktopProjectManager(paths, { node: process.execPath, pnpm: writeFakePnpm(root) })
++    const firstSeed = seedWithBundled(root, 'seed-1', '1.0.0', [
++      pluginTarball(root, '@lab/audio', '0.2.0'),
++      pluginTarball(root, '@lab/extra', '1.0.0'),
++    ])
++    await manager.applyRelease(firstSeed, '1.0.0', hooks())
++    await manager.mutate({ type: 'plugin-add-local', path: pluginTarball(root, 'dsh-voice-capture', '0.3.0') }, hooks())
++    await manager.mutate({ type: 'plugin-add', spec: '@scope/registry@1.0.0' }, hooks())
++    await manager.mutate({ type: 'plugin-remove', name: '@lab/extra' }, hooks())
++    writeFileSync(join(paths.profile, 'cordis.patch.yml'), '- id: user-row\n')
++
++    const nextSeed = seedWithBundled(root, 'seed-2', '1.1.0', [
++      pluginTarball(root, '@lab/audio', '0.3.0'),
++      pluginTarball(root, '@lab/extra', '1.1.0'),
++    ])
++    process.env.TEST_PNPM_LOG = log
++    process.env.TEST_PNPM_FAIL = '@scope/registry'
++    await expect(manager.applyRelease(nextSeed, '1.1.0', hooks())).resolves.toBe(true)
++
++    expect(manager.releaseVersion()).toBe('1.1.0')
++    expect(manager.listPluginDetails()).toEqual([
++      { name: '@lab/audio', version: '0.3.0', source: 'bundled', state: 'enabled' },
++      { name: 'dsh-voice-capture', version: '0.3.0', source: 'local', state: 'enabled' },
++      { name: '@lab/extra', version: '1.1.0', source: 'bundled', state: 'disabled' },
++      { name: '@scope/registry', version: '1.0.0', source: 'registry', state: 'restore-failed', message: expect.stringContaining('simulated') },
++    ])
++    expect(readFileSync(join(paths.profile, 'cordis.patch.yml'), 'utf8')).toBe('- id: user-row\n')
++    expect(pnpmCalls(log).some(args => args.includes('add') && args.some(value => value.startsWith('file:./desktop-local-packages/dsh-voice-capture-0.3.0-')))).toBe(true)
++
++    delete process.env.TEST_PNPM_FAIL
++    await manager.mutate({ type: 'plugin-remove', name: '@scope/registry' }, hooks())
++    expect(manager.listPluginDetails().map(plugin => plugin.name)).toEqual(['@lab/audio', 'dsh-voice-capture', '@lab/extra'])
++  })
++
++  it('reapplies a same-version seed whose bundled plugin inventory changed', async () => {
++    const root = temporaryRoot()
++    const paths = resolveDesktopPaths(join(root, '.dsh'))
++    const manager = new DesktopProjectManager(paths, { node: process.execPath, pnpm: writeFakePnpm(root) })
++    await manager.applyRelease(seedWithBundled(root, 'seed-a', '1.0.0', [pluginTarball(root, '@lab/audio', '0.2.0')]), '1.0.0', hooks())
++    const rebuilt = seedWithBundled(root, 'seed-b', '1.0.0', [pluginTarball(root, '@lab/audio', '0.2.1')])
++    await expect(manager.applyRelease(rebuilt, '1.0.0', hooks())).resolves.toBe(true)
++    expect(manager.listPlugins()).toEqual([{ name: '@lab/audio', version: '0.2.1' }])
++  })
++
++  it('returns a removed local override of a bundled plugin to the bundled package, disabled', async () => {
++    const root = temporaryRoot()
++    const paths = resolveDesktopPaths(join(root, '.dsh'))
++    const manager = new DesktopProjectManager(paths, { node: process.execPath, pnpm: writeFakePnpm(root) })
++    await manager.applyRelease(seedWithBundled(root, 'seed', '1.0.0', [pluginTarball(root, '@lab/audio', '0.2.0')]), '1.0.0', hooks())
++    await manager.mutate({ type: 'plugin-add-local', path: pluginTarball(root, '@lab/audio', '0.9.0', { marker: 'override' }) }, hooks())
++    expect(manager.listPluginDetails()).toEqual([{ name: '@lab/audio', version: '0.9.0', source: 'local', state: 'enabled' }])
++    await manager.mutate({ type: 'plugin-remove', name: '@lab/audio' }, hooks())
++    expect(manager.listPluginDetails()).toEqual([{ name: '@lab/audio', version: '0.2.0', source: 'bundled', state: 'disabled' }])
++  })
++})
++
++describe('distribution profile paths (LOCAL PATCH, sbplab)', () => {
++  it('keeps the official profile by default and isolates a named distribution profile', () => {
++    const official = resolveDesktopPaths('/home/u/.dsh')
++    expect(official.profile).toBe(join('/home/u/.dsh', 'profiles', 'desktop'))
++    expect(official.root).toBe(join('/home/u/.dsh', 'desktop'))
++    const audio = resolveDesktopPaths('/home/u/.dsh', 'desktop-audio')
++    expect(audio.profile).toBe(join('/home/u/.dsh', 'profiles', 'desktop-audio'))
++    expect(audio.root).toBe(join('/home/u/.dsh', 'desktop-audio'))
++    expect(audio.pluginState).toBe(join('/home/u/.dsh', 'desktop-audio', 'plugin-state.json'))
++    expect(() => resolveDesktopPaths('/home/u/.dsh', '../evil')).toThrow(/invalid desktop profile name/u)
++  })
++})

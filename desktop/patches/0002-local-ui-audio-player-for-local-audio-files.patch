@@ -1,0 +1,69 @@
+diff --git a/packages/client/ui-chat/src/client/chat/AssistantMarkdown.tsx b/packages/client/ui-chat/src/client/chat/AssistantMarkdown.tsx
+index 3212801..d292314 100644
+--- a/packages/client/ui-chat/src/client/chat/AssistantMarkdown.tsx
++++ b/packages/client/ui-chat/src/client/chat/AssistantMarkdown.tsx
+@@ -20,7 +20,8 @@ import css from './AssistantMarkdown.module.css'
+  * relative destinations).
+  */
+ export function localPathMediaUrl(protocol: string, origin: string, value: string): string | undefined {
+-  if (protocol !== 'http:' && protocol !== 'https:') return undefined
++  // LOCAL PATCH (sbplab dgx-audio): Electron Desktop serves the same file API on its dsh-app:// origin.
++  if (protocol !== 'http:' && protocol !== 'https:' && protocol !== 'dsh-app:') return undefined
+   if (value.length === 0 || !value.startsWith('/') || value.startsWith('//')) return undefined
+   return `${origin}/api/file?path=${encodeURIComponent(value)}`
+ }
+diff --git a/packages/client/ui-primitives/src/markdown/render.tsx b/packages/client/ui-primitives/src/markdown/render.tsx
+index 4d78055..12c7206 100644
+--- a/packages/client/ui-primitives/src/markdown/render.tsx
++++ b/packages/client/ui-primitives/src/markdown/render.tsx
+@@ -73,7 +73,8 @@ function remoteImageUrl(url: string): string | undefined {
+ function vocabularyImageUrl(url: string): string | undefined {
+   try {
+     const protocol = new URL(url).protocol
+-    return protocol === 'http:' || protocol === 'https:' || protocol === 'blob:' || protocol === 'data:'
++    // LOCAL PATCH (sbplab dgx-audio): the Desktop renderer's same-origin file API lives on dsh-app://.
++    return protocol === 'http:' || protocol === 'https:' || protocol === 'blob:' || protocol === 'data:' || protocol === 'dsh-app:'
+       ? url
+       : undefined
+   } catch {
+@@ -562,14 +563,40 @@ function inlineCodeHttpUrl(value: string): string | undefined {
+   }
+ }
+ 
++/** LOCAL PATCH (sbplab dgx-audio): local audio files named by image syntax render as an audio player. */
++const AUDIO_DESTINATION = /\.(?:wav|wave|mp3|m4a|aac|ogg|oga|opus|flac|webm)$/iu
++
+ function renderImage(url: string, alt: string, key: Key, context: MarkdownRenderContext): ReactNode {
+   const imageSrc = imageSource(url, context.pathImages)
+   if (imageSrc === undefined) {
+     return <span key={key} className={css.imageAlt}>{alt}</span>
+   }
++  // Only vocabulary-rewritten (same-origin file API) sources become players; remote URLs stay images.
++  if (AUDIO_DESTINATION.test(url) && imageSrc !== remoteImageUrl(sanitizeUrl(normalizeUri(url)))) {
++    return <MarkdownAudio key={`${key}:${imageSrc}`} src={imageSrc} alt={alt} destination={url} />
++  }
+   return <MarkdownImage key={`${key}:${imageSrc}`} src={imageSrc} alt={alt} destination={url} />
+ }
+ 
++/** LOCAL PATCH (sbplab dgx-audio): native audio controls (play, seek, download) for a same-origin local file. */
++function MarkdownAudio({ src, alt, destination }: { src: string; alt: string; destination: string }): ReactNode {
++  const [failed, setFailed] = useState(false)
++  if (failed) return <span className={css.imageAlt}>{alt || destination}</span>
++  return (
++    <span data-dsh-audio="" style={{ display: 'flex', flexDirection: 'column', gap: 4, margin: '6px 0' }}>
++      <audio
++        controls
++        preload="metadata"
++        src={src}
++        aria-label={alt || destination}
++        style={{ width: '100%', maxWidth: 520 }}
++        onError={() => { setFailed(true) }}
++      />
++      {alt !== '' && <span className={css.imageAlt}>{alt}</span>}
++    </span>
++  )
++}
++
+ /** Failed loads retain the authored alt or destination; a new source remounts the image. */
+ function MarkdownImage({ src, alt, destination }: { src: string; alt: string; destination: string }): ReactNode {
+   const [failed, setFailed] = useState(false)
