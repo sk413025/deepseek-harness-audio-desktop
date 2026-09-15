@@ -1,0 +1,1505 @@
+{
+ "source": "results/dgx-audio-catalog-20260915/checkpoints/20260915T0515/catalog.v1.json",
+ "catalogVersion": "1.0.0-full-census.202609150505",
+ "sha256": "ffa4946ed8a30bee6b4625dcc653b3990a3ab74b279f70246274bcea6e80dd67",
+ "note": "rows[].adapter_models[] entries copied verbatim for host 0.4.6 option-controls tests",
+ "entries": [
+  {
+   "upstreamModel": "OpenMOSS-Team/MOSS-TTSD-v1.0",
+   "catalogId": "vllm-omni:OpenMOSS-Team/MOSS-TTSD-v1.0",
+   "revision": "c7cd852d87aff71cab5bd2b9b05509cedc0ef1ba",
+   "deploymentId": null,
+   "generated": true,
+   "review": "needs-review (derived from catalog)",
+   "id": "moss-ttsd-v1-0-speech-dialogue",
+   "tasks": [
+    "tts.speech"
+   ],
+   "catalogTasks": [
+    "tts_multi_speaker_dialogue"
+   ],
+   "catalogTasksBasis": "MOSS-TTSD [S1]/[S2] + ref_audio_2",
+   "mode": "speech",
+   "wire": "omni-speech-http",
+   "streaming": {
+    "audio": "off"
+   },
+   "delivery_expected": "final-only",
+   "speech": {
+    "responseFormat": "wav",
+    "extraBody": {},
+    "pcmSampleRate": 24000,
+    "refAudio": "attachment",
+    "refAudio2": "attachment"
+   },
+   "params_required": [
+    "referenceAudio",
+    "referenceAudio2 (optional speaker 2)"
+   ],
+   "requestOptions": [
+    "input",
+    "ref_audio",
+    "ref_audio_2",
+    "voice",
+    "language",
+    "max_new_tokens",
+    "seed",
+    "response_format",
+    "stream",
+    "stream_format"
+   ],
+   "requestOptionsMap": [
+    {
+     "option": "input",
+     "status": "listed-by-source",
+     "raw": "input"
+    },
+    {
+     "option": "ref_audio",
+     "status": "listed-by-source",
+     "raw": "ref_audio"
+    },
+    {
+     "option": "ref_audio_2",
+     "status": "listed-by-source",
+     "raw": "ref_audio_2"
+    },
+    {
+     "option": "voice",
+     "status": "listed-by-source",
+     "raw": "voice"
+    },
+    {
+     "option": "language",
+     "status": "listed-by-source",
+     "raw": "language"
+    },
+    {
+     "option": "max_new_tokens",
+     "status": "listed-by-source",
+     "raw": "max_new_tokens"
+    },
+    {
+     "option": "seed",
+     "status": "listed-by-source",
+     "raw": "seed"
+    },
+    {
+     "option": "response_format",
+     "status": "listed-by-source",
+     "raw": "response_format"
+    },
+    {
+     "option": "stream",
+     "status": "listed-by-source",
+     "raw": "stream"
+    },
+    {
+     "option": "stream_format",
+     "status": "listed-by-source",
+     "raw": "stream_format"
+    }
+   ],
+   "requestOptionsScope": "row request_options scoped to this variant (entries for other variants/wires omitted)",
+   "requestOptionsEvidence": {
+    "source": "catalog census rows[].request_options (verbatim)",
+    "row_sources": [
+     "omni-main:recipes/OpenMOSS/MOSS-TTS.md:7",
+     "omni-main:recipes/OpenMOSS/MOSS-TTS.md:23",
+     "omni-main:vllm_omni/deploy/moss_ttsd.yaml:1-3",
+     "omni-main:vllm_omni/model_executor/models/registry.py:380",
+     "omni-main:examples/offline_inference/text_to_speech/moss_tts/end2end.py:5",
+     "omni-main:examples/offline_inference/text_to_speech/moss_tts/end2end.py:210"
+    ]
+   }
+  },
+  {
+   "upstreamModel": "OpenMOSS-Team/MOSS-TTSD-v1.0",
+   "catalogId": "vllm-omni:OpenMOSS-Team/MOSS-TTSD-v1.0",
+   "revision": "c7cd852d87aff71cab5bd2b9b05509cedc0ef1ba",
+   "deploymentId": null,
+   "generated": true,
+   "review": "needs-review (derived from catalog)",
+   "id": "moss-ttsd-v1-0-speech",
+   "tasks": [
+    "tts.speech"
+   ],
+   "catalogTasks": [
+    "tts_voice_clone",
+    "tts"
+   ],
+   "catalogTasksBasis": "endpoint /v1/audio/speech with ref_audio (required by adapter); ref_text not used",
+   "mode": "speech",
+   "wire": "omni-speech-http",
+   "streaming": {
+    "audio": "off"
+   },
+   "delivery_expected": "final-only",
+   "speech": {
+    "responseFormat": "wav",
+    "extraBody": {},
+    "pcmSampleRate": 24000,
+    "refAudio": "attachment"
+   },
+   "params_required": [
+    "referenceAudio"
+   ],
+   "params_optional": [],
+   "variantId": "speech-clone",
+   "requestOptions": [
+    "input",
+    "ref_audio",
+    "voice",
+    "language",
+    "max_new_tokens",
+    "seed",
+    "response_format",
+    "stream",
+    "stream_format"
+   ],
+   "requestOptionsMap": [
+    {
+     "option": "input",
+     "status": "listed-by-source",
+     "raw": "input"
+    },
+    {
+     "option": "ref_audio",
+     "status": "listed-by-source",
+     "raw": "ref_audio"
+    },
+    {
+     "option": "voice",
+     "status": "listed-by-source",
+     "raw": "voice"
+    },
+    {
+     "option": "language",
+     "status": "listed-by-source",
+     "raw": "language"
+    },
+    {
+     "option": "max_new_tokens",
+     "status": "listed-by-source",
+     "raw": "max_new_tokens"
+    },
+    {
+     "option": "seed",
+     "status": "listed-by-source",
+     "raw": "seed"
+    },
+    {
+     "option": "response_format",
+     "status": "listed-by-source",
+     "raw": "response_format"
+    },
+    {
+     "option": "stream",
+     "status": "listed-by-source",
+     "raw": "stream"
+    },
+    {
+     "option": "stream_format",
+     "status": "listed-by-source",
+     "raw": "stream_format"
+    }
+   ],
+   "requestOptionsScope": "row request_options scoped to this variant (entries for other variants/wires omitted)",
+   "requestOptionsEvidence": {
+    "source": "catalog census rows[].request_options (verbatim)",
+    "row_sources": [
+     "omni-main:recipes/OpenMOSS/MOSS-TTS.md:7",
+     "omni-main:recipes/OpenMOSS/MOSS-TTS.md:23",
+     "omni-main:vllm_omni/deploy/moss_ttsd.yaml:1-3",
+     "omni-main:vllm_omni/model_executor/models/registry.py:380",
+     "omni-main:examples/offline_inference/text_to_speech/moss_tts/end2end.py:5",
+     "omni-main:examples/offline_inference/text_to_speech/moss_tts/end2end.py:210"
+    ]
+   }
+  },
+  {
+   "upstreamModel": "IndexTeam/IndexTTS-2",
+   "catalogId": "vllm-omni:IndexTeam/IndexTTS-2",
+   "revision": "740dcaff396282ffb241903d150ac011cd4b1ede",
+   "deploymentId": null,
+   "generated": true,
+   "review": "needs-review (derived from catalog)",
+   "id": "indextts-2-speech",
+   "tasks": [
+    "tts.speech"
+   ],
+   "catalogTasks": [
+    "tts_voice_clone",
+    "tts_instruct_style"
+   ],
+   "catalogTasksBasis": "endpoint /v1/audio/speech with ref_audio (required by adapter); ref_text not used",
+   "mode": "speech",
+   "wire": "omni-speech-http",
+   "streaming": {
+    "audio": "off"
+   },
+   "delivery_expected": "final-only",
+   "speech": {
+    "responseFormat": "wav",
+    "extraBody": {},
+    "pcmSampleRate": 22050,
+    "refAudio": "attachment"
+   },
+   "params_required": [
+    "referenceAudio"
+   ],
+   "params_optional": [],
+   "variantId": "speech-clone",
+   "requestOptions": [
+    "input",
+    "ref_audio (required unless uploaded voice; http(s)/data:/file:// only)",
+    "voice (uploaded audio voice only)",
+    "max_new_tokens [1,4096]",
+    "extra_params.emo_audio",
+    "extra_params.emo_vector (8 floats in [0,1.2]: happy,angry,sad,afraid,disgusted,melancholic,surprised,calm)",
+    "extra_params.emo_alpha",
+    "extra_params.emo_text",
+    "extra_params.use_emo_text",
+    "extra_params.use_random",
+    "seed",
+    "response_format",
+    "stream (compatibility only)",
+    "speed (generic non-streaming post-processing; not native)",
+    "IGNORED: ref_text, instructions, language, task_type",
+    "NOT SUPPORTED: sample_rate"
+   ],
+   "requestOptionsMap": [
+    {
+     "option": "input",
+     "status": "listed-by-source",
+     "raw": "input"
+    },
+    {
+     "option": "ref_audio",
+     "status": "required-conditional",
+     "raw": "ref_audio (required unless uploaded voice; http(s)/data:/file:// only)"
+    },
+    {
+     "option": "voice",
+     "status": "listed-by-source",
+     "raw": "voice (uploaded audio voice only)"
+    },
+    {
+     "option": "max_new_tokens",
+     "status": "listed-by-source",
+     "raw": "max_new_tokens [1,4096]"
+    },
+    {
+     "option": "extra_params.emo_audio",
+     "status": "listed-by-source",
+     "raw": "extra_params.emo_audio"
+    },
+    {
+     "option": "extra_params.emo_vector",
+     "status": "listed-by-source",
+     "raw": "extra_params.emo_vector (8 floats in [0,1.2]: happy,angry,sad,afraid,disgusted,melancholic,surprised,calm)"
+    },
+    {
+     "option": "extra_params.emo_alpha",
+     "status": "listed-by-source",
+     "raw": "extra_params.emo_alpha"
+    },
+    {
+     "option": "extra_params.emo_text",
+     "status": "listed-by-source",
+     "raw": "extra_params.emo_text"
+    },
+    {
+     "option": "extra_params.use_emo_text",
+     "status": "listed-by-source",
+     "raw": "extra_params.use_emo_text"
+    },
+    {
+     "option": "extra_params.use_random",
+     "status": "listed-by-source",
+     "raw": "extra_params.use_random"
+    },
+    {
+     "option": "seed",
+     "status": "listed-by-source",
+     "raw": "seed"
+    },
+    {
+     "option": "response_format",
+     "status": "listed-by-source",
+     "raw": "response_format"
+    },
+    {
+     "option": "stream",
+     "status": "listed-by-source",
+     "raw": "stream (compatibility only)"
+    },
+    {
+     "option": "speed",
+     "status": "listed-by-source",
+     "raw": "speed (generic non-streaming post-processing; not native)"
+    },
+    {
+     "option": "ref_text",
+     "status": "ignored",
+     "detail": "ref_text",
+     "raw": "IGNORED: ref_text, instructions, language, task_type"
+    },
+    {
+     "option": "instructions",
+     "status": "ignored",
+     "detail": "instructions",
+     "raw": "IGNORED: ref_text, instructions, language, task_type"
+    },
+    {
+     "option": "language",
+     "status": "ignored",
+     "detail": "language",
+     "raw": "IGNORED: ref_text, instructions, language, task_type"
+    },
+    {
+     "option": "task_type",
+     "status": "ignored",
+     "detail": "task_type",
+     "raw": "IGNORED: ref_text, instructions, language, task_type"
+    },
+    {
+     "option": "sample_rate",
+     "status": "unsupported",
+     "detail": "sample_rate",
+     "raw": "NOT SUPPORTED: sample_rate"
+    }
+   ],
+   "requestOptionsScope": "row request_options scoped to this variant (entries for other variants/wires omitted)",
+   "requestOptionsEvidence": {
+    "source": "catalog census rows[].request_options (verbatim)",
+    "row_sources": [
+     "omni-main:docs/models/supported_models.md:95",
+     "omni-v0.29.0rc1:docs/models/supported_models.md:93",
+     "omni-v0.28.0:docs/models/supported_models.md:91",
+     "omni-main:vllm_omni/model_executor/models/registry.py:410,415",
+     "omni-main:vllm_omni/config/pipeline_registry.py:204",
+     "omni-main:vllm_omni/model_executor/models/indextts2/pipeline.py:17-51"
+    ]
+   }
+  },
+  {
+   "upstreamModel": "IndexTeam/IndexTTS-2",
+   "catalogId": "vllm-omni:IndexTeam/IndexTTS-2",
+   "revision": "740dcaff396282ffb241903d150ac011cd4b1ede",
+   "deploymentId": null,
+   "generated": true,
+   "review": "needs-review (derived from catalog)",
+   "id": "indextts-2-speech-ws",
+   "tasks": [
+    "tts.stream-input"
+   ],
+   "catalogTasks": [
+    "tts_voice_clone",
+    "tts_instruct_style"
+   ],
+   "catalogTasksBasis": "/v1/audio/speech/stream (streaming_text_input_tts) mirroring HTTP variant indextts-2-speech",
+   "mode": "realtime",
+   "wire": "omni-speech-ws",
+   "realtime": {
+    "path": "/audio/speech/stream",
+    "outputSampleRate": 22050
+   },
+   "notes": "use per-chunk sample_rate; WS session lacks extra_params/ref_audio_2/ambient_sound",
+   "requiresReferenceAudio": true,
+   "params_required": [
+    "referenceAudio (library referenceVoiceFile -> realtime.refAudioFile -> session.ref_audio)"
+   ],
+   "requestOptions": [
+    "input",
+    "ref_audio (required unless uploaded voice; http(s)/data:/file:// only)",
+    "voice (uploaded audio voice only)",
+    "max_new_tokens [1,4096]",
+    "seed",
+    "stream (compatibility only)",
+    "speed (generic non-streaming post-processing; not native)",
+    "IGNORED: ref_text, instructions, language, task_type",
+    "NOT SUPPORTED: sample_rate"
+   ],
+   "requestOptionsMap": [
+    {
+     "option": "input",
+     "status": "listed-by-source",
+     "raw": "input"
+    },
+    {
+     "option": "ref_audio",
+     "status": "required-conditional",
+     "raw": "ref_audio (required unless uploaded voice; http(s)/data:/file:// only)"
+    },
+    {
+     "option": "voice",
+     "status": "listed-by-source",
+     "raw": "voice (uploaded audio voice only)"
+    },
+    {
+     "option": "max_new_tokens",
+     "status": "listed-by-source",
+     "raw": "max_new_tokens [1,4096]"
+    },
+    {
+     "option": "seed",
+     "status": "listed-by-source",
+     "raw": "seed"
+    },
+    {
+     "option": "stream",
+     "status": "listed-by-source",
+     "raw": "stream (compatibility only)"
+    },
+    {
+     "option": "speed",
+     "status": "listed-by-source",
+     "raw": "speed (generic non-streaming post-processing; not native)"
+    },
+    {
+     "option": "ref_text",
+     "status": "ignored",
+     "detail": "ref_text",
+     "raw": "IGNORED: ref_text, instructions, language, task_type"
+    },
+    {
+     "option": "instructions",
+     "status": "ignored",
+     "detail": "instructions",
+     "raw": "IGNORED: ref_text, instructions, language, task_type"
+    },
+    {
+     "option": "language",
+     "status": "ignored",
+     "detail": "language",
+     "raw": "IGNORED: ref_text, instructions, language, task_type"
+    },
+    {
+     "option": "task_type",
+     "status": "ignored",
+     "detail": "task_type",
+     "raw": "IGNORED: ref_text, instructions, language, task_type"
+    },
+    {
+     "option": "sample_rate",
+     "status": "unsupported",
+     "detail": "sample_rate",
+     "raw": "NOT SUPPORTED: sample_rate"
+    }
+   ],
+   "requestOptionsScope": "row request_options scoped to this variant (entries for other variants/wires omitted)",
+   "requestOptionsEvidence": {
+    "source": "catalog census rows[].request_options (verbatim)",
+    "row_sources": [
+     "omni-main:docs/models/supported_models.md:95",
+     "omni-v0.29.0rc1:docs/models/supported_models.md:93",
+     "omni-v0.28.0:docs/models/supported_models.md:91",
+     "omni-main:vllm_omni/model_executor/models/registry.py:410,415",
+     "omni-main:vllm_omni/config/pipeline_registry.py:204",
+     "omni-main:vllm_omni/model_executor/models/indextts2/pipeline.py:17-51"
+    ]
+   }
+  },
+  {
+   "upstreamModel": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+   "catalogId": "vllm-omni:Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+   "revision": "0c0e3051f131929182e2c023b9537f8b1c68adfe",
+   "deploymentId": null,
+   "generated": true,
+   "review": "needs-review (derived from catalog)",
+   "id": "qwen3-tts-12hz-1-7b-customvoice-speech-word-timestamps",
+   "tasks": [
+    "tts.speech"
+   ],
+   "catalogTasks": [
+    "timestamps"
+   ],
+   "catalogTasksBasis": "word timestamps side output of /v1/audio/speech on a --forced-aligner deploy (non-streaming)",
+   "mode": "speech",
+   "wire": "omni-speech-http",
+   "streaming": {
+    "audio": "off"
+   },
+   "delivery_expected": "final-only",
+   "speech": {
+    "responseFormat": "wav",
+    "extraBody": {},
+    "pcmSampleRate": 24000,
+    "taskType": "CustomVoice",
+    "wordTimestamps": true
+   },
+   "params_required": [],
+   "deployRequirement": "--forced-aligner Qwen/Qwen3-ForcedAligner-0.6B",
+   "requestOptions": [
+    "input",
+    "voice (preset, case-insensitive; default Vivian)",
+    "instructions (maps to instruct; max 500 chars)",
+    "language (Auto + codec_language_id keys)",
+    "task_type=CustomVoice (default)",
+    "response_format wav|pcm|flac|mp3|opus",
+    "sample_rate 8000|24000 (rc1+)",
+    "speed (not with streaming)",
+    "stream",
+    "stream_format sse|audio",
+    "max_new_tokens (default 2048, max 4096)",
+    "seed",
+    "initial_codec_chunk_frames",
+    "non_streaming_mode (prompt mode; default true)",
+    "word_timestamps (needs --forced-aligner; non-stream header or WS)"
+   ],
+   "requestOptionsMap": [
+    {
+     "option": "input",
+     "status": "listed-by-source",
+     "raw": "input"
+    },
+    {
+     "option": "voice",
+     "status": "listed-by-source",
+     "raw": "voice (preset, case-insensitive; default Vivian)"
+    },
+    {
+     "option": "instructions",
+     "status": "listed-by-source",
+     "raw": "instructions (maps to instruct; max 500 chars)"
+    },
+    {
+     "option": "language",
+     "status": "listed-by-source",
+     "raw": "language (Auto + codec_language_id keys)"
+    },
+    {
+     "option": "task_type",
+     "status": "listed-by-source",
+     "raw": "task_type=CustomVoice (default)"
+    },
+    {
+     "option": "response_format",
+     "status": "listed-by-source",
+     "raw": "response_format wav|pcm|flac|mp3|opus"
+    },
+    {
+     "option": "sample_rate",
+     "status": "listed-by-source",
+     "raw": "sample_rate 8000|24000 (rc1+)"
+    },
+    {
+     "option": "speed",
+     "status": "listed-by-source",
+     "raw": "speed (not with streaming)"
+    },
+    {
+     "option": "stream",
+     "status": "listed-by-source",
+     "raw": "stream"
+    },
+    {
+     "option": "stream_format",
+     "status": "listed-by-source",
+     "raw": "stream_format sse|audio"
+    },
+    {
+     "option": "max_new_tokens",
+     "status": "listed-by-source",
+     "raw": "max_new_tokens (default 2048, max 4096)"
+    },
+    {
+     "option": "seed",
+     "status": "listed-by-source",
+     "raw": "seed"
+    },
+    {
+     "option": "initial_codec_chunk_frames",
+     "status": "listed-by-source",
+     "raw": "initial_codec_chunk_frames"
+    },
+    {
+     "option": "non_streaming_mode",
+     "status": "listed-by-source",
+     "raw": "non_streaming_mode (prompt mode; default true)"
+    },
+    {
+     "option": "word_timestamps",
+     "status": "listed-by-source",
+     "raw": "word_timestamps (needs --forced-aligner; non-stream header or WS)"
+    }
+   ],
+   "requestOptionsScope": "row request_options scoped to this variant (entries for other variants/wires omitted)",
+   "requestOptionsEvidence": {
+    "source": "catalog census rows[].request_options (verbatim)",
+    "row_sources": [
+     "omni-main:docs/models/supported_models.md:85",
+     "omni-v0.29.0rc1:docs/models/supported_models.md:83",
+     "omni-v0.28.0:docs/models/supported_models.md:81",
+     "omni-main:vllm_omni/model_executor/models/registry.py:160-174",
+     "omni-main:vllm_omni/config/pipeline_registry.py:116,144",
+     "omni-main:docs/serving/speech_api.md:738"
+    ]
+   }
+  },
+  {
+   "upstreamModel": "dots-studio/dots.tts-soar",
+   "catalogId": "vllm-omni:dots-studio/dots.tts-soar",
+   "revision": "2f9b3e18d70d670d4c701da2dc55ded5755815ce",
+   "deploymentId": null,
+   "generated": true,
+   "review": "needs-review (derived from catalog)",
+   "id": "dots-tts-soar-speech",
+   "tasks": [
+    "tts.speech"
+   ],
+   "catalogTasks": [
+    "tts"
+   ],
+   "catalogTasksBasis": "endpoint /v1/audio/speech text-only synthesis (no reference required per request_options); voice from request_options: voice (only null or 'default')",
+   "mode": "speech",
+   "wire": "omni-speech-http",
+   "streaming": {
+    "audio": "sse"
+   },
+   "delivery_expected": "progressive",
+   "speech": {
+    "responseFormat": "wav",
+    "extraBody": {},
+    "pcmSampleRate": 48000,
+    "voice": "default"
+   },
+   "params_required": [],
+   "params_optional": [],
+   "requestOptions": [
+    "input",
+    "voice (only null or 'default')",
+    "response_format",
+    "stream",
+    "stream_format",
+    "speed (non-streaming generic post-process)",
+    "max_new_tokens",
+    "seed (does not control DiT flow-matching noise, recipe:162-166)",
+    "extra_params (generic)",
+    "IGNORED: instructions, language, task_type",
+    "REJECTED: voice other than default, ref_audio, ref_text, speaker_embedding, x_vector_only_mode, sample_rate (any value)"
+   ],
+   "requestOptionsMap": [
+    {
+     "option": "input",
+     "status": "listed-by-source",
+     "raw": "input"
+    },
+    {
+     "option": "voice",
+     "status": "listed-restricted",
+     "raw": "voice (only null or 'default')"
+    },
+    {
+     "option": "response_format",
+     "status": "listed-by-source",
+     "raw": "response_format"
+    },
+    {
+     "option": "stream",
+     "status": "listed-by-source",
+     "raw": "stream"
+    },
+    {
+     "option": "stream_format",
+     "status": "listed-by-source",
+     "raw": "stream_format"
+    },
+    {
+     "option": "speed",
+     "status": "listed-by-source",
+     "raw": "speed (non-streaming generic post-process)"
+    },
+    {
+     "option": "max_new_tokens",
+     "status": "listed-by-source",
+     "raw": "max_new_tokens"
+    },
+    {
+     "option": "seed",
+     "status": "listed-by-source",
+     "raw": "seed (does not control DiT flow-matching noise, recipe:162-166)"
+    },
+    {
+     "option": "extra_params",
+     "status": "listed-by-source",
+     "raw": "extra_params (generic)"
+    },
+    {
+     "option": "instructions",
+     "status": "ignored",
+     "detail": "instructions",
+     "raw": "IGNORED: instructions, language, task_type"
+    },
+    {
+     "option": "language",
+     "status": "ignored",
+     "detail": "language",
+     "raw": "IGNORED: instructions, language, task_type"
+    },
+    {
+     "option": "task_type",
+     "status": "ignored",
+     "detail": "task_type",
+     "raw": "IGNORED: instructions, language, task_type"
+    },
+    {
+     "option": "voice other than default",
+     "status": "rejected",
+     "detail": "voice other than default",
+     "raw": "REJECTED: voice other than default, ref_audio, ref_text, speaker_embedding, x_vector_only_mode, sample_rate (any value)"
+    },
+    {
+     "option": "sample_rate",
+     "status": "rejected",
+     "detail": "sample_rate (any value)",
+     "raw": "REJECTED: voice other than default, ref_audio, ref_text, speaker_embedding, x_vector_only_mode, sample_rate (any value)"
+    }
+   ],
+   "requestOptionsScope": "row request_options scoped to this variant (entries for other variants/wires omitted)",
+   "requestOptionsEvidence": {
+    "source": "catalog census rows[].request_options (verbatim)",
+    "row_sources": [
+     "omni-main:docs/models/supported_models.md:75",
+     "omni-v0.29.0rc1:docs/models/supported_models.md:73",
+     "omni-main:recipes/rednote-hilab/dots.tts.md:8,113",
+     "omni-main:vllm_omni/model_executor/models/registry.py:329-334",
+     "omni-main:vllm_omni/config/pipeline_registry.py:169",
+     "omni-main:vllm_omni/model_executor/models/dots_tts/pipeline.py:21-46"
+    ]
+   }
+  },
+  {
+   "upstreamModel": "MiniMaxAI/MiniMax-Music3",
+   "catalogId": "vllm-omni:MiniMaxAI/MiniMax-Music3",
+   "revision": "fbdf52fbaaca799592917417eb05f1899f1255ec",
+   "deploymentId": null,
+   "generated": true,
+   "review": "needs-review (derived from catalog)",
+   "id": "minimax-music3-speech",
+   "tasks": [
+    "audio.generate"
+   ],
+   "catalogTasks": [
+    "music_generation"
+   ],
+   "catalogTasksBasis": "MiniMax-Music3 generates over /v1/audio/speech (lyrics=input, style=instructions); stream rejected per recipe",
+   "mode": "speech",
+   "wire": "omni-speech-http",
+   "streaming": {
+    "audio": "off"
+   },
+   "delivery_expected": "final-only",
+   "speech": {
+    "responseFormat": "wav",
+    "extraBody": {},
+    "pcmSampleRate": 32000,
+    "instructions": "",
+    "seed": 0
+   },
+   "params_required": [
+    "input (lyrics)",
+    "instructions (style caption)"
+   ],
+   "variantId": "music",
+   "requestOptions": [
+    "input (lyrics, required non-empty; [Verse]/[Chorus]/[Bridge]/[Outro] tags must sit on their own line)",
+    "instructions (style caption, required non-empty, <=20000 chars; tokenized prompt <=5000 tokens)",
+    "seed (non-negative, default 0)",
+    "max_new_tokens (audio frames at 25 fps, 1..9000, default 9000; a cap, not a target)",
+    "response_format (default wav)",
+    "model",
+    "rejected: voice (except empty/'default'), ref_audio, ref_text, language, task_type, speed != 1.0, extra_params temperature/top_p/top_k/repetition_penalty, extra_params cfg_role/cfg_pair_id/cfg_null_prompt"
+   ],
+   "requestOptionsMap": [
+    {
+     "option": "input",
+     "status": "required",
+     "raw": "input (lyrics, required non-empty; [Verse]/[Chorus]/[Bridge]/[Outro] tags must sit on their own line)"
+    },
+    {
+     "option": "instructions",
+     "status": "required",
+     "raw": "instructions (style caption, required non-empty, <=20000 chars; tokenized prompt <=5000 tokens)"
+    },
+    {
+     "option": "seed",
+     "status": "listed-by-source",
+     "raw": "seed (non-negative, default 0)"
+    },
+    {
+     "option": "max_new_tokens",
+     "status": "listed-by-source",
+     "raw": "max_new_tokens (audio frames at 25 fps, 1..9000, default 9000; a cap, not a target)"
+    },
+    {
+     "option": "response_format",
+     "status": "listed-by-source",
+     "raw": "response_format (default wav)"
+    },
+    {
+     "option": "model",
+     "status": "listed-by-source",
+     "raw": "model"
+    },
+    {
+     "option": "voice",
+     "status": "rejected",
+     "detail": "voice (except empty/'default')",
+     "raw": "rejected: voice (except empty/'default'), ref_audio, ref_text, language, task_type, speed != 1.0, extra_params temperature/top_p/top_k/repetition_penalty, extra_params cfg_role/cfg_pair_id/cfg_null_pr"
+    },
+    {
+     "option": "language",
+     "status": "rejected",
+     "detail": "language",
+     "raw": "rejected: voice (except empty/'default'), ref_audio, ref_text, language, task_type, speed != 1.0, extra_params temperature/top_p/top_k/repetition_penalty, extra_params cfg_role/cfg_pair_id/cfg_null_pr"
+    },
+    {
+     "option": "task_type",
+     "status": "rejected",
+     "detail": "task_type",
+     "raw": "rejected: voice (except empty/'default'), ref_audio, ref_text, language, task_type, speed != 1.0, extra_params temperature/top_p/top_k/repetition_penalty, extra_params cfg_role/cfg_pair_id/cfg_null_pr"
+    },
+    {
+     "option": "speed != 1.0",
+     "status": "rejected",
+     "detail": "speed != 1.0",
+     "raw": "rejected: voice (except empty/'default'), ref_audio, ref_text, language, task_type, speed != 1.0, extra_params temperature/top_p/top_k/repetition_penalty, extra_params cfg_role/cfg_pair_id/cfg_null_pr"
+    },
+    {
+     "option": "extra_params temperature/top_p/top_k/repetition_penalty",
+     "status": "rejected",
+     "detail": "extra_params temperature/top_p/top_k/repetition_penalty",
+     "raw": "rejected: voice (except empty/'default'), ref_audio, ref_text, language, task_type, speed != 1.0, extra_params temperature/top_p/top_k/repetition_penalty, extra_params cfg_role/cfg_pair_id/cfg_null_pr"
+    },
+    {
+     "option": "extra_params cfg_role/cfg_pair_id/cfg_null_prompt",
+     "status": "rejected",
+     "detail": "extra_params cfg_role/cfg_pair_id/cfg_null_prompt",
+     "raw": "rejected: voice (except empty/'default'), ref_audio, ref_text, language, task_type, speed != 1.0, extra_params temperature/top_p/top_k/repetition_penalty, extra_params cfg_role/cfg_pair_id/cfg_null_pr"
+    }
+   ],
+   "requestOptionsScope": "row request_options scoped to this variant (entries for other variants/wires omitted)",
+   "requestOptionsEvidence": {
+    "source": "catalog census rows[].request_options (verbatim)",
+    "row_sources": [
+     "omni-main:docs/models/supported_models.md:84",
+     "omni-v0.29.0rc1:docs/models/supported_models.md:82",
+     "omni-v0.28.0:docs/models/supported_models.md:80",
+     "omni-main:vllm_omni/model_executor/models/registry.py:485-493",
+     "omni-v0.29.0rc1:vllm_omni/model_executor/models/registry.py:480-485",
+     "omni-v0.28.0:vllm_omni/model_executor/models/registry.py:466-471"
+    ]
+   }
+  },
+  {
+   "upstreamModel": "BreezeBlue/Breeze-TTS-2",
+   "catalogId": "vllm-omni:BreezeBlue/Breeze-TTS-2",
+   "revision": "3e28c5151381a722f1d8661b4118c298caa77aa4",
+   "deploymentId": null,
+   "generated": true,
+   "review": "needs-review (derived from catalog)",
+   "id": "breeze-tts-2-speech-clone-ws",
+   "tasks": [
+    "tts.stream-input"
+   ],
+   "catalogTasks": [
+    "tts_voice_clone"
+   ],
+   "catalogTasksBasis": "/v1/audio/speech/stream (streaming_text_input_tts) mirroring HTTP variant breeze-tts-2-speech-clone",
+   "mode": "realtime",
+   "wire": "omni-speech-ws",
+   "realtime": {
+    "path": "/audio/speech/stream",
+    "outputSampleRate": 24000,
+    "session": {
+     "task_type": "Base"
+    }
+   },
+   "notes": "use per-chunk sample_rate; WS session lacks extra_params/ref_audio_2/ambient_sound",
+   "requiresReferenceAudio": true,
+   "adapterLimit": "server needs ref_text unless x_vector_only_mode: host >= 0.4.3 sends session params refText / xVectorOnlyMode (TASK_CONTRACT K.2); host 0.4.2 cannot (no per-session ref_text)",
+   "params_required": [
+    "referenceAudio (library referenceVoiceFile -> realtime.refAudioFile -> session.ref_audio)",
+    "refText (session param, host >= 0.4.3) unless xVectorOnlyMode"
+   ],
+   "requestOptions": [
+    "input",
+    "voice (speaker tag S0..S9, default S0; passed verbatim; ignored for timbre when ref_audio is given)",
+    "instructions (voice design without a reference = tts_instruction; voice direction with a reference = ref_edit_tata)",
+    "ref_audio (exactly one clip; requires ref_text)",
+    "ref_text (requires ref_audio; must be non-empty)",
+    "task_type (Base requires ref_audio; VoiceDesign rejected)",
+    "stream",
+    "sample_rate (only 24000)",
+    "max_new_tokens (codec frames, 80 ms each; default 2048)",
+    "seed (generic)",
+    "REJECTED: speed != 1.0, language, speaker_embedding, x_vector_only_mode, extra_params guidance_scale/cfg_scale != 1.0, negative_prompt, temperature != 0, top_p != 1.0, top_k not in (-1,0,1)"
+   ],
+   "requestOptionsMap": [
+    {
+     "option": "input",
+     "status": "listed-by-source",
+     "raw": "input"
+    },
+    {
+     "option": "voice",
+     "status": "listed-by-source",
+     "raw": "voice (speaker tag S0..S9, default S0; passed verbatim; ignored for timbre when ref_audio is given)"
+    },
+    {
+     "option": "instructions",
+     "status": "listed-by-source",
+     "raw": "instructions (voice design without a reference = tts_instruction; voice direction with a reference = ref_edit_tata)"
+    },
+    {
+     "option": "ref_audio",
+     "status": "listed-by-source",
+     "raw": "ref_audio (exactly one clip; requires ref_text)"
+    },
+    {
+     "option": "ref_text",
+     "status": "required",
+     "raw": "ref_text (requires ref_audio; must be non-empty)"
+    },
+    {
+     "option": "task_type",
+     "status": "listed-by-source",
+     "raw": "task_type (Base requires ref_audio; VoiceDesign rejected)"
+    },
+    {
+     "option": "stream",
+     "status": "listed-by-source",
+     "raw": "stream"
+    },
+    {
+     "option": "sample_rate",
+     "status": "listed-by-source",
+     "raw": "sample_rate (only 24000)"
+    },
+    {
+     "option": "max_new_tokens",
+     "status": "listed-by-source",
+     "raw": "max_new_tokens (codec frames, 80 ms each; default 2048)"
+    },
+    {
+     "option": "seed",
+     "status": "listed-by-source",
+     "raw": "seed (generic)"
+    },
+    {
+     "option": "speed != 1.0",
+     "status": "rejected",
+     "detail": "speed != 1.0",
+     "raw": "REJECTED: speed != 1.0, language, speaker_embedding, x_vector_only_mode, extra_params guidance_scale/cfg_scale != 1.0, negative_prompt, temperature != 0, top_p != 1.0, top_k not in (-1,0,1)"
+    },
+    {
+     "option": "language",
+     "status": "rejected",
+     "detail": "language",
+     "raw": "REJECTED: speed != 1.0, language, speaker_embedding, x_vector_only_mode, extra_params guidance_scale/cfg_scale != 1.0, negative_prompt, temperature != 0, top_p != 1.0, top_k not in (-1,0,1)"
+    },
+    {
+     "option": "x_vector_only_mode",
+     "status": "rejected",
+     "detail": "x_vector_only_mode",
+     "raw": "REJECTED: speed != 1.0, language, speaker_embedding, x_vector_only_mode, extra_params guidance_scale/cfg_scale != 1.0, negative_prompt, temperature != 0, top_p != 1.0, top_k not in (-1,0,1)"
+    },
+    {
+     "option": "negative_prompt",
+     "status": "rejected",
+     "detail": "negative_prompt",
+     "raw": "REJECTED: speed != 1.0, language, speaker_embedding, x_vector_only_mode, extra_params guidance_scale/cfg_scale != 1.0, negative_prompt, temperature != 0, top_p != 1.0, top_k not in (-1,0,1)"
+    },
+    {
+     "option": "temperature != 0",
+     "status": "rejected",
+     "detail": "temperature != 0",
+     "raw": "REJECTED: speed != 1.0, language, speaker_embedding, x_vector_only_mode, extra_params guidance_scale/cfg_scale != 1.0, negative_prompt, temperature != 0, top_p != 1.0, top_k not in (-1,0,1)"
+    },
+    {
+     "option": "top_p != 1.0",
+     "status": "rejected",
+     "detail": "top_p != 1.0",
+     "raw": "REJECTED: speed != 1.0, language, speaker_embedding, x_vector_only_mode, extra_params guidance_scale/cfg_scale != 1.0, negative_prompt, temperature != 0, top_p != 1.0, top_k not in (-1,0,1)"
+    },
+    {
+     "option": "top_k not in",
+     "status": "rejected",
+     "detail": "top_k not in (-1,0,1)",
+     "raw": "REJECTED: speed != 1.0, language, speaker_embedding, x_vector_only_mode, extra_params guidance_scale/cfg_scale != 1.0, negative_prompt, temperature != 0, top_p != 1.0, top_k not in (-1,0,1)"
+    }
+   ],
+   "requestOptionsScope": "row request_options scoped to this variant (entries for other variants/wires omitted)",
+   "requestOptionsEvidence": {
+    "source": "catalog census rows[].request_options (verbatim)",
+    "row_sources": [
+     "omni-main:docs/models/supported_models.md:74",
+     "omni-main:vllm_omni/model_executor/models/registry.py:495-503",
+     "omni-main:vllm_omni/config/pipeline_registry.py:132",
+     "omni-main:vllm_omni/model_executor/models/breeze_tts_2/pipeline.py:14-49",
+     "omni-main:vllm_omni/entrypoints/openai/tts_adapters/breeze_tts_2.py:29-44",
+     "omni-main:recipes/BreezeBlue/Breeze-TTS-2.md:8"
+    ]
+   }
+  },
+  {
+   "upstreamModel": "zai-org/GLM-TTS",
+   "catalogId": "vllm-omni:zai-org/GLM-TTS",
+   "revision": "b3feb691fa4cf590eec4418f6275f95220e58844",
+   "deploymentId": null,
+   "generated": true,
+   "review": "needs-review (derived from catalog)",
+   "id": "glm-tts-speech-ws",
+   "tasks": [
+    "tts.stream-input"
+   ],
+   "catalogTasks": [
+    "tts_voice_clone",
+    "tts"
+   ],
+   "catalogTasksBasis": "/v1/audio/speech/stream (streaming_text_input_tts) mirroring HTTP variant glm-tts-speech",
+   "mode": "realtime",
+   "wire": "omni-speech-ws",
+   "realtime": {
+    "path": "/audio/speech/stream",
+    "outputSampleRate": 24000
+   },
+   "notes": "use per-chunk sample_rate; WS session lacks extra_params/ref_audio_2/ambient_sound",
+   "requiresReferenceAudio": true,
+   "adapterLimit": "server needs ref_text: host >= 0.4.3 sends session params refText / xVectorOnlyMode (TASK_CONTRACT K.2); host 0.4.2 cannot (no per-session ref_text)",
+   "params_required": [
+    "referenceAudio (library referenceVoiceFile -> realtime.refAudioFile -> session.ref_audio)",
+    "refText (session param, host >= 0.4.3)"
+   ],
+   "requestOptions": [
+    "input",
+    "ref_audio (required; URL, file://, data:)",
+    "ref_text (required, non-empty)",
+    "voice (only uploaded voices; unknown voice -> error)",
+    "max_new_tokens (caps dynamic max_tokens; min/max tokens from text_len x min/max_token_text_ratio 2/20)",
+    "seed (stage0)",
+    "stream",
+    "speed (generic, non-streaming only)",
+    "REJECTED: missing ref_audio or ref_text, empty input, sample_rate",
+    "IGNORED (not read by adapter): instructions, language, speaker_embedding, task_type"
+   ],
+   "requestOptionsMap": [
+    {
+     "option": "input",
+     "status": "listed-by-source",
+     "raw": "input"
+    },
+    {
+     "option": "ref_audio",
+     "status": "required",
+     "raw": "ref_audio (required; URL, file://, data:)"
+    },
+    {
+     "option": "ref_text",
+     "status": "required",
+     "raw": "ref_text (required, non-empty)"
+    },
+    {
+     "option": "voice",
+     "status": "listed-by-source",
+     "raw": "voice (only uploaded voices; unknown voice -> error)"
+    },
+    {
+     "option": "max_new_tokens",
+     "status": "listed-by-source",
+     "raw": "max_new_tokens (caps dynamic max_tokens; min/max tokens from text_len x min/max_token_text_ratio 2/20)"
+    },
+    {
+     "option": "seed",
+     "status": "listed-by-source",
+     "raw": "seed (stage0)"
+    },
+    {
+     "option": "stream",
+     "status": "listed-by-source",
+     "raw": "stream"
+    },
+    {
+     "option": "speed",
+     "status": "listed-by-source",
+     "raw": "speed (generic, non-streaming only)"
+    },
+    {
+     "option": "missing ref_audio or ref_text",
+     "status": "rejected",
+     "detail": "missing ref_audio or ref_text",
+     "raw": "REJECTED: missing ref_audio or ref_text, empty input, sample_rate"
+    },
+    {
+     "option": "empty input",
+     "status": "rejected",
+     "detail": "empty input",
+     "raw": "REJECTED: missing ref_audio or ref_text, empty input, sample_rate"
+    },
+    {
+     "option": "sample_rate",
+     "status": "rejected",
+     "detail": "sample_rate",
+     "raw": "REJECTED: missing ref_audio or ref_text, empty input, sample_rate"
+    },
+    {
+     "option": "ignored",
+     "status": "listed-by-source",
+     "raw": "IGNORED (not read by adapter): instructions, language, speaker_embedding, task_type"
+    }
+   ],
+   "requestOptionsScope": "row request_options scoped to this variant (entries for other variants/wires omitted)",
+   "requestOptionsEvidence": {
+    "source": "catalog census rows[].request_options (verbatim)",
+    "row_sources": [
+     "omni-main:docs/models/supported_models.md:89",
+     "omni-v0.29.0rc1:docs/models/supported_models.md:87",
+     "omni-v0.28.0:docs/models/supported_models.md:85",
+     "omni-main:vllm_omni/model_executor/models/registry.py:279-284",
+     "omni-main:vllm_omni/config/pipeline_registry.py:184",
+     "omni-main:vllm_omni/model_executor/models/glm_tts/pipeline.py:13-47"
+    ]
+   }
+  },
+  {
+   "upstreamModel": "MiniMaxAI/MiniMax-H3",
+   "catalogId": "vllm-omni:MiniMaxAI/MiniMax-H3@combined",
+   "revision": "42ed227ee7df40d41602854ae760620d6eb651fe",
+   "deploymentId": null,
+   "generated": true,
+   "review": "needs-review (derived from catalog)",
+   "id": "minimax-h3-video",
+   "tasks": [
+    "video.audio"
+   ],
+   "catalogTasks": [
+    "text_to_video_with_audio",
+    "image_to_video_with_audio"
+   ],
+   "catalogTasksBasis": "endpoint /v1/videos text/image -> video with audio track (generate_sound)",
+   "mode": "generate-video",
+   "wire": "omni-videos",
+   "delivery_expected": "final-only",
+   "video": {
+    "endpoint": "/v1/videos",
+    "sync": "/v1/videos/sync",
+    "generateSound": "unknown",
+    "imageReference": "attachment"
+   },
+   "requestOptions": [
+    "prompt",
+    "width",
+    "height",
+    "aspect_ratio (t2va requires one of 21:9,16:9,4:3,1:1,3:4,9:16; ref2va default 16:9, 'adaptive'/'auto')",
+    "short_edge (must be 768)",
+    "fps (fixed 24)",
+    "num_inference_steps (50)",
+    "flow_shift (12)",
+    "seed",
+    "num_outputs_per_prompt (1-10)",
+    "quality (lossless|high)",
+    "input_reference (image; FL2VA first frame)",
+    "input_references (repeatable image/video/audio multipart, classified by MIME)",
+    "start_time_seconds",
+    "lora ({name,path,scale})",
+    "extra_params.task (t2va|fl2va|ref2va)",
+    "extra_params.duration (4-15 s decimal)",
+    "extra_params.audio_flow_shift (3.0)",
+    "extra_params.frame_indices ([0]|[-1]|[0,-1])",
+    "extra_params.start_time_seconds (list per video)",
+    "extra_params.force_refresh_step_hint/force_refresh_step_policy",
+    "extra_params.preencode_mp4",
+    "extra_params.video_codec_options"
+   ],
+   "requestOptionsMap": [
+    {
+     "option": "prompt",
+     "status": "listed-by-source",
+     "raw": "prompt"
+    },
+    {
+     "option": "width",
+     "status": "listed-by-source",
+     "raw": "width"
+    },
+    {
+     "option": "height",
+     "status": "listed-by-source",
+     "raw": "height"
+    },
+    {
+     "option": "aspect_ratio",
+     "status": "listed-by-source",
+     "raw": "aspect_ratio (t2va requires one of 21:9,16:9,4:3,1:1,3:4,9:16; ref2va default 16:9, 'adaptive'/'auto')"
+    },
+    {
+     "option": "short_edge",
+     "status": "required",
+     "raw": "short_edge (must be 768)"
+    },
+    {
+     "option": "fps",
+     "status": "listed-by-source",
+     "raw": "fps (fixed 24)"
+    },
+    {
+     "option": "num_inference_steps",
+     "status": "listed-by-source",
+     "raw": "num_inference_steps (50)"
+    },
+    {
+     "option": "flow_shift",
+     "status": "listed-by-source",
+     "raw": "flow_shift (12)"
+    },
+    {
+     "option": "seed",
+     "status": "listed-by-source",
+     "raw": "seed"
+    },
+    {
+     "option": "num_outputs_per_prompt",
+     "status": "listed-by-source",
+     "raw": "num_outputs_per_prompt (1-10)"
+    },
+    {
+     "option": "quality",
+     "status": "listed-by-source",
+     "raw": "quality (lossless|high)"
+    },
+    {
+     "option": "input_reference",
+     "status": "listed-by-source",
+     "raw": "input_reference (image; FL2VA first frame)"
+    },
+    {
+     "option": "input_references",
+     "status": "listed-by-source",
+     "raw": "input_references (repeatable image/video/audio multipart, classified by MIME)"
+    },
+    {
+     "option": "start_time_seconds",
+     "status": "listed-by-source",
+     "raw": "start_time_seconds"
+    },
+    {
+     "option": "lora",
+     "status": "listed-by-source",
+     "raw": "lora ({name,path,scale})"
+    },
+    {
+     "option": "extra_params.task",
+     "status": "listed-by-source",
+     "raw": "extra_params.task (t2va|fl2va|ref2va)"
+    },
+    {
+     "option": "extra_params.duration",
+     "status": "listed-by-source",
+     "raw": "extra_params.duration (4-15 s decimal)"
+    },
+    {
+     "option": "extra_params.audio_flow_shift",
+     "status": "listed-by-source",
+     "raw": "extra_params.audio_flow_shift (3.0)"
+    },
+    {
+     "option": "extra_params.frame_indices",
+     "status": "listed-by-source",
+     "raw": "extra_params.frame_indices ([0]|[-1]|[0,-1])"
+    },
+    {
+     "option": "extra_params.start_time_seconds",
+     "status": "listed-by-source",
+     "raw": "extra_params.start_time_seconds (list per video)"
+    },
+    {
+     "option": "extra_params.force_refresh_step_hint",
+     "status": "listed-by-source",
+     "raw": "extra_params.force_refresh_step_hint/force_refresh_step_policy"
+    },
+    {
+     "option": "extra_params.preencode_mp4",
+     "status": "listed-by-source",
+     "raw": "extra_params.preencode_mp4"
+    },
+    {
+     "option": "extra_params.video_codec_options",
+     "status": "listed-by-source",
+     "raw": "extra_params.video_codec_options"
+    }
+   ],
+   "requestOptionsScope": "row request_options scoped to this variant (entries for other variants/wires omitted)",
+   "requestOptionsEvidence": {
+    "source": "catalog census rows[].request_options (verbatim)",
+    "row_sources": [
+     "omni-main:docs/models/supported_models.md:57",
+     "omni-main:vllm_omni/diffusion/registry.py:109",
+     "omni-main:vllm_omni/diffusion/registry.py:114",
+     "omni-main:recipes/MiniMaxAI/MiniMax-H3.md:14-26",
+     "omni-main:recipes/MiniMaxAI/MiniMax-H3.md:94-106",
+     "omni-main:recipes/MiniMaxAI/MiniMax-H3.md:417-419"
+    ]
+   }
+  },
+  {
+   "upstreamModel": "Audio8/Audio8-TTS-Preview-0.6b",
+   "catalogId": "vllm-omni:Audio8/Audio8-TTS-Preview-0.6b",
+   "revision": "f07040f3d151f1ba0253bfb92cb2f5dd38b44594",
+   "deploymentId": null,
+   "generated": true,
+   "review": "needs-review (derived from catalog)",
+   "id": "audio8-tts-preview-0-6b-speech",
+   "tasks": [
+    "tts.speech"
+   ],
+   "catalogTasks": [
+    "tts"
+   ],
+   "catalogTasksBasis": "endpoint /v1/audio/speech text-only synthesis (no reference required per request_options); voice from request_options: voice (uploaded audio voices only; no presets)",
+   "mode": "speech",
+   "wire": "omni-speech-http",
+   "streaming": {
+    "audio": "sse"
+   },
+   "delivery_expected": "progressive",
+   "speech": {
+    "responseFormat": "wav",
+    "extraBody": {},
+    "pcmSampleRate": 44100
+   },
+   "params_required": [],
+   "params_optional": [],
+   "requestOptions": [
+    "input",
+    "voice (uploaded audio voices only; no presets)",
+    "max_new_tokens [1,4096]",
+    "seed (also seeds fast-AR tts_local_seed)",
+    "response_format",
+    "stream",
+    "stream_format",
+    "speed (generic non-streaming post-processing)",
+    "IGNORED: instructions, language, task_type",
+    "NOT SUPPORTED: sample_rate"
+   ],
+   "requestOptionsMap": [
+    {
+     "option": "input",
+     "status": "listed-by-source",
+     "raw": "input"
+    },
+    {
+     "option": "voice",
+     "status": "listed-by-source",
+     "raw": "voice (uploaded audio voices only; no presets)"
+    },
+    {
+     "option": "max_new_tokens",
+     "status": "listed-by-source",
+     "raw": "max_new_tokens [1,4096]"
+    },
+    {
+     "option": "seed",
+     "status": "listed-by-source",
+     "raw": "seed (also seeds fast-AR tts_local_seed)"
+    },
+    {
+     "option": "response_format",
+     "status": "listed-by-source",
+     "raw": "response_format"
+    },
+    {
+     "option": "stream",
+     "status": "listed-by-source",
+     "raw": "stream"
+    },
+    {
+     "option": "stream_format",
+     "status": "listed-by-source",
+     "raw": "stream_format"
+    },
+    {
+     "option": "speed",
+     "status": "listed-by-source",
+     "raw": "speed (generic non-streaming post-processing)"
+    },
+    {
+     "option": "instructions",
+     "status": "ignored",
+     "detail": "instructions",
+     "raw": "IGNORED: instructions, language, task_type"
+    },
+    {
+     "option": "language",
+     "status": "ignored",
+     "detail": "language",
+     "raw": "IGNORED: instructions, language, task_type"
+    },
+    {
+     "option": "task_type",
+     "status": "ignored",
+     "detail": "task_type",
+     "raw": "IGNORED: instructions, language, task_type"
+    },
+    {
+     "option": "sample_rate",
+     "status": "unsupported",
+     "detail": "sample_rate",
+     "raw": "NOT SUPPORTED: sample_rate"
+    }
+   ],
+   "requestOptionsScope": "row request_options scoped to this variant (entries for other variants/wires omitted)",
+   "requestOptionsEvidence": {
+    "source": "catalog census rows[].request_options (verbatim)",
+    "row_sources": [
+     "omni-main:docs/models/supported_models.md:102",
+     "omni-v0.29.0rc1:docs/models/supported_models.md:100",
+     "omni-main:vllm_omni/model_executor/models/registry.py:313,318",
+     "omni-main:vllm_omni/config/pipeline_registry.py:186",
+     "omni-main:vllm_omni/model_executor/models/audio8_tts/pipeline.py:20-50",
+     "omni-main:vllm_omni/transformers_utils/configs/audio8_tts.py:6,22-24"
+    ]
+   }
+  },
+  {
+   "upstreamModel": "Qwen/Qwen3-ASR-0.6B",
+   "catalogId": "vllm:Qwen/Qwen3-ASR-0.6B@realtime",
+   "revision": "5eb144179a02acc5e5ba31e748d22b0cf3e303b0",
+   "deploymentId": null,
+   "generated": true,
+   "review": "needs-review (derived from catalog)",
+   "id": "qwen3-asr-0-6b-realtime-asr",
+   "tasks": [
+    "asr.realtime"
+   ],
+   "catalogTasks": [
+    "asr"
+   ],
+   "catalogTasksBasis": "vLLM /v1/realtime (realtime_transcription_ws supported per census)",
+   "mode": "realtime",
+   "wire": "vllm-asr",
+   "realtime": {
+    "path": "/realtime",
+    "query": {},
+    "inputEncoding": "pcm16",
+    "inputSampleRate": 16000,
+    "frameMs": 200
+   },
+   "requestOptions": [],
+   "requestOptionsMap": [],
+   "requestOptionsScope": "row request_options describe the transcriptions endpoint; none are claimed for this wire (unknown, not unsupported)",
+   "requestOptionsEvidence": {
+    "source": "catalog census rows[].request_options (verbatim)",
+    "row_sources": [
+     "vllm-main:tests/models/registry.py:1401",
+     "vllm-main:docs/models/supported_models.md:739",
+     "vllm-v0.29.0:docs/models/supported_models.md:718",
+     "vllm-main:docs/models/supported_models.md:744",
+     "vllm-main:vllm/model_executor/models/registry.py:591",
+     "vllm-main:vllm/model_executor/models/qwen3_asr_realtime.py:179"
+    ]
+   }
+  }
+ ]
+}

@@ -149,6 +149,52 @@ jobs:
           path: reports/
           retention-days: 14
 
+  availability:
+    name: Service availability scenarios (deterministic, real plugin code)
+    needs: target
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      TAG: ${{ needs.target.outputs.tag }}
+      TAG_COMMIT: ${{ needs.target.outputs.tag_commit }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: ci-src
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+        with:
+          ref: refs/tags/${{ needs.target.outputs.tag }}
+          path: tag-src
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ci-src/ci/availability/package-lock.json
+      - name: Install pinned test dependencies (cordis, dsh-llm, schemastery, tsx from npm)
+        run: npm ci --ignore-scripts --prefix ci-src/ci/availability
+      - name: Run owner unit tests + CI scenario tests against the tree's plugin sources (loopback fakes only)
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          # PR/push: the sources under review. Release/dispatch: the released tag tree.
+          if [ "$EVENT" = release ] || [ "$EVENT" = workflow_dispatch ]; then
+            test "$(git -C tag-src rev-parse HEAD)" = "$TAG_COMMIT"
+            TREE=tag-src; LABEL="tag $TAG ($TAG_COMMIT)"
+          else
+            TREE=ci-src; LABEL="$EVENT tree $(git -C ci-src rev-parse HEAD)"
+          fi
+          node ci-src/ci/availability/run.mjs --tree "$TREE" --out reports/availability --label "$LABEL"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: reports-availability
+          path: reports/
+          retention-days: 14
+
   desktop:
     name: Packaged app on macOS arm64 (hosted)
     needs: target
@@ -226,7 +272,7 @@ jobs:
 
   summary:
     name: Evidence summary
-    needs: [target, sources, desktop]
+    needs: [target, sources, availability, desktop]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -245,7 +291,7 @@ jobs:
       - name: Aggregate (a missing or failed required report fails the run)
         env:
           DESKTOP_RESULT: ${{ needs.desktop.result }}
-          REQUIRED_SOURCES: verify-release-sources,verify-patch-stack,negative-controls-sources
+          REQUIRED_SOURCES: verify-release-sources,verify-patch-stack,negative-controls-sources,availability-suites,availability-scenarios
           REQUIRED_DESKTOP: >-
             verify-desktop-artifact,negative-controls-artifact,desktop-smoke-launch${{ (github.event_name != 'workflow_dispatch' || inputs.lifecycle) && ',desktop-smoke-lifecycle,desktop-smoke-ci-env' || '' }}
         run: |

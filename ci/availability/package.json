@@ -1,0 +1,14 @@
+{
+  "name": "dsh-audio-availability-ci",
+  "private": true,
+  "description": "Deterministic service-availability CI: owner unit tests and CI scenario tests run against the real plugin sources of the tree under test. Not shipped.",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=22.19" },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.2",
+    "@deepseek-ai/dsh-llm": "0.1.5-rc.1",
+    "@deepseek-ai/schemastery": "3.18.2",
+    "tsx": "4.22.4"
+  }
+}

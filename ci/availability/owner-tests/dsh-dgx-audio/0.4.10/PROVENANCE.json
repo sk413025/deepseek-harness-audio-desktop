@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "plugin": "dsh-dgx-audio",
+  "version": "0.4.10",
+  "owner": "streaming lane (host)",
+  "license": "MIT",
+  "copiedFrom": "results/harness-streaming-transport-20260915/source-0.4.10/test/ (GITHUB_SOURCE_HANDOFF_20260915.md §Snapshots)",
+  "copiedAt": "2026-09-15T13:40+08:00",
+  "sourceUnderTestIdentity": "source-0.4.10/src is byte-identical to repository plugins/dsh-dgx-audio/src at main 2c81069 (diff -rq)",
+  "ownerResult": "owner TAP tests-0.4.10/source-tree.tap: 115/115 (node v22.16.0)",
+  "redactions": [
+    {
+      "file": "test/hub-routes.test.js",
+      "line": 272,
+      "reason": "handoff privacy flag: the negative guard regex named the lab tailnet prefix and the local username",
+      "before": "/100\\.83\\.|sbplab|\\/Users\\//i",
+      "after": "the whole 100.64.0.0/10 CGNAT range, /Users/ and /home/ (strictly broader, same assertion)"
+    }
+  ],
+  "files": [
+    {
+      "path": "test/adapter.test.js",
+      "sha256": "41a8f4ce1a4d3143c5766cb0822a4c1138865adf1b8f8c3f54102eafde29dabb"
+    },
+    {
+      "path": "test/coordination-040.test.js",
+      "sha256": "c5a876ae61986b31d4fb9ccdf8f84db58a157054cf1635aec89ce7e7c48746e4"
+    },
+    {
+      "path": "test/harness-runtime.test.js",
+      "sha256": "d68f0fb83e64b7728d7cffcff1263d9d872b78c5f02c527efe43e7bd659c120f"
+    },
+    {
+      "path": "test/helpers/catalog-0515-option-variants.json",
+      "sha256": "2f6ee10e6789d11874ec942bc117c29e55864a110ef09442fb43d7b3bc91b314"
+    },
+    {
+      "path": "test/helpers/fixtures.js",
+      "sha256": "2c4b0699d1d9250dc8351510bcbb3b93303afad24cf43367af49325237b053fd"
+    },
+    {
+      "path": "test/helpers/ws-server.js",
+      "sha256": "83f420e7cc60e844e4e53c5c443e2b054f5416764b891df591b248b021b2befc"
+    },
+    {
+      "path": "test/hub-routes.test.js",
+      "sha256": "1836a1ba566f1b7c8261b6a64510d983e4ce1e2efe7b0953cc191834ba8c5e9f"
+    },
+    {
+      "path": "test/i2a-041.test.js",
+      "sha256": "35261f333a367160b9a6fd65fc25c1c98a4eb11f31c69a1185a97dbd2c706f75"
+    },
+    {
+      "path": "test/live-duplex.test.js",
+      "sha256": "c33c1151885007a176b28c88bc7c7989387d5f52787ea26f84be4967ebc5c003"
+    },
+    {
+      "path": "test/settings.test.js",
+      "sha256": "7102e9d57c80c60c20788a1021c4b35b00291a7bfba0934d54db0c0a4066dc67"
+    },
+    {
+      "path": "test/streaming-adapter.test.js",
+      "sha256": "fcb59cd63a974b829a36f650035d78f13b5c97414e4a5695610e6a2397ca0d30"
+    },
+    {
+      "path": "test/tasks-040.test.js",
+      "sha256": "272bb01da31079829d51f3fdae37af6c5dbf8ab2d31f42924578aa6d48d577c2"
+    },
+    {
+      "path": "test/transport.test.js",
+      "sha256": "5f99d761715db3c8cb77d5c90c94de9764d5a6423031375cab78240a759ed1ae"
+    },
+    {
+      "path": "test/v0410-dev.test.js",
+      "sha256": "b82be0f16331f740f339fb38123bb11bd29b46c264d21e2f0cda993185ee5860"
+    },
+    {
+      "path": "test/v042.test.js",
+      "sha256": "138e07a751ae279cdd05c7d1142da59c26c1b7ebe2ec4482b2144258bf813eac"
+    },
+    {
+      "path": "test/v043-dev.test.js",
+      "sha256": "f40c5191a998246fcc62f09ba57ab0e6fb402110d12e65522218faf50706ac7d"
+    },
+    {
+      "path": "test/v045-dev.test.js",
+      "sha256": "c1d08a3b79dbaa917c17dac5a98fdb9564d46b854fd5664576bde8ca3d69fd25"
+    },
+    {
+      "path": "test/v046-dev.test.js",
+      "sha256": "2a14bcff5f02729035e9f57b67d3ed085bc899a7bc992f14d0c9e14fab3dbfbd"
+    },
+    {
+      "path": "test/v047-dev.test.js",
+      "sha256": "fb6f1d0c3fbe0885967d3a1ade2fcb9a59a152f9381118ae2b25f6a301e3780a"
+    },
+    {
+      "path": "test/v048-dev.test.js",
+      "sha256": "5171d4f6b8f4f3e1d12f0a3d8fa9ad0a7d50c58ced7f95d594a2f86b9ed0716e"
+    },
+    {
+      "path": "test/v049-dev.test.js",
+      "sha256": "47338d96125f6b91770ef5433332223aaf12105c2971379d2b0f319adf322e96"
+    }
+  ]
+}

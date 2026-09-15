@@ -1,0 +1,293 @@
+{
+ "catalog_version": "1.0.0-full-census.202609150335",
+ "generated_at": "2026-09-15T03:35:13+08:00",
+ "rows": {
+  "MiniCPM-o-4_5": {
+   "id": "vllm:openbmb/MiniCPM-o-4_5",
+   "tasks": [
+    "audio_understanding_qa",
+    "spoken_chat_text_reply"
+   ],
+   "request_options": [
+    "messages[].content[type=input_audio]",
+    "messages[].content[type=audio_url]",
+    "stream",
+    "stream_options",
+    "max_completion_tokens",
+    "temperature",
+    "mm_processor_kwargs",
+    "limit_mm_per_prompt(server)"
+   ]
+  },
+  "Qwen3-ASR-1.7B": {
+   "id": "vllm:Qwen/Qwen3-ASR-1.7B",
+   "tasks": [
+    "asr",
+    "speech_translation"
+   ],
+   "request_options": [
+    "file",
+    "model",
+    "language",
+    "prompt",
+    "response_format(json|text|verbose_json|diarized_json)",
+    "temperature",
+    "timestamp_granularities[]",
+    "stream",
+    "stream_include_usage",
+    "stream_continuous_usage_stats",
+    "to_language",
+    "hotwords",
+    "use_beam_search",
+    "repetition_penalty",
+    "seed",
+    "max_completion_tokens",
+    "vllm_xargs",
+    "messages[].content[type=input_audio]",
+    "messages[].content[type=audio_url]",
+    "stream",
+    "stream_options",
+    "max_completion_tokens",
+    "temperature",
+    "mm_processor_kwargs",
+    "limit_mm_per_prompt(server)"
+   ]
+  },
+  "Voxtral-Mini-4B-Realtime": {
+   "id": "vllm:mistralai/Voxtral-Mini-4B-Realtime-2602",
+   "tasks": [
+    "asr"
+   ],
+   "request_options": [
+    "session.update{model}",
+    "input_audio_buffer.append{audio: base64 PCM16 16kHz mono}",
+    "input_audio_buffer.commit{final}",
+    "file",
+    "model",
+    "language",
+    "prompt",
+    "response_format(json|text|verbose_json|diarized_json)",
+    "temperature",
+    "timestamp_granularities[]",
+    "stream",
+    "stream_include_usage",
+    "stream_continuous_usage_stats",
+    "to_language",
+    "hotwords",
+    "use_beam_search",
+    "repetition_penalty",
+    "seed",
+    "max_completion_tokens",
+    "vllm_xargs"
+   ]
+  },
+  "IndexTTS-2": {
+   "id": "vllm-omni:IndexTeam/IndexTTS-2",
+   "tasks": [
+    "tts_voice_clone",
+    "tts_instruct_style"
+   ],
+   "request_options": [
+    "input",
+    "ref_audio (required unless uploaded voice; http(s)/data:/file:// only)",
+    "voice (uploaded audio voice only)",
+    "max_new_tokens [1,4096]",
+    "extra_params.emo_audio",
+    "extra_params.emo_vector (8 floats in [0,1.2]: happy,angry,sad,afraid,disgusted,melancholic,surprised,calm)",
+    "extra_params.emo_alpha",
+    "extra_params.emo_text",
+    "extra_params.use_emo_text",
+    "extra_params.use_random",
+    "seed",
+    "response_format",
+    "stream (compatibility only)",
+    "speed (generic non-streaming post-processing; not native)",
+    "IGNORED: ref_text, instructions, language, task_type",
+    "NOT SUPPORTED: sample_rate"
+   ]
+  },
+  "Ming-omni-tts": {
+   "id": "vllm-omni:inclusionAI/Ming-omni-tts-0.5B",
+   "tasks": [
+    "tts",
+    "tts_instruct_style",
+    "tts_voice_design",
+    "tts_preset_voice",
+    "tts_voice_clone",
+    "tts_multi_speaker_dialogue",
+    "music_generation",
+    "text_to_audio",
+    "sound_effect_generation"
+   ],
+   "request_options": [
+    "input",
+    "instructions (plain text -> passthrough/风格; JSON object -> structured caption keys 方言/风格/语速/基频/音量/情感/IP/BGM; max length enforced)",
+    "voice (-> Ming IP label unless it names an uploaded voice)",
+    "ref_audio (str or list[str]; list = podcast mode, >=2 clips)",
+    "ref_text (enables prompt-latent zero-shot; required non-empty for podcast; rejected without ref_audio/uploaded voice)",
+    "speaker_embedding (192-d; list of 192-d per clip for podcast)",
+    "task_type=Base (requires clone source)",
+    "max_new_tokens (-> ming max_decode_steps; stage0 max_tokens+1)",
+    "response_format",
+    "stream",
+    "stream_format",
+    "seed (generic)",
+    "extra_params temperature/top_p/top_k (generic stage-0)",
+    "speed (generic post-process, non-streaming only)",
+    "REJECTED/UNSUPPORTED: sample_rate (adapter declares no supported_output_sample_rates), bgm/music-only and tta prompt modes online (offline only), language (accepted but not read by adapter)"
+   ]
+  },
+  "MiniMax-Music3": {
+   "id": "vllm-omni:MiniMaxAI/MiniMax-Music3",
+   "tasks": [
+    "music_generation"
+   ],
+   "request_options": [
+    "input (lyrics, required non-empty; [Verse]/[Chorus]/[Bridge]/[Outro] tags must sit on their own line)",
+    "instructions (style caption, required non-empty, <=20000 chars; tokenized prompt <=5000 tokens)",
+    "seed (non-negative, default 0)",
+    "max_new_tokens (audio frames at 25 fps, 1..9000, default 9000; a cap, not a target)",
+    "response_format (default wav)",
+    "model",
+    "rejected: voice (except empty/'default'), ref_audio, ref_text, language, task_type, speed != 1.0, extra_params temperature/top_p/top_k/repetition_penalty, extra_params cfg_role/cfg_pair_id/cfg_null_prompt"
+   ]
+  },
+  "MOSS-SoundEffect": {
+   "id": "vllm-omni:OpenMOSS-Team/MOSS-SoundEffect",
+   "tasks": [
+    "sound_effect_generation"
+   ],
+   "request_options": [
+    "ambient_sound",
+    "duration_seconds",
+    "max_new_tokens",
+    "input",
+    "seed",
+    "response_format",
+    "stream",
+    "stream_format"
+   ]
+  },
+  "MOSS-TTSD": {
+   "id": "vllm-omni:OpenMOSS-Team/MOSS-TTSD-v1.0",
+   "tasks": [
+    "tts_multi_speaker_dialogue",
+    "tts_voice_clone",
+    "tts"
+   ],
+   "request_options": [
+    "input",
+    "ref_audio",
+    "ref_audio_2",
+    "voice",
+    "language",
+    "max_new_tokens",
+    "seed",
+    "response_format",
+    "stream",
+    "stream_format"
+   ]
+  },
+  "Qwen3-TTS-12Hz-0.6B-Base": {
+   "id": "vllm-omni:Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+   "tasks": [
+    "tts",
+    "tts_voice_clone"
+   ],
+   "request_options": [
+    "input",
+    "task_type=Base",
+    "ref_audio",
+    "ref_text",
+    "x_vector_only_mode",
+    "speaker_embedding",
+    "voice (uploaded/precomputed)",
+    "language",
+    "response_format",
+    "sample_rate 8000|24000 (rc1+)",
+    "speed",
+    "stream",
+    "stream_format",
+    "max_new_tokens",
+    "seed",
+    "initial_codec_chunk_frames",
+    "non_streaming_mode",
+    "word_timestamps (needs --forced-aligner)"
+   ]
+  },
+  "Qwen3-TTS-12Hz-1.7B-CustomVoice": {
+   "id": "vllm-omni:Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+   "tasks": [
+    "tts",
+    "tts_preset_voice",
+    "tts_instruct_style",
+    "timestamps"
+   ],
+   "request_options": [
+    "input",
+    "voice (preset, case-insensitive; default Vivian)",
+    "instructions (maps to instruct; max 500 chars)",
+    "language (Auto + codec_language_id keys)",
+    "task_type=CustomVoice (default)",
+    "response_format wav|pcm|flac|mp3|opus",
+    "sample_rate 8000|24000 (rc1+)",
+    "speed (not with streaming)",
+    "stream",
+    "stream_format sse|audio",
+    "max_new_tokens (default 2048, max 4096)",
+    "seed",
+    "initial_codec_chunk_frames",
+    "non_streaming_mode (prompt mode; default true)",
+    "word_timestamps (needs --forced-aligner; non-stream header or WS)"
+   ]
+  },
+  "Qwen3-TTS-12Hz-1.7B-VoiceDesign": {
+   "id": "vllm-omni:Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+   "tasks": [
+    "tts",
+    "tts_voice_design",
+    "timestamps"
+   ],
+   "request_options": [
+    "input",
+    "task_type=VoiceDesign (must be explicit)",
+    "instructions (required voice description; max 500 chars)",
+    "language",
+    "response_format",
+    "sample_rate 8000|24000 (rc1+)",
+    "speed",
+    "stream",
+    "stream_format",
+    "max_new_tokens",
+    "seed",
+    "initial_codec_chunk_frames",
+    "non_streaming_mode (defaults true for VoiceDesign)",
+    "word_timestamps (needs --forced-aligner)"
+   ]
+  },
+  "VoxCPM2": {
+   "id": "vllm-omni:openbmb/VoxCPM2",
+   "tasks": [
+    "tts",
+    "tts_voice_clone",
+    "tts_voice_design",
+    "tts_instruct_style"
+   ],
+   "request_options": [
+    "input",
+    "voice ('default' = zero-shot; an uploaded audio voice; or a precomputed custom_voice_dir voice; anything else rejected)",
+    "ref_audio (URL, base64 data URI, or file path; resampled to the AudioVAE encode rate)",
+    "ref_text (optional; with ref_audio it switches to continuation mode prompt_audio+prompt_text)",
+    "response_format (wav|pcm|flac|mp3|opus; streaming needs pcm|wav)",
+    "stream",
+    "stream_format (sse|audio)",
+    "speed (non-streaming only, generic post-process; rejected when streaming)",
+    "max_new_tokens (1..4096)",
+    "seed (sampler seed; recipe notes CFM noise is deterministic per request, not tied to seed)",
+    "extra_params (temperature/top_p/top_k and extra_args, generic)",
+    "IGNORED by adapter: instructions, language, task_type (voice design only works as an inline '(instruction)text' prefix in input)",
+    "REJECTED: sample_rate (any value, rc1+), uploaded voice whose embedding_source is 'direct'"
+   ]
+  }
+ }
+}

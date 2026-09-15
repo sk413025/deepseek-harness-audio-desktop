@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "plugin": "dsh-voice-capture",
+  "version": "0.3.6",
+  "owner": "mic lane (shared audio UI)",
+  "license": "MIT",
+  "copiedFrom": "parallel-work/microphone-ui/source-snapshots/dsh-voice-capture-0.3.6/test/ (FINAL_FROZEN_0.3.6.md: sourceTreeSha256 560306d1…, package 09f557c0…)",
+  "copiedAt": "2026-09-15T13:40+08:00",
+  "ownerResult": "owner: 102/102 on 0.3.6; negative control Z1–Z5 against 0.3.5 source 0/5 (evidence/unit-0.3.6/negative-0.3.5-v036.txt)",
+  "runsAgainst": "repository plugins/dsh-voice-capture/src (0.3.5, recovered from lib/client.js.map sourcesContent); live.ts sha256 a94bc856… (same in 0.3.3–0.3.5)",
+  "redactions": [],
+  "files": [
+    {
+      "path": "test/audio.test.ts",
+      "sha256": "488c30387168cdfccd38247f692b92bdd9473321986aeb544d09b3562799c58f"
+    },
+    {
+      "path": "test/controller.test.ts",
+      "sha256": "4fc62835f575e2df692894bc4fb459f5057dde6795bcd1347129155860859573"
+    },
+    {
+      "path": "test/fixtures-catalog-request-options.json",
+      "sha256": "501a37b9b5db27b8af8726b346b32fa7474a46f648e38b85f6c5915a7462e359"
+    },
+    {
+      "path": "test/fixtures-host040-capabilities.json",
+      "sha256": "b43393718c74916100e7524a2d7b0edfb18ae192566ef6f66eb5f9d898370451"
+    },
+    {
+      "path": "test/fixtures-host042-capabilities.json",
+      "sha256": "59935930c7999a629fa8803bc65be750aecf188233477b4693a798d78b5e9802"
+    },
+    {
+      "path": "test/fixtures-host045-catalog0515.json",
+      "sha256": "a5bfc51e3e1ee82e6df64256678cad67261edd642c1452dfde1da4dbd0396a16"
+    },
+    {
+      "path": "test/fixtures-host046-catalog0550.json",
+      "sha256": "7068e1ceace3c73308a80b4f87fb5a9a385c45455df135bdd0c8e5b2d2bc174f"
+    },
+    {
+      "path": "test/interop-040.test.ts",
+      "sha256": "345c36e91f2cbcb8b33ed034a4ddd5c168f5ea144f2bc89219ce7bc13727d426"
+    },
+    {
+      "path": "test/params-031.test.ts",
+      "sha256": "7cb2264e14da738ef24ac244a1b5086f2bd2f281fbd9b7ec3443390a8ff29e9d"
+    },
+    {
+      "path": "test/tasks.test.ts",
+      "sha256": "40499cc3c3e8ea8aaf85561223a7cc1211f12bf3ce77f56fa62fc69ec8c03e37"
+    },
+    {
+      "path": "test/v032.test.ts",
+      "sha256": "cfc7358770cee5d9138a4c3d45667afef27193594f7e6ed11798272209a5c22a"
+    },
+    {
+      "path": "test/v033.test.ts",
+      "sha256": "276b976bd020076584540ecdd957c35eef7c576735c288386fa2bf71d1718001"
+    },
+    {
+      "path": "test/v034.test.ts",
+      "sha256": "8a51565a755cee1c05e63101b7c071c511732e3c609c239cb524036b77331a2a"
+    },
+    {
+      "path": "test/v035.test.ts",
+      "sha256": "00eb1bd43e5c8d3ad46fcd2c7a070e2b7f516f208aadfd20a153f9776c7d21c1"
+    },
+    {
+      "path": "test/v036.test.ts",
+      "sha256": "ea6e78c6ebf1d2f8bd640fc2ece5b8a0d6cec6cdd00de5882ae2b6dc949ebe9f"
+    },
+    {
+      "path": "test/wav.test.ts",
+      "sha256": "a1f95c827f885254554f6b0125103fae805dac91512844dfde76cedfa651a020"
+    }
+  ]
+}
