@@ -22,6 +22,20 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$OUT" ] || { echo "--out is required" >&2; exit 2; }
+# Fail fast before the lock (audio.2-pre17 13:22: a relative --bundled-dir failed inside `export X="$(cd …)"`, which
+# set -e does not catch, and the build silently continued without bundled plugins into the same --out).
+BUNDLED_TGZ=()
+if [ -n "$BUNDLED" ]; then
+  [ -d "$BUNDLED" ] || { echo "--bundled-dir $BUNDLED is not a directory (cwd $PWD)" >&2; exit 2; }
+  BUNDLED_ABS="$(cd "$BUNDLED" && pwd)" || { echo "--bundled-dir $BUNDLED cannot be resolved" >&2; exit 2; }
+  BUNDLED="$BUNDLED_ABS"
+  BUNDLED_TGZ=("$BUNDLED"/*.tgz(N))
+  [ ${#BUNDLED_TGZ[@]} -gt 0 ] || { echo "--bundled-dir $BUNDLED contains no .tgz" >&2; exit 2; }
+  # codesign --force writes into every seed file; a read-only tarball (audio.2-pre19 16:19, mic 0.3.8 dist is 0444) fails signing late.
+  for t in "${BUNDLED_TGZ[@]}"; do [ -w "$t" ] || { echo "--bundled-dir: $t is not writable (codesign would fail); chmod u+w the staged copy" >&2; exit 2; }; done
+fi
+# One writer per output: refuse an --out that already holds an app (use a fresh directory per build).
+if [ -d "$OUT" ] && [ -n "$(find "$OUT" -maxdepth 1 -name '*.app' -print -quit)" ]; then echo "--out $OUT already contains an .app; refusing to overwrite (use a fresh --out)" >&2; exit 2; fi
 mkdir -p "$OUT"
 [ -n "$LOG" ] || LOG="$OUT/build.log"
 export PATH=${DSH_ROOT}/.tools/node/bin:$PATH
@@ -53,12 +67,22 @@ export DSH_DESKTOP_LOCAL_PRODUCT_NAME="$PRODUCT"
 if [ -n "$PROFILE" ]; then export DSH_DESKTOP_LOCAL_PROFILE="$PROFILE"; else unset DSH_DESKTOP_LOCAL_PROFILE; fi
 export DSH_DESKTOP_AUTO_UPDATE_ENV=test
 export DOWNLOAD_TEST_ORIGIN=https://updates.invalid
-if [ -n "$BUNDLED" ]; then export DSH_DESKTOP_BUNDLED_PLUGINS_DIR="$(cd "$BUNDLED" && pwd)"; else unset DSH_DESKTOP_BUNDLED_PLUGINS_DIR; fi
+if [ -n "$BUNDLED" ]; then export DSH_DESKTOP_BUNDLED_PLUGINS_DIR="$BUNDLED"; else unset DSH_DESKTOP_BUNDLED_PLUGINS_DIR; fi
 START=$(date +%s)
 pnpm run package:desktop:mac:arm64:dir >> "$LOG" 2>&1
 ARTIFACTS="$SRC/apps/desktop/.desktop-build/targets/mac-arm64/artifacts"
 APP="$(find "$ARTIFACTS" -maxdepth 2 -name '*.app' -type d | head -1)"
 [ -n "$APP" ] || { echo "no .app produced; see $LOG" >&2; exit 3; }
-rm -rf "$OUT/$(basename "$APP")"
 ditto "$APP" "$OUT/$(basename "$APP")"
+# The offline seed must hold exactly the bundled tarballs (name-sha12.tgz), no more and no fewer.
+if [ ${#BUNDLED_TGZ[@]} -gt 0 ]; then
+  SEED="$OUT/$(basename "$APP")/Contents/Resources/seed/desktop-local-packages"
+  for t in "${BUNDLED_TGZ[@]}"; do
+    base="$(basename "$t" .tgz)"; sha="$(shasum -a 256 "$t" | cut -c1-12)"
+    [ -f "$SEED/$base-$sha.tgz" ] || { echo "bundled $base ($sha) missing from $SEED" | tee -a "$LOG" >&2; exit 7; }
+  done
+  count="$(find "$SEED" -maxdepth 1 -name '*.tgz' | wc -l | tr -d ' ')"
+  [ "$count" = "${#BUNDLED_TGZ[@]}" ] || { echo "seed holds $count packages, expected ${#BUNDLED_TGZ[@]}" | tee -a "$LOG" >&2; exit 7; }
+  echo "seed check: ${#BUNDLED_TGZ[@]} bundled tarballs present by sha" | tee -a "$LOG"
+fi
 echo "== $(date '+%F %T') build done in $(( $(date +%s) - START ))s: $OUT/$(basename "$APP")" | tee -a "$LOG"

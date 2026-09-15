@@ -17,6 +17,21 @@ DMG_NAME="DeepSeek-Harness-Audio-Local-$VERSION-arm64.dmg"
 rm -rf "$REL/plugins" "$REL/source" "$REL/docs" "$REL/work/dmg-root"
 mkdir -p "$REL/plugins" "$REL/source/patches" "$REL/docs" "$REL/work/dmg-root"
 cp "$REL"/work/bundled-plugins/*.tgz "$REL/plugins/"
+# Mandatory bundled plugins (FOCUSED_AUDIO_DEMO_PLAN): the app seed and the standalone plugins/ must each hold exactly the four
+# required plugins, byte-identical (sha256). Anything missing, extra or different fails the release before the dmg is built.
+REQUIRED_PLUGINS=(dsh-dgx-audio dsh-voice-capture dsh-audio-model-library dsh-audio-release-kit)
+SEED_DIR="$APP/Contents/Resources/seed/desktop-local-packages"
+[ "$(find "$SEED_DIR" -maxdepth 1 -name '*.tgz' | wc -l | tr -d ' ')" = "${#REQUIRED_PLUGINS[@]}" ] || { echo "release gate: app seed does not hold exactly ${#REQUIRED_PLUGINS[@]} plugins" >&2; exit 8; }
+[ "$(find "$REL/plugins" -maxdepth 1 -name '*.tgz' | wc -l | tr -d ' ')" = "${#REQUIRED_PLUGINS[@]}" ] || { echo "release gate: plugins/ does not hold exactly ${#REQUIRED_PLUGINS[@]} tarballs" >&2; exit 8; }
+for name in "${REQUIRED_PLUGINS[@]}"; do
+  standalone="$(find "$REL/plugins" -maxdepth 1 -name "$name-[0-9]*.tgz" | head -1)"
+  [ -n "$standalone" ] || { echo "release gate: required plugin $name missing from plugins/" >&2; exit 8; }
+  sha="$(shasum -a 256 "$standalone" | cut -d' ' -f1)"
+  embedded="$SEED_DIR/$(basename "$standalone" .tgz)-${sha:0:12}.tgz"
+  [ -f "$embedded" ] || { echo "release gate: $name $(basename "$standalone") not embedded as $(basename "$embedded")" >&2; exit 8; }
+  [ "$(shasum -a 256 "$embedded" | cut -d' ' -f1)" = "$sha" ] || { echo "release gate: embedded $name differs from standalone" >&2; exit 8; }
+done
+echo "release gate: 4 required plugins embedded == standalone by sha256"
 # Owner build records name the builder checkout: they are not shipped and never rewritten (frozen owner artefacts).
 cp "$ROOT"/desktop-local-build/patches/*.patch "$REL/source/patches/"
 tar -czf "$REL/source/dsh-audio-release-kit-src.tgz" -C "$ROOT/release-kit" --exclude node_modules --exclude lib dsh-audio-release-kit
@@ -46,7 +61,7 @@ const plist = key => cp.execFileSync('/usr/libexec/PlistBuddy', ['-c', `Print ${
 const seed = path.join(app, 'Contents/Resources/seed')
 const bundled = JSON.parse(fs.readFileSync(path.join(seed, 'desktop-bundled-plugins.json'), 'utf8')).plugins
 const releaseJson = JSON.parse(fs.readFileSync(path.join(seed, 'desktop-release.json'), 'utf8'))
-const vendor = `${process.env.DSH_ROOT}/vendor/deepseek-harness-desktop-src`
+const vendor = '${DSH_ROOT}/vendor/deepseek-harness-desktop-src'
 const codesign = cp.spawnSync('codesign', ['-dv', app], { encoding: 'utf8' }).stderr
 const manifest = {
   schemaVersion: 1,
