@@ -21,6 +21,10 @@
 | `verify-desktop-artifact` | macos-26 | `release-artifact`, `packaged-app-static` | See [App checks](#app-checks). |
 | `negative-controls-artifact` | macos-26 | `negative-control` | The dmg seed checked against a PLUGINS.json with a wrong hash must fail. |
 | `desktop-smoke-launch` | macos-26 | `packaged-app-hosted-launch` | See [Launch smoke](#launch-smoke). |
+| `desktop-smoke-bundled` | macos-26 | `packaged-app-hosted-ui` | **Mandatory bundled plugins.** See [Mandatory bundled plugins](#mandatory-bundled-plugins). |
+| `availability-suites`, `availability-scenarios` | ubuntu | `deterministic-plugin-code` | Service-availability rows A1–A12 and the duplex judge D1–D4 over the real plugin sources (`ci/availability/`). |
+| `desktop-availability` | macos-26 | `packaged-app-hosted-ui` | A1, A8, A9 and A12 in the release app against a loopback mock behind a TCP fault switch. A2 records with the microphone owner's fixture capture while the upstream is absent. |
+| `desktop-fixture-capture` | macos-26 | `packaged-app-hosted-ui` | See [Fixture capture](#fixture-capture). |
 | `desktop-smoke-ci-env` | macos-26 | `packaged-app-hosted-ui` | The same Install from File + Remove, but with `CI=true` in the app environment. The expected result per build comes from `ci/expected.json` `knownDefects`, bound to the tag's MANIFEST patch hash. A reproduced known defect is reported as `known-fail`: visible in the summary and `evidence.json`, but it does not fail the run. The same failure on a build that should carry the fix is a `fail`. |
 | `desktop-smoke-lifecycle` | macos-26 | `packaged-app-hosted-ui` | See [Plugins window lifecycle](#plugins-window-lifecycle). |
 
@@ -83,3 +87,29 @@ The scripts need Node ≥ 22. `verify-desktop-artifact` and `desktop-smoke` also
 ```bash
 node ci/scripts/verify-release-sources.mjs --tag <tag> --tag-src <checkout-of-tag> --assets <dir> --release-json <dir>/release.json --out out/sources.json
 ```
+
+### Mandatory bundled plugins
+- **Setup:**
+  - the app from the release DMG;
+  - a clean home that already holds user settings and has no audio endpoint;
+  - nothing sideloaded.
+- **Checks:**
+  - Each embedded package (seed record and file) equals the Release tgz: version, sha256 and installed files.
+  - All four plugins are installed and enabled on first launch: profile spec, bundles, and the Plugins window shows `source=bundled` and not disabled.
+  - Exactly four plugins; the client bundles are loaded; the host routes run.
+  - The Audio models view shows the host plugin and adapter as present.
+  - The microphone control appears in the composer.
+  - User settings survive first launch and relaunch.
+  - A relaunch leaves profile and plugin bytes, the plugin list and the boot graph unchanged.
+- **Scope:** offline seed presence (`verify-desktop-artifact`) is a structural check only.
+
+### Fixture capture
+- **Harness:** the microphone owner's fixture-capture harness 1.0.0.
+  - Vendored byte-identical under `ci/fixture-capture/harness-1.0.0/`, checked against the owner hash list `8a6b428b…`.
+  - Runs on the **release app with its own seeded plugins**.
+  - Labels: capture=fixture (test-only MediaStream at getUserMedia), backend=mock.
+- **Cases:**
+  - `overlap-abc` / `timeline-interrupt`: C0 C1 C2 O1 S1 P1 I1 E1.
+  - `turn-record-send`: M1 M2 C2.
+  - `negative-silent-input`: must FAIL O1/S1.
+  - A6 late permission + Dismiss: a simulated getUserMedia hold, not the TCC prompt. It is bound to the installed mic package sha: known-fail on 0.3.5 / 0.3.3.
