@@ -51,7 +51,14 @@ const report = new Report('desktop-availability', {
 // Observation only (no substitution): request log and output audio source timing, installed before app scripts run.
 const OBSERVER = `(() => {
   if (window.__CI_OBS__) return
-  const obs = window.__CI_OBS__ = { fetches: [], sources: [] }
+  const obs = window.__CI_OBS__ = { fetches: [], sources: [], failures: [] }
+  // Turn failures as they are rendered (the conversation list is virtualised, so text scans alone can miss them).
+  new MutationObserver((records) => {
+    for (const record of records) for (const node of record.addedNodes) {
+      const text = node.nodeType === 1 ? node.innerText ?? node.textContent ?? '' : ''
+      if (/This turn failed/.test(text) && obs.failures.length < 200) obs.failures.push({ at: Date.now(), text: text.slice(0, 300) })
+    }
+  }).observe(document.documentElement, { childList: true, subtree: true })
   const originalFetch = window.fetch.bind(window)
   window.fetch = async (input, init) => {
     const url = String(input instanceof Request ? input.url : input)
@@ -285,14 +292,12 @@ async function main() {
     const capture = await page.evaluate(() => (window.__dshFixtureCapture?.streams ?? []).map(x => ({ requestedAt: x.requested?.epoch ?? null, resolvedAt: x.resolved?.epoch ?? null, clips: (x.clips ?? []).length, source: x.source })))
     await shot('07-a2-preview-while-down')
     const upstreamBeforeSend = mockRequests().length - beforeA2
+    const sendAt = Date.now()
     await page.locator('[data-testid=dsh-voice-capture-send]').first().click().catch(() => undefined)
-    // The conversation list is virtualised (earlier turns leave the DOM), so judge by order: an explicit "cannot reach"
-    // failure must follow the recording message itself.
-    const explicit = await waitUntil('explicit failure after the recording message', async () => page.evaluate(() => {
-      const text = document.querySelector('main')?.innerText ?? ''
-      const message = text.indexOf('recording-') // the only recording in this session; the dock's "sent" status repeats the name below
-      return message >= 0 && text.indexOf('cannot reach', message) > message
-    }), { timeoutMs: 45_000, intervalMs: 300 }).then(() => true).catch(() => false)
+    // An explicit failure rendered for this send: a "This turn failed … cannot reach" node added after the click.
+    const explicitNode = await waitUntil('explicit failure rendered after Send', async () => page.evaluate((since) => window.__CI_OBS__.failures.find(f => f.at >= since && /cannot reach/.test(f.text)) ?? null, sendAt), { timeoutMs: 45_000, intervalMs: 300 }).then(r => r.value).catch(() => null)
+    const explicit = explicitNode !== null
+    const domTail = await page.evaluate(() => (document.querySelector('main')?.innerText ?? '').slice(-700))
     void errorsBefore
     await shot('08-a2-send-while-down')
     const failed = invocations().slice(invBeforeA2).find(record => record.ok === false)
@@ -301,7 +306,7 @@ async function main() {
     const ok = recording && upstreamDuringRecording === 0 && preview !== null && upstreamBeforeSend === 0 && explicit && failed?.code === 'TRANSPORT' && audio !== null && attachmentKept
     report.add('capture.a2-record-while-server-down', ok ? 'pass' : 'fail', U,
       `[capture=fixture (${fixtureTurn.file} ${fixtureTurn.sha256.slice(0, 12)}…), backend=mock] upstream absent: recording started=${recording}, 0 upstream requests while recording=${upstreamDuringRecording === 0} and in preview=${upstreamBeforeSend === 0}, preview ${preview ? `${preview.duration ?? '?'} s` : 'missing'}; Send → explicit error=${explicit}, host record ${failed?.code ?? 'missing'} with the recording (${audio?.bytes ?? 0} B) kept as an attachment=${attachmentKept}`,
-      { recording, upstreamDuringRecording, upstreamBeforeSend, preview, capture, failedRecord: failed ? { code: failed.code, inputAudio: failed.inputAudio } : null, attachmentKept })
+      { recording, upstreamDuringRecording, upstreamBeforeSend, preview, capture, sendAt, explicitNode, domTail, failedRecord: failed ? { code: failed.code, inputAudio: failed.inputAudio } : null, attachmentKept })
     await proxy.setMode('up')
     await waitIdle(page)
   } else {
