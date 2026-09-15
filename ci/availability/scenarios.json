@@ -8,7 +8,12 @@
       "runner": "node",
       "glob": "test/*.test.js",
       "testDir": "test",
-      "pinned": { "0.4.10": { "path": "owner-tests/dsh-dgx-audio/0.4.10/test", "provenance": "owner-tests/dsh-dgx-audio/0.4.10/PROVENANCE.json" } },
+      "pinned": {
+        "0.4.10": {
+          "path": "owner-tests/dsh-dgx-audio/0.4.10/test",
+          "provenance": "owner-tests/dsh-dgx-audio/0.4.10/PROVENANCE.json"
+        }
+      },
       "timeoutMs": 30000
     },
     "mic-owner": {
@@ -18,8 +23,15 @@
       "glob": "test/*.test.ts",
       "testDir": "test",
       "pinned": {
-        "0.3.5": { "path": "owner-tests/dsh-voice-capture/0.3.6/test", "provenance": "owner-tests/dsh-voice-capture/0.3.6/PROVENANCE.json", "note": "0.3.6 owner tests against 0.3.5 source: Z1–Z5 are the pre16 late-capture negative control" },
-        "0.3.6": { "path": "owner-tests/dsh-voice-capture/0.3.6/test", "provenance": "owner-tests/dsh-voice-capture/0.3.6/PROVENANCE.json" }
+        "0.3.5": {
+          "path": "owner-tests/dsh-voice-capture/0.3.6/test",
+          "provenance": "owner-tests/dsh-voice-capture/0.3.6/PROVENANCE.json",
+          "note": "0.3.6 owner tests against 0.3.5 source: Z1–Z5 are the pre16 late-capture negative control"
+        },
+        "0.3.6": {
+          "path": "owner-tests/dsh-voice-capture/0.3.6/test",
+          "provenance": "owner-tests/dsh-voice-capture/0.3.6/PROVENANCE.json"
+        }
       },
       "timeoutMs": 20000
     },
@@ -33,17 +45,56 @@
       "helpersFrom": "host-owner",
       "timeoutMs": 30000,
       "mutations": [
-        { "id": "transport-code-lost", "file": "src/adapter.js", "find": "`dsh-dgx-audio: cannot reach ${route.baseURL}: ${error?.message ?? error}`, 'TRANSPORT'", "replace": "`dsh-dgx-audio: cannot reach ${route.baseURL}: ${error?.message ?? error}`, 'UNKNOWN'", "mustFail": ["A1 server absent before send: TRANSPORT failure"] },
-        { "id": "timeout-reported-as-transport", "file": "src/adapter.js", "find": "did not answer within ${config.requestTimeoutMs} ms`, 'DGX_TIMEOUT'", "replace": "did not answer within ${config.requestTimeoutMs} ms`, 'TRANSPORT'", "mustFail": ["A1 lab window closed behind a listener", "A5 stream stalls after headers"] }
+        {
+          "id": "transport-code-lost",
+          "file": "src/adapter.js",
+          "find": "`dsh-dgx-audio: cannot reach ${route.baseURL}: ${error?.message ?? error}`, 'TRANSPORT'",
+          "replace": "`dsh-dgx-audio: cannot reach ${route.baseURL}: ${error?.message ?? error}`, 'UNKNOWN'",
+          "mustFail": [
+            "A1 server absent before send: TRANSPORT failure"
+          ]
+        },
+        {
+          "id": "timeout-reported-as-transport",
+          "file": "src/adapter.js",
+          "find": "did not answer within ${config.requestTimeoutMs} ms`, 'DGX_TIMEOUT'",
+          "replace": "did not answer within ${config.requestTimeoutMs} ms`, 'TRANSPORT'",
+          "mustFail": [
+            "A1 lab window closed behind a listener",
+            "A5 stream stalls after headers"
+          ]
+        }
       ]
+    },
+    "verdict-ci": {
+      "inPlace": true,
+      "owner": "CI lane (duplex verdict logic and negative controls; synthetic timelines, not app evidence)",
+      "runner": "node",
+      "testDir": "scenario-tests",
+      "files": [
+        "scenario-tests/duplex-verdict.test.mjs"
+      ],
+      "glob": "scenario-tests/duplex-verdict.test.mjs",
+      "timeoutMs": 30000
     }
   },
   "knownDefects": [
     {
       "id": "live-late-capture-revives-session",
       "suite": "mic-owner",
-      "tests": ["Z1 ", "Z2 ", "Z3 ", "Z4 ", "Z5 "],
-      "affectedWhen": { "file": "plugins/dsh-voice-capture/src/client/audio/live.ts", "sha256": ["a94bc856d1cdb74f9dc566852528dbbdc03154b7fe48e6e24c739fd98d40a408"] },
+      "tests": [
+        "Z1 ",
+        "Z2 ",
+        "Z3 ",
+        "Z4 ",
+        "Z5 "
+      ],
+      "affectedWhen": {
+        "file": "plugins/dsh-voice-capture/src/client/audio/live.ts",
+        "sha256": [
+          "a94bc856d1cdb74f9dc566852528dbbdc03154b7fe48e6e24c739fd98d40a408"
+        ]
+      },
       "summary": "pre16 Live regression: microphone permission/capture resolving after the host 15 s idle close (or after Dismiss) revives the ended session → LIVE_CLOSED 410 or CLIENT_BACKLOG with 0 appends",
       "evidence": "results/harness-microphone-ui-20260915/PRE16_LIVE_BACKLOG_ROOT_CAUSE_20260915.md; release demo3-minicpm2 DEMO-MINICPM-2 12:29 (real USB mic FAIL)",
       "fixedBy": "dsh-voice-capture 0.3.6 sha256 09f557c0ce8006c9faf38b6b19abb1350b6ce3b9a13b2dbf024cf95f1e6de917 (live.ts 97ddb1a7…); not yet in the repository tree"
@@ -51,144 +102,514 @@
   ],
   "rows": [
     {
-      "id": "A1", "title": "Server absent or lab window closed before send", "priority": "P0",
-      "owners": ["host", "mic"],
-      "tests": [
-        { "suite": "host-ci", "title": "A1 server absent before send: TRANSPORT failure" },
-        { "suite": "host-ci", "title": "A1 server absent before send (real Cordis + LlmRuntime)" },
-        { "suite": "host-ci", "title": "A1 lab window closed behind a listener that never answers" },
-        { "suite": "host-owner", "title": "capabilities route: unconfigured install reports configured:false and contacts nothing" },
-        { "suite": "host-owner", "title": "fail-fast refusals are logged as refusal records" },
-        { "suite": "mic-owner", "title": "upload and prompt failures keep the clip for retry" }
+      "id": "A1",
+      "title": "Server absent or lab window closed before send",
+      "priority": "P0",
+      "owners": [
+        "host",
+        "mic"
       ],
-      "packaged": ["availability.a1-send-to-absent-server (macOS release/manual job, simulated mic)"],
-      "notCovered": ["Real lab window closure on the DGX; the exact user-facing wording in the native app is only checked in the packaged job"]
+      "tests": [
+        {
+          "suite": "host-ci",
+          "title": "A1 server absent before send: TRANSPORT failure"
+        },
+        {
+          "suite": "host-ci",
+          "title": "A1 server absent before send (real Cordis + LlmRuntime)"
+        },
+        {
+          "suite": "host-ci",
+          "title": "A1 lab window closed behind a listener that never answers"
+        },
+        {
+          "suite": "host-owner",
+          "title": "capabilities route: unconfigured install reports configured:false and contacts nothing"
+        },
+        {
+          "suite": "host-owner",
+          "title": "fail-fast refusals are logged as refusal records"
+        },
+        {
+          "suite": "mic-owner",
+          "title": "upload and prompt failures keep the clip for retry"
+        }
+      ],
+      "packaged": [
+        "availability.a1-send-to-absent-server (macOS release/manual job, simulated mic)"
+      ],
+      "notCovered": [
+        "Real lab window closure on the DGX; the exact user-facing wording in the native app is only checked in the packaged job"
+      ]
     },
     {
-      "id": "A2", "title": "Service becomes unavailable while recording", "priority": "P0",
-      "owners": ["mic"],
-      "tests": [
-        { "suite": "mic-owner", "title": "record → stop produces a 16 kHz mono WAV preview and releases the capture" },
-        { "suite": "mic-owner", "title": "upload and prompt failures keep the clip for retry" },
-        { "suite": "mic-owner", "title": "cancelling an in-flight upload returns to the preview without prompting" },
-        { "suite": "mic-owner", "title": "send is refused while the selected model is not ready, before upload and again before admission (clip kept)" },
-        { "suite": "mic-owner", "title": "duration limit stops capture automatically and keeps the clip" }
+      "id": "A2",
+      "title": "Service becomes unavailable while recording",
+      "priority": "P0",
+      "owners": [
+        "mic"
       ],
-      "packaged": ["availability.a2-record-while-server-down (simulated mic)"],
-      "notCovered": ["Physical USB microphone while the network drops (L7)"]
+      "tests": [
+        {
+          "suite": "mic-owner",
+          "title": "record → stop produces a 16 kHz mono WAV preview and releases the capture"
+        },
+        {
+          "suite": "mic-owner",
+          "title": "upload and prompt failures keep the clip for retry"
+        },
+        {
+          "suite": "mic-owner",
+          "title": "cancelling an in-flight upload returns to the preview without prompting"
+        },
+        {
+          "suite": "mic-owner",
+          "title": "send is refused while the selected model is not ready, before upload and again before admission (clip kept)"
+        },
+        {
+          "suite": "mic-owner",
+          "title": "duration limit stops capture automatically and keeps the clip"
+        }
+      ],
+      "packaged": [
+        "availability.a2-record-while-server-down (simulated mic)"
+      ],
+      "notCovered": [
+        "Physical USB microphone while the network drops (L7)"
+      ]
     },
     {
-      "id": "A3", "title": "Window expires between readiness check and request", "priority": "P0",
-      "owners": ["host", "mic", "library"],
-      "tests": [
-        { "suite": "host-ci", "title": "A3 window closes between readiness and request" },
-        { "suite": "mic-owner", "title": "send is refused while the selected model is not ready, before upload and again before admission (clip kept)" },
-        { "suite": "mic-owner", "title": "activation gate: library and adapter states combine" }
+      "id": "A3",
+      "title": "Window expires between readiness check and request",
+      "priority": "P0",
+      "owners": [
+        "host",
+        "mic",
+        "library"
       ],
-      "notCovered": ["Server-side atomic admission is the DGX service's contract; only the client/host reaction to a 503 at admission is tested"]
+      "tests": [
+        {
+          "suite": "host-ci",
+          "title": "A3 window closes between readiness and request"
+        },
+        {
+          "suite": "mic-owner",
+          "title": "send is refused while the selected model is not ready, before upload and again before admission (clip kept)"
+        },
+        {
+          "suite": "mic-owner",
+          "title": "activation gate: library and adapter states combine"
+        }
+      ],
+      "notCovered": [
+        "Server-side atomic admission is the DGX service's contract; only the client/host reaction to a 503 at admission is tested"
+      ]
     },
     {
-      "id": "A4", "title": "Planned closure during an active stream (drain)", "priority": "P0",
-      "owners": ["host", "DGX", "library"],
-      "tests": [
-        { "suite": "host-ci", "title": "A4 planned drain: the accepted stream completes in full" },
-        { "suite": "host-ci", "title": "A4/A5 forced closure or backend crash mid-stream" },
-        { "suite": "host-owner", "title": "dshAudio service: route source + activation, busy/drain" }
+      "id": "A4",
+      "title": "Planned closure during an active stream (drain)",
+      "priority": "P0",
+      "owners": [
+        "host",
+        "DGX",
+        "library"
       ],
-      "notCovered": ["DGX owner's real drain/shutdown sequence (owner-coordinated window only; never fault-injected on the shared DGX)", "library controller offline-job drain tests (controller tests not published for the repository controller version)"]
+      "tests": [
+        {
+          "suite": "host-ci",
+          "title": "A4 planned drain: the accepted stream completes in full"
+        },
+        {
+          "suite": "host-ci",
+          "title": "A4/A5 forced closure or backend crash mid-stream"
+        },
+        {
+          "suite": "host-owner",
+          "title": "dshAudio service: route source + activation, busy/drain"
+        }
+      ],
+      "notCovered": [
+        "DGX owner's real drain/shutdown sequence (owner-coordinated window only; never fault-injected on the shared DGX)",
+        "library controller offline-job drain tests (controller tests not published for the repository controller version)"
+      ]
     },
     {
-      "id": "A5", "title": "Backend crash / network loss during stream", "priority": "P0",
-      "owners": ["host", "mic"],
-      "tests": [
-        { "suite": "host-ci", "title": "A4/A5 forced closure or backend crash mid-stream" },
-        { "suite": "host-ci", "title": "A5 stream stalls after headers" },
-        { "suite": "host-owner", "title": "malformed, truncated, oversized and error streams fail with specific codes and no finish chunk" },
-        { "suite": "host-owner", "title": "transport drop mid-response → one resume with the server token" },
-        { "suite": "host-owner", "title": "a slow resume after a real network loss (no test hook) is not cut short by the idle timer" },
-        { "suite": "mic-owner", "title": "live mode reports a closed session (410) and refuses while the microphone records" },
-        { "suite": "mic-owner", "title": "W4 host-cancelled stream (turn Stop / barge-in) silences scheduled audio at once" }
+      "id": "A5",
+      "title": "Backend crash / network loss during stream",
+      "priority": "P0",
+      "owners": [
+        "host",
+        "mic"
       ],
-      "notCovered": ["Real network loss between the Mac and the DGX", "Default bound is requestTimeoutMs 900 s for the whole request; no separate idle-stream timeout (finding for the host owner)"]
+      "tests": [
+        {
+          "suite": "host-ci",
+          "title": "A4/A5 forced closure or backend crash mid-stream"
+        },
+        {
+          "suite": "host-ci",
+          "title": "A5 stream stalls after headers"
+        },
+        {
+          "suite": "host-owner",
+          "title": "malformed, truncated, oversized and error streams fail with specific codes and no finish chunk"
+        },
+        {
+          "suite": "host-owner",
+          "title": "transport drop mid-response → one resume with the server token"
+        },
+        {
+          "suite": "host-owner",
+          "title": "a slow resume after a real network loss (no test hook) is not cut short by the idle timer"
+        },
+        {
+          "suite": "mic-owner",
+          "title": "live mode reports a closed session (410) and refuses while the microphone records"
+        },
+        {
+          "suite": "mic-owner",
+          "title": "W4 host-cancelled stream (turn Stop / barge-in) silences scheduled audio at once"
+        }
+      ],
+      "notCovered": [
+        "Real network loss between the Mac and the DGX",
+        "Default bound is requestTimeoutMs 900 s for the whole request; no separate idle-stream timeout (finding for the host owner)"
+      ]
     },
     {
-      "id": "A6", "title": "Permission/device init delayed beyond session idle timeout, or cancel during opening", "priority": "P0",
-      "owners": ["mic", "host"],
-      "tests": [
-        { "suite": "mic-owner", "title": "Z1 DEMO3 sequence" },
-        { "suite": "mic-owner", "title": "Z2 host idle close while the microphone opens" },
-        { "suite": "mic-owner", "title": "Z3 microphone permission is answered before live/open" },
-        { "suite": "mic-owner", "title": "Z4 permission denied" },
-        { "suite": "mic-owner", "title": "Z5 End live session while the microphone still opens" },
-        { "suite": "mic-owner", "title": "cancel during the permission prompt closes the stream once it is granted" },
-        { "suite": "host-owner", "title": "frame validation, ordering, backpressure and idle timeout" }
+      "id": "A6",
+      "title": "Permission/device init delayed beyond session idle timeout, or cancel during opening",
+      "priority": "P0",
+      "owners": [
+        "mic",
+        "host"
       ],
-      "packaged": ["availability.a6-late-capture (simulated permission hold; pre16 must reproduce the defect)"],
-      "notCovered": ["The macOS TCC permission prompt itself and a physical USB device (L7)"]
+      "tests": [
+        {
+          "suite": "mic-owner",
+          "title": "Z1 DEMO3 sequence"
+        },
+        {
+          "suite": "mic-owner",
+          "title": "Z2 host idle close while the microphone opens"
+        },
+        {
+          "suite": "mic-owner",
+          "title": "Z3 microphone permission is answered before live/open"
+        },
+        {
+          "suite": "mic-owner",
+          "title": "Z4 permission denied"
+        },
+        {
+          "suite": "mic-owner",
+          "title": "Z5 End live session while the microphone still opens"
+        },
+        {
+          "suite": "mic-owner",
+          "title": "cancel during the permission prompt closes the stream once it is granted"
+        },
+        {
+          "suite": "host-owner",
+          "title": "frame validation, ordering, backpressure and idle timeout"
+        }
+      ],
+      "packaged": [
+        "availability.a6-late-capture (simulated permission hold; pre16 must reproduce the defect)"
+      ],
+      "notCovered": [
+        "The macOS TCC permission prompt itself and a physical USB device (L7)"
+      ]
     },
     {
-      "id": "A7", "title": "Model loading/switching or contention", "priority": "P1",
-      "owners": ["host", "library"],
-      "tests": [
-        { "suite": "host-owner", "title": "#3: live/open refuses PROVIDER_BUSY while a reply streams from the same server" },
-        { "suite": "host-owner", "title": "dshAudio service: route source + activation, busy/drain, A→B→A switch closes stale live sessions" },
-        { "suite": "host-owner", "title": "real Cordis: another plugin can inject the dshAudio service and drive activation" },
-        { "suite": "mic-owner", "title": "I2-A #3: a busy server refuses Live before any open request" }
+      "id": "A7",
+      "title": "Model loading/switching or contention",
+      "priority": "P1",
+      "owners": [
+        "host",
+        "library"
       ],
-      "notCovered": ["Two Macs contending for one DGX", "library/controller switch tests for the repository versions (not published)"]
+      "tests": [
+        {
+          "suite": "host-owner",
+          "title": "#3: live/open refuses PROVIDER_BUSY while a reply streams from the same server"
+        },
+        {
+          "suite": "host-owner",
+          "title": "dshAudio service: route source + activation, busy/drain, A→B→A switch closes stale live sessions"
+        },
+        {
+          "suite": "host-owner",
+          "title": "real Cordis: another plugin can inject the dshAudio service and drive activation"
+        },
+        {
+          "suite": "mic-owner",
+          "title": "I2-A #3: a busy server refuses Live before any open request"
+        }
+      ],
+      "notCovered": [
+        "Two Macs contending for one DGX",
+        "library/controller switch tests for the repository versions (not published)"
+      ]
     },
     {
-      "id": "A8", "title": "Stop/Interrupt races with done/disconnect", "priority": "P0",
-      "owners": ["host", "mic"],
-      "tests": [
-        { "suite": "host-ci", "title": "A8 Stop vs done, deterministic orderings" },
-        { "suite": "host-ci", "title": "A8 Stop racing completion sweep" },
-        { "suite": "host-owner", "title": "#5: Stop aborts the upstream HTTP request promptly" },
-        { "suite": "host-owner", "title": "I4 tail race replay: Interrupt reaching the server after the response finished" },
-        { "suite": "host-owner", "title": "controls: no active response is a clean no-op" },
-        { "suite": "mic-owner", "title": "W3 reply Stop: sounding chunk cut at Stop, queued chunk never sounds" },
-        { "suite": "mic-owner", "title": "X2 Stop posts stopped with the played samples and no later position" },
-        { "suite": "mic-owner", "title": "U13 Interrupt result delivered by the feed before the HTTP reply is not undone by the reply" }
+      "id": "A8",
+      "title": "Stop/Interrupt races with done/disconnect",
+      "priority": "P0",
+      "owners": [
+        "host",
+        "mic"
       ],
-      "packaged": ["availability.a8-stop-after-done (packaged UI)"],
-      "notCovered": ["Audible silence on a physical speaker after Stop (L7/L8)"]
+      "tests": [
+        {
+          "suite": "host-ci",
+          "title": "A8 Stop vs done, deterministic orderings"
+        },
+        {
+          "suite": "host-ci",
+          "title": "A8 Stop racing completion sweep"
+        },
+        {
+          "suite": "host-owner",
+          "title": "#5: Stop aborts the upstream HTTP request promptly"
+        },
+        {
+          "suite": "host-owner",
+          "title": "I4 tail race replay: Interrupt reaching the server after the response finished"
+        },
+        {
+          "suite": "host-owner",
+          "title": "controls: no active response is a clean no-op"
+        },
+        {
+          "suite": "mic-owner",
+          "title": "W3 reply Stop: sounding chunk cut at Stop, queued chunk never sounds"
+        },
+        {
+          "suite": "mic-owner",
+          "title": "X2 Stop posts stopped with the played samples and no later position"
+        },
+        {
+          "suite": "mic-owner",
+          "title": "U13 Interrupt result delivered by the feed before the HTTP reply is not undone by the reply"
+        }
+      ],
+      "packaged": [
+        "availability.a8-stop-after-done (packaged UI)"
+      ],
+      "notCovered": [
+        "Audible silence on a physical speaker after Stop (L7/L8)"
+      ]
     },
     {
-      "id": "A9", "title": "Server recovers/reconnects", "priority": "P1",
-      "owners": ["host", "mic"],
-      "tests": [
-        { "suite": "host-ci", "title": "A9 recovery: after a crash the service returns" },
-        { "suite": "host-owner", "title": "reconnect with after=cursor replays only newer events" },
-        { "suite": "host-owner", "title": "negative: resume after the server grace (resume: delay) is refused as expired" },
-        { "suite": "mic-owner", "title": "event feed reconnects with the last cursor and stops on 404" },
-        { "suite": "mic-owner", "title": "V7 explicit Recover: exact identity body, one request per click" }
+      "id": "A9",
+      "title": "Server recovers/reconnects",
+      "priority": "P1",
+      "owners": [
+        "host",
+        "mic"
       ],
-      "notCovered": ["Billing/duplicate work on the real server after recovery"]
+      "tests": [
+        {
+          "suite": "host-ci",
+          "title": "A9 recovery: after a crash the service returns"
+        },
+        {
+          "suite": "host-owner",
+          "title": "reconnect with after=cursor replays only newer events"
+        },
+        {
+          "suite": "host-owner",
+          "title": "negative: resume after the server grace (resume: delay) is refused as expired"
+        },
+        {
+          "suite": "mic-owner",
+          "title": "event feed reconnects with the last cursor and stops on 404"
+        },
+        {
+          "suite": "mic-owner",
+          "title": "V7 explicit Recover: exact identity body, one request per click"
+        }
+      ],
+      "notCovered": [
+        "Billing/duplicate work on the real server after recovery"
+      ]
     },
     {
-      "id": "A10", "title": "App sleep/wake, close/relaunch, USB unplug/replug", "priority": "P2",
-      "owners": ["release", "mic"],
+      "id": "A10",
+      "title": "App sleep/wake, close/relaunch, USB unplug/replug",
+      "priority": "P2",
+      "owners": [
+        "release",
+        "mic"
+      ],
       "tests": [],
-      "packaged": ["desktop-smoke-launch relaunch.* (close/relaunch only)"],
-      "notCovered": ["Sleep/wake and USB unplug/replug need a physical Mac (never global sleep on a shared machine)"]
-    },
-    {
-      "id": "A11", "title": "Stale OPEN file, expired deadline, owner watcher crash", "priority": "P2",
-      "owners": ["DGX", "release"],
-      "tests": [],
-      "notCovered": ["Scheduling window files and the owner watcher are development control-plane tools outside the published repository; no product dependency is claimed. Host resume-token expiry is mapped under A9."]
-    },
-    {
-      "id": "A12", "title": "Fresh recipient Mac without lab paths/SSH/window files", "priority": "P0",
-      "owners": ["release", "host", "library"],
-      "tests": [
-        { "suite": "host-owner", "title": "plugin apply: no private defaults, no adapter without routes" },
-        { "suite": "host-owner", "title": "plugin source has no @deepseek-ai runtime imports" },
-        { "suite": "host-owner", "title": "credential reference: keyless by default" },
-        { "suite": "host-owner", "title": "probe route: reachability only on explicit call" }
+      "packaged": [
+        "desktop-smoke-launch relaunch.* (close/relaunch only)"
       ],
-      "packaged": ["availability.a12-no-lab-paths (installed app/profile scan)", "availability.a12-endpoint-only (fresh home → loopback endpoint reply)", "verify-release-sources tree.privacy / plugin.*.privacy"],
-      "notCovered": ["A second physical Mac (G2)"]
+      "notCovered": [
+        "Sleep/wake and USB unplug/replug need a physical Mac (never global sleep on a shared machine)"
+      ]
+    },
+    {
+      "id": "A11",
+      "title": "Stale OPEN file, expired deadline, owner watcher crash",
+      "priority": "P2",
+      "owners": [
+        "DGX",
+        "release"
+      ],
+      "tests": [],
+      "notCovered": [
+        "Scheduling window files and the owner watcher are development control-plane tools outside the published repository; no product dependency is claimed. Host resume-token expiry is mapped under A9."
+      ]
+    },
+    {
+      "id": "A12",
+      "title": "Fresh recipient Mac without lab paths/SSH/window files",
+      "priority": "P0",
+      "owners": [
+        "release",
+        "host",
+        "library"
+      ],
+      "tests": [
+        {
+          "suite": "host-owner",
+          "title": "plugin apply: no private defaults, no adapter without routes"
+        },
+        {
+          "suite": "host-owner",
+          "title": "plugin source has no @deepseek-ai runtime imports"
+        },
+        {
+          "suite": "host-owner",
+          "title": "credential reference: keyless by default"
+        },
+        {
+          "suite": "host-owner",
+          "title": "probe route: reachability only on explicit call"
+        }
+      ],
+      "packaged": [
+        "availability.a12-no-lab-paths (installed app/profile scan)",
+        "availability.a12-endpoint-only (fresh home → loopback endpoint reply)",
+        "verify-release-sources tree.privacy / plugin.*.privacy"
+      ],
+      "notCovered": [
+        "A second physical Mac (G2)"
+      ]
+    },
+    {
+      "id": "D1",
+      "title": "Full duplex: valid decodable output audio actually played",
+      "priority": "P0",
+      "owners": [
+        "CI",
+        "mic",
+        "streaming"
+      ],
+      "layer": "judge + packaged",
+      "tests": [
+        {
+          "suite": "verdict-ci",
+          "title": "D-verdict positive"
+        },
+        {
+          "suite": "verdict-ci",
+          "title": "D-verdict negative: dropped output"
+        },
+        {
+          "suite": "verdict-ci",
+          "title": "D-verdict negative: silent-only or undecodable output is not output"
+        },
+        {
+          "suite": "verdict-ci",
+          "title": "D-verdict negative: received but never played output"
+        }
+      ],
+      "packaged": [
+        "duplex.output-presence (mic-owner fixture sequence A/B/C through the real capture path, mock realtime backend)"
+      ],
+      "notCovered": [
+        "Real MiniCPM-o-4_5 output (release/DGX window)",
+        "The deterministic CI row proves the judge only; app evidence comes from the packaged job"
+      ]
+    },
+    {
+      "id": "D2",
+      "title": "Full duplex: clip B sent and ACKed while output plays; progress after B and C",
+      "priority": "P0",
+      "owners": [
+        "CI",
+        "mic",
+        "streaming"
+      ],
+      "layer": "judge + packaged",
+      "tests": [
+        {
+          "suite": "verdict-ci",
+          "title": "D-verdict positive"
+        },
+        {
+          "suite": "verdict-ci",
+          "title": "D-verdict negative: input blocked until output ends"
+        },
+        {
+          "suite": "verdict-ci",
+          "title": "D-verdict negative: output after B that only continues the old response"
+        }
+      ],
+      "packaged": [
+        "duplex.simultaneous-io (active-playback-triggered clip B)",
+        "negative mock modes blocked-input / dropped-output must FAIL"
+      ],
+      "notCovered": [
+        "Real model duplex behaviour"
+      ]
+    },
+    {
+      "id": "D3",
+      "title": "Full duplex: Interrupt during an active playback buffer",
+      "priority": "P0",
+      "owners": [
+        "CI",
+        "mic",
+        "streaming"
+      ],
+      "layer": "judge + packaged",
+      "tests": [
+        {
+          "suite": "verdict-ci",
+          "title": "D-verdict negative: Interrupt no-op, underrun gap"
+        }
+      ],
+      "packaged": [
+        "duplex.interrupt (second utterance during active output)"
+      ],
+      "notCovered": [
+        "Real barge-in on the DGX"
+      ]
+    },
+    {
+      "id": "D4",
+      "title": "Full duplex: End/cleanup",
+      "priority": "P0",
+      "owners": [
+        "CI",
+        "mic"
+      ],
+      "layer": "judge + packaged",
+      "tests": [
+        {
+          "suite": "verdict-ci",
+          "title": "D-verdict negative: dirty close"
+        }
+      ],
+      "packaged": [
+        "duplex.cleanup"
+      ],
+      "notCovered": []
     }
   ]
 }

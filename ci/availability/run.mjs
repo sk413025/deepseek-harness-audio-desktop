@@ -35,6 +35,15 @@ const scenarioReport = new Report('availability-scenarios', { tree, treeCommit: 
 const results = {} // suite -> { ran, reason, tests: Map(title -> {status, message}) }
 
 for (const [name, suite] of Object.entries(spec.suites)) {
+  if (suite.inPlace) {
+    // CI-owned logic tests that need no plugin source (e.g. the duplex judge and its negative controls).
+    const run = runNodeTests(here, suite, name)
+    const meta = { owner: suite.owner, tests: { source: 'ci', dir: `ci/availability/${suite.testDir}`, sha256: sha256(suite.files.map(f => readFileSync(join(here, f))).join('')) } }
+    results[name] = { ran: true, meta, ...run }
+    const counts = countStatuses(run.tests)
+    suitesReport.add(`suite.${name}`, run.exitSignal ? 'fail' : 'info', C, `${suite.owner}: ${counts.pass} pass, ${counts.fail} fail of ${run.tests.size}; ${Math.round(run.ms / 1000)} s`, { ...meta, counts })
+    continue
+  }
   const pluginDir = join(tree, 'plugins', suite.plugin)
   if (!existsSync(join(pluginDir, 'package.json'))) { results[name] = { ran: false, reason: `plugins/${suite.plugin} not in the tree` }; continue }
   const version = JSON.parse(readFileSync(join(pluginDir, 'package.json'), 'utf8')).version
@@ -133,6 +142,8 @@ for (const row of spec.rows) {
   else if (statuses.every(s => s === 'not-run')) { status = 'skip'; summary = `NOT RUN in this tree: ${[...new Set(mapped.map(m => m.reason))].join('; ')}` }
   else if (statuses.includes('not-run')) { status = 'warn'; summary = `${statuses.filter(s => s === 'pass').length}/${statuses.length} mapped tests pass; not run here: ${mapped.filter(m => m.status === 'not-run').map(m => `${m.suite}:${m.title}`).join(' | ')}` }
   else { status = 'pass'; summary = `${statuses.length}/${statuses.length} mapped tests ran and passed` }
+  // Rows whose acceptance needs the packaged app (duplex): passing judge tests are never reported as the row's PASS.
+  if (row.layer === 'judge + packaged' && status === 'pass') { status = 'info'; summary = `JUDGE ONLY — ${statuses.length}/${statuses.length} verdict tests incl. negative controls pass; desktop acceptance for this row is NOT produced by this job (${(row.packaged ?? []).join('; ')})` }
   scenarioReport.add(`scenario.${row.id}`, status, C, `${row.id} ${row.title}: ${summary}`, { priority: row.priority, owners: row.owners, mapped, packaged: row.packaged ?? [], notCovered: row.notCovered ?? [] })
   rowSummary.push({ id: row.id, priority: row.priority, status, mapped: mapped.length, pass: statuses.filter(s => s === 'pass').length })
 }
@@ -146,7 +157,7 @@ console.log(`\navailability-suites: ${a.verdict.toUpperCase()} ${JSON.stringify(
 process.exit(a.verdict === 'pass' && b.verdict === 'pass' ? 0 : 1)
 
 function runNodeTests(stage, suite, label, namePatterns) {
-  const files = walk(join(stage, suite.testDir)).filter(file => new RegExp(`${suite.glob.split('/').pop().replace('.', '\\.').replace('*', '.*')}$`).test(file) && dirname(file) === join(stage, suite.testDir)).sort()
+  const files = suite.inPlace ? suite.files.map(f => join(stage, f)) : walk(join(stage, suite.testDir)).filter(file => new RegExp(`${suite.glob.split('/').pop().replace('.', '\\.').replace('*', '.*')}$`).test(file) && dirname(file) === join(stage, suite.testDir)).sort()
   const junit = join(out, `${label}.junit.xml`)
   const argv = [...(suite.runner === 'tsx' ? ['--import', 'tsx/esm'] : []), '--test', `--test-timeout=${suite.timeoutMs}`, '--test-force-exit',
     ...(namePatterns ?? []).flatMap(p => ['--test-name-pattern', p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')]),
@@ -178,7 +189,7 @@ function countStatuses(tests) {
 }
 
 function markdownTable(rows, document) {
-  const icon = { pass: '✅ PASS', fail: '❌ FAIL', 'known-fail': '❗ KNOWN-FAIL', warn: '⚠️ PARTIAL', skip: '⛔ NOT COVERED' }
+  const icon = { pass: '✅ PASS', fail: '❌ FAIL', 'known-fail': '❗ KNOWN-FAIL', warn: '⚠️ PARTIAL', skip: '⛔ NOT COVERED', info: '🧪 JUDGE ONLY' }
   const lines = ['| Row | P | Result | Mapped tests passed | Detail |', '|---|---|---|---|---|']
   for (const check of document.checks) {
     const row = rows.find(r => `scenario.${r.id}` === check.id)
