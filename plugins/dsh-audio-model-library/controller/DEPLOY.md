@@ -50,6 +50,22 @@ umask 077; openssl rand -hex 32 > ~/dsh-audio-controller/etc/controller.token
 - **Reservation** (`policy.reservationFile`): `{"state":"measurement","until":"2026-09-15T04:00:00+08:00","owner":"…"}` refuses every switch until `until` (`RESERVED_MEASUREMENT`); `"integration"` with `"allowRecipes":[…]` allows only those recipes; an unreadable file refuses everything. Expired reservations are ignored.
 - **Foreign workloads**: a running container whose name starts with a `foreignContainerPrefixes` entry and is not a recipe blocks activation (`FOREIGN_GPU_WORKLOAD`).
 - **In-progress turns**: before stopping a model, established TCP connections to its port are drained for `drainSeconds`; still busy → `MODEL_BUSY`, nothing is stopped. (Harness hosts with dsh-dgx-audio ≥ 0.4 also refuse locally while their own turns run.)
+- **Offline generator job workers** (controller ≥ 0.1.1; `dsh.offline-job/0.1`)
+  - **Why sockets are not enough:** a resident job worker keeps running a job after its stream client disconnects, so established sockets alone cannot guard it. Give the recipe a **private** `offlineJob` object:
+    ```json
+    "offlineJob": { "activeJobsPath": "/v1/offline-jobs?state=active", "drainPath": "/v1/offline-jobs/drain", "tokenFile": "/abs/path/worker.token" }
+    ```
+    - `tokenFile` is optional and must be mode 0600. **The owner creates it in place on the server** (for example `install -m 600 /dev/stdin /home/<user>/dsh-audio-controller/etc/gepard-jobworker.token` with the worker's drain bearer). The secret never leaves the server; neither the Harness plugins nor any published recipe carries it.
+    - These keys are never returned by `recipes`. They may also sit inside the `adapterMode: "offline-job"` endpoint's `offlineJob`; they are stripped there too.
+    - **gepard-1.0 jobworker (DGX v3 contract `JOBWORKER_CONTRACT_gepard-1.0.md`, public recipe `8bd7d4a6…`):** add the published recipe object unchanged to `recipes.json` and append the private block above (paths `/v1/offline-jobs?state=active`, `/v1/offline-jobs/drain`). The worker lists only non-terminal jobs; a reply that lists jobs while `active` is 0 is treated as unreadable (fail closed).
+  - **Before stopping that recipe**, the controller:
+    1. sets the worker draining;
+    2. waits up to `drainSeconds` for `active == 0`;
+    3. still active → re-opens the worker and refuses `MODEL_BUSY` with `activeJobs`;
+    4. unreadable state (non-200, bad JSON, timeout after `workerTimeoutSeconds`, missing paths or token) → re-opens it and refuses `ACTIVE_JOBS_UNREADABLE`.
+  - **Always re-opened:** a cancelled or refused switch never leaves the worker draining.
+  - **Status:** `status.active[].activeJobs` shows the count, or `null` when unreadable.
+  - **On controller 0.1.0:** do not register a resident job worker as a switchable recipe.
 - **Failure recovery**: a failed or cancelled load stops the target and restarts the previously active recipe (`restorePreviousOnFailure`), then reports `restored`.
 - Audit trail: `state/audit.jsonl`; jobs: `state/jobs/<jobId>.json`.
 
@@ -60,6 +76,9 @@ umask 077; openssl rand -hex 32 > ~/dsh-audio-controller/etc/controller.token
 3. With a client connection open to the active model port, `activate` of another recipe returns `refused / MODEL_BUSY`.
 4. With a measurement reservation, `activate` returns `RESERVED_MEASUREMENT`.
 5. A→B→A switch between two different protocol families, then a real Harness turn on each (see the library HANDOFF acceptance list).
+6. Offline job worker recipe (if configured):
+   - with a job running and its client disconnected (`?state=active` shows `streamClients: 0`), `activate` of another recipe returns `refused / MODEL_BUSY` listing the job; the worker keeps running and is not left draining;
+   - with no active job, the switch proceeds.
 
 ## 5. Tests shipped with the source
 

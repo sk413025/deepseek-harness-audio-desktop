@@ -9,8 +9,10 @@
 set -euo pipefail
 REL="$1"; VERSION="$2"
 ROOT=${DSH_ROOT}
-APP_NAME="DeepSeek Harness Audio (Local Build)"
-APP="$REL/work/app/$APP_NAME.app"
+# The product name may carry the release (e.g. "DeepSeek Harness Audio pre20"): take the one app the build produced.
+APP="$(find "$REL/work/app" -maxdepth 1 -name '*.app' -type d | head -1)"
+[ -n "$APP" ] && [ "$(find "$REL/work/app" -maxdepth 1 -name '*.app' -type d | wc -l | tr -d ' ')" = 1 ] || { echo "work/app must hold exactly one .app" >&2; exit 2; }
+APP_NAME="$(basename "$APP" .app)"
 [ -d "$APP" ] || { echo "missing $APP" >&2; exit 2; }
 DMG_NAME="DeepSeek-Harness-Audio-Local-$VERSION-arm64.dmg"
 
@@ -50,7 +52,7 @@ mkdir -p "$REL/work/dmg-root/使用說明 Guide" "$REL/work/dmg-root/examples"
 cp -R "$REL/docs/." "$REL/work/dmg-root/使用說明 Guide/"
 cp "$REL"/work/examples/* "$REL/work/dmg-root/examples/"
 rm -f "$REL/$DMG_NAME"
-hdiutil create -volname "DeepSeek Harness Audio" -srcfolder "$REL/work/dmg-root" -fs HFS+ -format UDZO -ov "$REL/$DMG_NAME" >/dev/null
+hdiutil create -volname "DeepSeek Harness Audio audio.${VERSION##*-audio.}" -srcfolder "$REL/work/dmg-root" -fs HFS+ -format UDZO -ov "$REL/$DMG_NAME" >/dev/null
 hdiutil verify "$REL/$DMG_NAME" >/dev/null
 
 node - "$REL" "$VERSION" "$APP" "$DMG_NAME" <<'NODE'

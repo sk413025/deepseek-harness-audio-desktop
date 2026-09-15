@@ -1,6 +1,6 @@
 {
   "name": "dsh-audio-model-library",
-  "version": "0.1.4",
+  "version": "0.1.6",
   "description": "DeepSeek Harness plugin: full audio model catalog, task selection and controlled activation/switching of DGX/vLLM model services, bound into dsh-dgx-audio. Shared Web/Desktop UI; optional narrow server controller proposal.",
   "private": true,
   "license": "MIT",

@@ -14,6 +14,27 @@ window.__ModuleLoader__.load({
 		* `refresh`/`activate`/`cancel`/`deactivate`.
 		*/
 		const API = "/api/dsh-audio-model-library/v1";
+		var IntentStore = class {
+			value = null;
+			seq = 0;
+			listeners = /* @__PURE__ */ new Set();
+			getSnapshot = () => this.value;
+			subscribe = (listener) => {
+				this.listeners.add(listener);
+				return () => {
+					this.listeners.delete(listener);
+				};
+			};
+			publish(intent) {
+				this.value = {
+					...intent,
+					seq: ++this.seq,
+					at: (/* @__PURE__ */ new Date()).toISOString()
+				};
+				for (const listener of this.listeners) listener();
+				return this.value;
+			}
+		};
 		var ActionError = class extends Error {
 			code;
 			extra;
@@ -287,7 +308,7 @@ window.__ModuleLoader__.load({
 				detail: recipe.healthy ? "running-not-bound" : "not-loaded"
 			};
 		}
-		function createFace(store, open) {
+		function createFace(store, open, intents) {
 			const cache = /* @__PURE__ */ new Map();
 			return {
 				contractVersion: "0.1",
@@ -314,7 +335,13 @@ window.__ModuleLoader__.load({
 						subscribe: (listener) => store.subscribe(listener)
 					};
 				},
-				open
+				open,
+				intent() {
+					return {
+						getSnapshot: intents.getSnapshot,
+						subscribe: intents.subscribe
+					};
+				}
 			};
 		}
 		//#endregion
@@ -409,6 +436,10 @@ window.__ModuleLoader__.load({
 			reason_WIRE_MODE_MISMATCH: "the catalog protocol does not match the adapter mode of this task",
 			reason_ALIGN_CONFIG_MISSING: "alignment needs align.timestampSegmentTime from the checkpoint config",
 			reason_HOST_REFUSED: "the audio adapter refused this runtime configuration",
+			reason_OFFLINE_JOB_CONFIG_MISSING: "the offline job needs protocol, path, output sample rate and channels from the runtime recipe",
+			offlineJobModel: "offline generator job · {rate} Hz · {channels} ch (one text in, one audio out)",
+			offlineJobsStillRunning: "Offline generator jobs are still running on the current model (a job keeps running without a connected client):",
+			offlineJobLine: "{recipe}: job {job} {status}, stream clients {clients}",
 			taskDeclaredOnly: "Declared by the catalog, not verified on DGX: no backend or Desktop pass is recorded for this task. A ready runtime here is not a capability pass.",
 			requestOptionsDeclared: "{count} request options declared by the catalog (listed by source, not verified for this model)",
 			requestOptionStatuses: "catalog statuses: {statuses}",
@@ -425,6 +456,23 @@ window.__ModuleLoader__.load({
 			useHere: "Use in this conversation",
 			useHint: "Selects {model} for the current conversation.",
 			useDone: "Selected {model}.",
+			useMic: "Use with microphone",
+			useMicDone: "Selected {model}. Record with the microphone, stop, then send.",
+			useLive: "Use with Live duplex",
+			useLiveHint: "Selects the chat model of this runtime and opens {model} as the Live (full duplex) microphone mode.",
+			useLiveDone: "Selected {model}. Start Live from the composer to talk with {live}; you can interrupt it while it speaks.",
+			liveNoChat: "This runtime has no chat model to pair with Live.",
+			focusTitle: "Demo models",
+			focusHint: "Only the models chosen for this setup. Activate one, then use it in the open conversation.",
+			focusPending: "Waiting for the server recipe {recipe}. Nothing can be activated yet.",
+			focusNotInCatalog: "not in the server catalog",
+			focusNeedsRefresh: "Not read from the server yet. Press Refresh.",
+			focusVoiceMissing: "Live duplex needs a voice prompt: set one in Settings → Plugins → Audio model library.",
+			focusShowAll: "Show all catalog models",
+			focusSettingsLine: "Demo focus: {models}",
+			fieldReferenceVoice: "Voice prompt for Live duplex (WAV)",
+			fieldReferenceVoiceHint: "Absolute path or ~/ on this computer. Use a recording you have the right to use, for example your own voice.",
+			saveVoice: "Save voice prompt",
 			noTarget: "Open a conversation first, then choose “Audio models” from its composer.",
 			deactivate: "Unload",
 			cancel: "Cancel",
@@ -611,6 +659,10 @@ window.__ModuleLoader__.load({
 			reason_WIRE_MODE_MISMATCH: "目录协议与此任务的适配器模式不符",
 			reason_ALIGN_CONFIG_MISSING: "对齐需要检查点配置中的 align.timestampSegmentTime",
 			reason_HOST_REFUSED: "音频适配器拒绝了此运行时配置",
+			reason_OFFLINE_JOB_CONFIG_MISSING: "离线任务需要运行时配方提供协议、路径、输出采样率与声道数",
+			offlineJobModel: "离线生成任务 · {rate} Hz · {channels} 声道（一段文本输入，一段音频输出）",
+			offlineJobsStillRunning: "当前模型仍有离线生成任务在运行（客户端断开后任务仍会继续）：",
+			offlineJobLine: "{recipe}：任务 {job} {status}，串流客户端 {clients}",
 			taskDeclaredOnly: "目录已声明，未在 DGX 实测：此任务没有后端或桌面端通过记录。这里的运行时就绪不等于能力通过。",
 			requestOptionsDeclared: "目录声明了 {count} 个请求选项（来源列出，未针对此模型验证）",
 			requestOptionStatuses: "目录状态：{statuses}",
@@ -627,6 +679,23 @@ window.__ModuleLoader__.load({
 			useHere: "在此对话中使用",
 			useHint: "为当前对话选择 {model}。",
 			useDone: "已选择 {model}。",
+			useMic: "用麦克风使用",
+			useMicDone: "已选择 {model}。用麦克风录音、停止，然后发送。",
+			useLive: "用实时双工使用",
+			useLiveHint: "选择此运行时的对话模型，并以 {model} 作为实时（全双工）麦克风模式。",
+			useLiveDone: "已选择 {model}。从输入框启动实时模式与 {live} 对话；它说话时可以打断。",
+			liveNoChat: "此运行时没有可与实时模式搭配的对话模型。",
+			focusTitle: "演示模型",
+			focusHint: "只显示此设置选定的模型。启动其中一个，然后在当前对话中使用。",
+			focusPending: "等待服务器配方 {recipe}，目前还不能启动。",
+			focusNotInCatalog: "不在服务器目录中",
+			focusNeedsRefresh: "尚未从服务器读取，请按刷新。",
+			focusVoiceMissing: "实时双工需要声音提示：在 设置 → 插件 → 音频模型库 中指定。",
+			focusShowAll: "显示全部目录模型",
+			focusSettingsLine: "演示范围：{models}",
+			fieldReferenceVoice: "实时双工声音提示（WAV）",
+			fieldReferenceVoiceHint: "此电脑上的绝对路径或 ~/ 路径。请使用你有权使用的录音，例如你自己的声音。",
+			saveVoice: "保存声音提示",
 			noTarget: "请先打开一个对话，再从输入框选择“音频模型”。",
 			deactivate: "卸载",
 			cancel: "取消",
@@ -1055,6 +1124,16 @@ window.__ModuleLoader__.load({
 								message: job.error.message
 							}) }),
 							job.error.connections ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", { children: format(t("busyConnections"), { detail: Object.entries(job.error.connections).map(([k, v]) => `${k}: ${v}`).join(", ") }) }) : null,
+							job.error.activeJobs && job.error.activeJobs.length > 0 ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("ul", {
+								className: library_module_css_default.plain,
+								"data-testid": "library-job-active-offline-jobs",
+								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("li", { children: t("offlineJobsStillRunning") }), job.error.activeJobs.map((item, index) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("li", { children: format(t("offlineJobLine"), {
+									recipe: item.recipeId ?? "",
+									job: item.jobId ?? t("unknown"),
+									status: item.status ?? t("unknown"),
+									clients: item.streamClients ?? t("unknown")
+								}) }, `${item.jobId ?? index}`))]
+							}) : null,
 							job.error.logTail ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("details", { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("summary", { children: t("logTail") }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("pre", {
 								className: library_module_css_default.pre,
 								children: job.error.logTail
@@ -1091,8 +1170,34 @@ window.__ModuleLoader__.load({
 					setUseStatus(t("noTarget"));
 					return;
 				}
-				const result = await face.selectModel(nav.sessionId, recipe.provider, model.id);
-				setUseStatus(result.ok ? format(t("useDone"), { model: model.name ?? model.id }) : format(t("saveFailed"), { message: result.message ?? "" }));
+				const live = model.interaction === "live-duplex";
+				const chosenId = live ? model.useModel ?? "" : model.id;
+				const chosen = recipe.models.find((m) => m.id === chosenId);
+				if (chosenId === "" || chosen === void 0) {
+					setUseStatus(t("liveNoChat"));
+					return;
+				}
+				const result = await face.selectModel(nav.sessionId, recipe.provider, chosenId);
+				if (!result.ok) {
+					setUseStatus(format(t("saveFailed"), { message: result.message ?? "" }));
+					return;
+				}
+				face.intents.publish({
+					sessionId: nav.sessionId,
+					provider: recipe.provider,
+					model: chosenId,
+					mode: live ? "live-duplex" : chosen.interaction ?? "typed-prompt",
+					...live ? { liveModel: {
+						provider: recipe.provider,
+						model: model.id
+					} } : {},
+					rowId: row.id,
+					recipeId: recipe.recipeId
+				});
+				setUseStatus(format(t(live ? "useLiveDone" : chosen.interaction === "recorded-turn" ? "useMicDone" : "useDone"), {
+					model: chosen.name ?? chosen.id,
+					live: model.name ?? model.id
+				}));
 			};
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("li", {
 				className: library_module_css_default.recipe,
@@ -1273,7 +1378,30 @@ window.__ModuleLoader__.load({
 									"data-statuses": JSON.stringify(model.requestOptionStatuses ?? null),
 									children: [format(t("requestOptionsDeclared"), { count: model.requestOptionCount }), model.requestOptionStatuses ? ` · ${format(t("requestOptionStatuses"), { statuses: Object.entries(model.requestOptionStatuses).map(([k, n]) => `${k} ${n}`).join(", ") })}` : ""]
 								}) : null,
-								model.liveOnly ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+								model.mode === "offline-job" && model.offlineJob ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+									className: library_module_css_default.muted,
+									"data-testid": "library-offline-job",
+									children: format(t("offlineJobModel"), {
+										rate: model.offlineJob.outputSampleRate,
+										channels: model.offlineJob.channels
+									})
+								}) : null,
+								model.liveOnly && model.interaction === "live-duplex" ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+									type: "button",
+									className: library_module_css_default.secondary,
+									disabled: !recipe.usable || model.referenceAudio === "missing" || !model.useModel,
+									title: model.referenceAudio === "missing" ? t("referenceMissing") : format(t("useLiveHint"), { model: model.name ?? model.id }),
+									onClick: () => {
+										use(model);
+									},
+									"data-testid": "library-use-live",
+									"data-interaction": model.interaction,
+									children: t("useLive")
+								}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+									className: library_module_css_default.muted,
+									"data-testid": "library-live-only",
+									children: t("liveOnly")
+								})] }) : model.liveOnly ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 									className: library_module_css_default.muted,
 									"data-testid": "library-live-only",
 									children: t("liveOnly")
@@ -1286,7 +1414,8 @@ window.__ModuleLoader__.load({
 										use(model);
 									},
 									"data-testid": "library-use",
-									children: t("useHere")
+									"data-interaction": model.interaction ?? "",
+									children: model.interaction === "recorded-turn" ? t("useMic") : t("useHere")
 								})
 							]
 						}, model.id))
@@ -1714,6 +1843,80 @@ window.__ModuleLoader__.load({
 				]
 			});
 		}
+		/** The configured focus models (plugin 0.1.6): one card each with its runtimes, or a visible pending line. */
+		function FocusBoard({ t, face, doc, snapshot }) {
+			const intent = (0, react.useSyncExternalStore)(face.intents.subscribe, face.intents.getSnapshot);
+			const adapterLegacy = doc.adapter.binding === "settings";
+			const focusRows = (doc.focus?.rows ?? []).map((id) => ({
+				id,
+				row: doc.rows.find((r) => r.id === id)
+			}));
+			const catalogRead = doc.catalogs.some((c) => c.source);
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("section", {
+				className: library_module_css_default.server,
+				"data-testid": "library-focus",
+				"data-last-intent": intent === null ? "" : JSON.stringify(intent),
+				children: [
+					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+						className: library_module_css_default.serverHead,
+						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("strong", { children: t("focusTitle") }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+							className: library_module_css_default.muted,
+							children: t("focusHint")
+						})]
+					}),
+					doc.focus?.referenceVoiceConfigured === false ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+						className: library_module_css_default.muted,
+						"data-testid": "library-focus-voice",
+						children: t("focusVoiceMissing")
+					}) : null,
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("ul", {
+						className: library_module_css_default.recipes,
+						children: focusRows.map(({ id, row }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("li", {
+							className: library_module_css_default.recipe,
+							"data-testid": "library-focus-row",
+							"data-row": id,
+							"data-residency": row?.residency ?? "missing",
+							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+								className: library_module_css_default.recipeHead,
+								children: [
+									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+										className: library_module_css_default.recipeName,
+										children: row?.displayName ?? id
+									}),
+									row !== void 0 ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+										className: `${library_module_css_default.badge} ${row.residency === "active" ? library_module_css_default.badgeOk : ""}`,
+										children: residencyLabel(t, row.residency)
+									}) : null,
+									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("code", {
+										className: library_module_css_default.code,
+										children: id
+									})
+								]
+							}), row === void 0 ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+								className: catalogRead ? library_module_css_default.bad : library_module_css_default.muted,
+								"data-testid": "library-focus-unread",
+								children: t(catalogRead ? "focusNotInCatalog" : "focusNeedsRefresh")
+							}) : row.recipes.length === 0 ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+								className: library_module_css_default.muted,
+								"data-testid": "library-focus-pending",
+								children: format(t("focusPending"), { recipe: row.catalogRecipeId ?? "?" })
+							}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("ul", {
+								className: library_module_css_default.recipes,
+								children: row.recipes.map((recipe) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)(RecipeCard, {
+									t,
+									face,
+									row,
+									recipe,
+									server: doc.servers.find((s) => s.id === recipe.serverId),
+									snapshot,
+									adapterLegacy
+								}, `${recipe.serverId}/${recipe.recipeId}`))
+							})]
+						}, id))
+					})
+				]
+			});
+		}
 		const uniq = (values) => [...new Set(values.filter((v) => typeof v === "string" && v !== ""))].sort();
 		function LibraryView(props) {
 			const t = (key, values) => format(props.t(key), values);
@@ -1732,7 +1935,9 @@ window.__ModuleLoader__.load({
 				evidence: ""
 			});
 			const [showAssets, setShowAssets] = (0, react.useState)(false);
+			const [showAll, setShowAll] = (0, react.useState)(false);
 			const doc = snapshot.doc;
+			const focusActive = doc?.focus?.active === true;
 			const rows = doc?.rows ?? [];
 			const options = (0, react.useMemo)(() => ({
 				role: uniq(rows.filter((r) => showAssets || r.selectable).map((r) => r.role)),
@@ -1906,7 +2111,23 @@ window.__ModuleLoader__.load({
 							]
 						}, server.id);
 					}),
-					rows.length > 0 ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+					focusActive && doc !== null ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [!showAll ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(FocusBoard, {
+						t,
+						face,
+						doc,
+						snapshot
+					}) : null, /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", {
+						className: library_module_css_default.check,
+						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
+							type: "checkbox",
+							checked: showAll,
+							onChange: (event) => {
+								setShowAll(event.target.checked);
+							},
+							"data-testid": "library-show-all"
+						}), t("focusShowAll")]
+					})] }) : null,
+					rows.length > 0 && (!focusActive || showAll) ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 						className: library_module_css_default.filters,
 						children: [
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
@@ -2112,6 +2333,7 @@ window.__ModuleLoader__.load({
 			const [invalid, setInvalid] = (0, react.useState)([]);
 			const [status, setStatus] = (0, react.useState)("");
 			const [saving, setSaving] = (0, react.useState)(false);
+			const [voice, setVoice] = (0, react.useState)(void 0);
 			if (settings.status === "unavailable") return null;
 			const servers = Array.isArray(settings.value?.servers) ? settings.value.servers : [];
 			const writable = settings.writable;
@@ -2172,6 +2394,35 @@ window.__ModuleLoader__.load({
 				};
 				if (await write([...servers, server])) setForm(EMPTY);
 			};
+			const storedVoice = typeof settings.value?.referenceVoiceFile === "string" ? settings.value.referenceVoiceFile : "";
+			const voiceText = voice ?? storedVoice;
+			const saveVoice = async () => {
+				const value = voiceText.trim();
+				if (!(value.startsWith("/") || value.startsWith("~/")) || !/\.wav$/iu.test(value)) {
+					setInvalid(["referenceVoiceFile"]);
+					setStatus(t("invalid"));
+					return;
+				}
+				setInvalid([]);
+				setSaving(true);
+				setStatus(t("saving"));
+				try {
+					await face.scope.mutate([{
+						op: "set",
+						path: ["referenceVoiceFile"],
+						value
+					}]);
+					if (face.scope.getSnapshot().value?.referenceVoiceFile !== value) throw new Error("the host refused the update");
+					setVoice(void 0);
+					setStatus(t("saved"));
+					face.store.load();
+				} catch (error) {
+					setStatus(t("saveFailed", { message: error instanceof Error ? error.message : String(error) }));
+				} finally {
+					setSaving(false);
+				}
+			};
+			const focusRows = settings.value?.focus?.rows ?? [];
 			const field = (key, label, hint, placeholder) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", {
 				className: library_module_css_default.field,
 				children: [
@@ -2271,6 +2522,51 @@ window.__ModuleLoader__.load({
 								]
 							}, server.id))
 						}),
+						/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("form", {
+							className: library_module_css_default.form,
+							onSubmit: (event) => {
+								event.preventDefault();
+								saveVoice();
+							},
+							"data-testid": "library-settings-voice",
+							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", {
+								className: library_module_css_default.field,
+								children: [
+									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+										className: library_module_css_default.label,
+										children: t("fieldReferenceVoice")
+									}),
+									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
+										className: `${library_module_css_default.input} ${invalid.includes("referenceVoiceFile") ? library_module_css_default.inputBad : ""}`,
+										value: voiceText,
+										placeholder: "~/Voices/my-voice.wav",
+										disabled: !writable,
+										"aria-invalid": invalid.includes("referenceVoiceFile"),
+										onChange: (event) => {
+											setVoice(event.target.value);
+										},
+										"data-testid": "library-field-referenceVoiceFile"
+									}),
+									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+										className: library_module_css_default.hint,
+										children: t("fieldReferenceVoiceHint")
+									})
+								]
+							}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+								className: library_module_css_default.actions,
+								children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+									type: "submit",
+									className: library_module_css_default.secondary,
+									disabled: !writable || saving || voiceText.trim() === storedVoice,
+									children: t("saveVoice")
+								})
+							})]
+						}),
+						focusRows.length > 0 ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+							className: library_module_css_default.muted,
+							"data-testid": "library-settings-focus",
+							children: t("focusSettingsLine", { models: focusRows.join(", ") })
+						}) : null,
 						/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("form", {
 							className: library_module_css_default.form,
 							onSubmit: (event) => {
@@ -2388,6 +2684,7 @@ window.__ModuleLoader__.load({
 				zh
 			}), "audio-model-library: dictionaries");
 			const store = new LibraryStore();
+			const intents = new IntentStore();
 			const nav = new NavStore();
 			ctx.effect(() => () => {
 				store.dispose();
@@ -2409,10 +2706,11 @@ window.__ModuleLoader__.load({
 				});
 				ctx.layout.selectPanel(PANEL_ID);
 			};
-			ctx.effect(() => ctx.reflect.provide("audioModelLibrary", createFace(store, open)), "audio-model-library: client service");
+			ctx.effect(() => ctx.reflect.provide("audioModelLibrary", createFace(store, open, intents)), "audio-model-library: client service");
 			const viewFace = {
 				store,
 				nav,
+				intents,
 				async selectModel(sessionId, provider, model) {
 					try {
 						const result = await ctx.remote.session.selectModel({

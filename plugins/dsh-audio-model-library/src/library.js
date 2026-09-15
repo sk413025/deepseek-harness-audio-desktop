@@ -110,6 +110,17 @@ export class Library {
     return binder.kind === 'service' ? `${this.config.bindingProvider}-${providerSlug(server.id)}-${providerSlug(recipe.id)}`.slice(0, 96) : this.config.bindingProvider
   }
 
+  /** Demo focus (0.1.6): rows shown and recipes offered. Inactive when no rows are listed. */
+  focus() {
+    const focus = this.config.focus ?? { rows: [], recipes: [] }
+    return { active: focus.rows.length > 0, rows: new Set(focus.rows), recipes: new Set(focus.recipes) }
+  }
+
+  recipeInFocus(recipe, focus = this.focus()) {
+    if (!focus.active) return true
+    return focus.recipes.size > 0 ? focus.recipes.has(recipe.id) : (recipe.catalogIds ?? []).some(id => focus.rows.has(id))
+  }
+
   /** Service mode: every recipe with a bindable task is registered, with its activation state. */
   syncService() {
     const binder = this.binder()
@@ -120,8 +131,11 @@ export class Library {
     for (const server of this.config.servers) {
       const entry = this.state.servers[server.id]
       if (!entry || !server.modelHost) continue
+      const focus = this.focus()
       for (const recipe of entry.recipes ?? []) {
-        const served = [...rows.values()].filter(row => recipesForRow(row, [recipe]).length > 0 && row.role !== 'auxiliary_asset')
+        // Focus: only the demo recipes register models, so the conversation model picker lists only them.
+        if (!this.recipeInFocus(recipe, focus)) continue
+        const served = [...rows.values()].filter(row => recipesForRow(row, [recipe]).length > 0 && row.role !== 'auxiliary_asset' && (!focus.active || focus.rows.has(row.id)))
         if (served.length === 0) continue
         let built
         try {
@@ -246,10 +260,12 @@ export class Library {
         }
       }
     }
+    const focus = this.focus()
     return {
       contractVersion: CONTRACT_VERSION,
       plugin: { name: PLUGIN_NAME, version: PLUGIN_VERSION },
       configured: config.servers.length > 0,
+      focus: { active: focus.active, rows: [...focus.rows], recipes: [...focus.recipes], referenceVoiceConfigured: typeof config.referenceVoiceFile === 'string' },
       servers: config.servers.map((server) => {
         const entry = this.state.servers[server.id]
         return {
@@ -282,7 +298,7 @@ export class Library {
     const matched = []
     for (const server of this.config.servers) {
       const entry = this.state.servers[server.id]
-      for (const recipe of recipesForRow(row, entry?.recipes ?? [])) {
+      for (const recipe of recipesForRow(row, entry?.recipes ?? []).filter(r => this.recipeInFocus(r))) {
         matched.push(recipe)
         const active = (entry?.status?.active ?? []).find(a => a.recipeId === recipe.id)
         const healthy = active?.healthy === true && active?.modelsListed === true
@@ -331,6 +347,7 @@ export class Library {
     return {
       ...row,
       selectable: row.role !== 'auxiliary_asset',
+      focused: this.focus().active ? this.focus().rows.has(row.id) : null,
       tasks: preferred ? preferred.tasks : taskBindings(row, null, binder.features),
       recipes,
       residency,
@@ -417,7 +434,9 @@ export class Library {
     const row = this.catalogRows().get(rowId)
     if (row === undefined) throw new LibraryError('UNKNOWN_ROW', `catalog row ${rowId} is not loaded; refresh the library`, 404)
     if (row.role === 'auxiliary_asset') throw new LibraryError('TASK_NOT_BINDABLE', `${rowId} is an auxiliary asset, not a selectable model`, 409)
-    const candidates = recipesForRow(row, entry.recipes ?? [])
+    const focus = this.focus()
+    if (focus.active && !focus.rows.has(rowId)) throw new LibraryError('NOT_IN_FOCUS', `${rowId} is not one of the demo models configured in focus.rows`, 409)
+    const candidates = recipesForRow(row, entry.recipes ?? []).filter(r => this.recipeInFocus(r, focus))
     let recipe
     if (recipeId) recipe = candidates.find(r => r.id === recipeId)
     else recipe = candidates.find(r => (entry.status?.active ?? []).some(a => a.recipeId === r.id)) ?? (candidates.length === 1 ? candidates[0] : undefined)

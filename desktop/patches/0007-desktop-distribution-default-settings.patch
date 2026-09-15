@@ -1,0 +1,330 @@
+diff --git a/apps/desktop/electron-builder.config.mjs b/apps/desktop/electron-builder.config.mjs
+index 6842f41..93cdc2c 100644
+--- a/apps/desktop/electron-builder.config.mjs
++++ b/apps/desktop/electron-builder.config.mjs
+@@ -79,6 +79,8 @@ export function createElectronBuilderConfig(
+     extraResources: [
+       { from: buildPaths.runtime, to: 'runtime' },
+       { from: buildPaths.seed, to: 'seed' },
++      // LOCAL PATCH (sbplab): distribution default settings seeded into settings.yaml on first launch (main.ts).
++      ...(localUnsigned && env.DSH_DESKTOP_LOCAL_DISTRIBUTION_SETTINGS ? [{ from: env.DSH_DESKTOP_LOCAL_DISTRIBUTION_SETTINGS, to: 'distribution-settings.yaml' }] : []),
+     ],
+     mac: localUnsigned
+       ? {
+diff --git a/apps/desktop/src/distribution-settings.ts b/apps/desktop/src/distribution-settings.ts
+new file mode 100644
+index 0000000..53192a7
+--- /dev/null
++++ b/apps/desktop/src/distribution-settings.ts
+@@ -0,0 +1,186 @@
++/**
++ * LOCAL PATCH (sbplab): distribution default settings.
++ *
++ * A local build may ship `Resources/distribution-settings.yaml`, a block-style YAML document whose top-level keys are
++ * settings namespaces (for example the audio model library's DGX server). Before the host starts, each of those
++ * namespaces that the user's `settings.yaml` does not contain, and that this profile never seeded before, is appended
++ * to that document as text, so the user's own comments and formatting stay untouched. User values are never
++ * overwritten, and a namespace the user deletes later is not seeded again (the record lives in the profile root).
++ * A `...File:` line whose absolute or `~/` path does not exist on this computer is left out, so a plugin reports that
++ * setting as not configured instead of failing on a missing file.
++ */
++
++import { createHash, randomBytes } from 'node:crypto'
++import { existsSync } from 'node:fs'
++import { mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises'
++import { homedir } from 'node:os'
++import { dirname, isAbsolute, join } from 'node:path'
++
++export interface DistributionSettingsOptions {
++  /** Distribution document shipped with the app; absent file = nothing to do. */
++  readonly source: string
++  /** The user's settings document (`$DSH_HOME/settings.yaml`). */
++  readonly settings: string
++  /** Seed record (`<profile root>/distribution-settings.json`). */
++  readonly state: string
++  readonly releaseTag?: string | undefined
++  readonly now?: () => Date
++  readonly lockWaitMs?: number
++}
++
++export interface DistributionSettingsResult {
++  readonly applied: readonly string[]
++  readonly skipped: ReadonlyArray<{ readonly namespace: string, readonly reason: 'present' | 'seeded-before' }>
++  readonly droppedMissingFiles: readonly string[]
++  readonly refused?: string | undefined
++}
++
++interface SeedState {
++  readonly schemaVersion: 1
++  seeded: Record<string, { at: string, releaseTag?: string, sha256: string }>
++}
++
++const TOP_KEY = /^([A-Za-z0-9_][A-Za-z0-9_.-]*)\s*:(?:\s|$)/u
++const FILE_LINE = /^(\s*)([A-Za-z0-9_]*File)\s*:\s*(['"]?)([^'"#\n]+?)\3\s*(?:#.*)?$/u
++
++/** Top-level keys of a block-style YAML document; `undefined` for flow/JSON documents, which are left alone. */
++export function topLevelKeys(text: string): Set<string> | undefined {
++  const lines = text.replace(/^﻿/u, '').split(/\r?\n/u)
++  const first = lines.find(line => line.trim() !== '' && !line.trimStart().startsWith('#') && line.trim() !== '---')
++  if (first !== undefined && /^\s*[{[]/u.test(first)) return undefined
++  const keys = new Set<string>()
++  for (const line of lines) {
++    const match = TOP_KEY.exec(line)
++    if (match) keys.add(match[1]!)
++  }
++  return keys
++}
++
++/** Split a block-style distribution document into its top-level namespace blocks (leading comments stay attached). */
++export function namespaceBlocks(text: string): Array<{ namespace: string, block: string }> {
++  const blocks: Array<{ namespace: string, lines: string[] }> = []
++  let pending: string[] = []
++  for (const line of text.replace(/^﻿/u, '').split(/\r?\n/u)) {
++    if (line.trim() === '---') continue
++    const match = TOP_KEY.exec(line)
++    if (match) {
++      blocks.push({ namespace: match[1]!, lines: [...pending, line] })
++      pending = []
++    } else if (blocks.length === 0 || line.trimStart().startsWith('#') || line.trim() === '') {
++      // Comments and blank lines belong to whatever follows them: the next namespace or more of the current one.
++      pending.push(line)
++    } else {
++      const last = blocks.at(-1)!
++      last.lines.push(...pending, line)
++      pending = []
++    }
++  }
++  return blocks.map(({ namespace, lines }) => {
++    while (lines.length > 0 && lines.at(-1)!.trim() === '') lines.pop()
++    return { namespace, block: `${lines.join('\n')}\n` }
++  })
++}
++
++function expandHome(path: string): string {
++  return path === '~' || path.startsWith('~/') ? join(homedir(), path.slice(2)) : path
++}
++
++/** Drop `...File:` lines whose path is missing on this computer. */
++export function dropMissingFiles(block: string, exists: (path: string) => boolean = existsSync): { block: string, dropped: string[] } {
++  const dropped: string[] = []
++  const lines = block.split('\n').filter((line) => {
++    const match = FILE_LINE.exec(line)
++    if (!match) return true
++    const value = match[4]!.trim()
++    const path = expandHome(value)
++    if (!isAbsolute(path) || exists(path)) return true
++    dropped.push(`${match[2]}: ${value}`)
++    return false
++  })
++  return { block: lines.join('\n'), dropped }
++}
++
++async function withLock<T>(filename: string, waitMs: number, operation: () => Promise<T>): Promise<T> {
++  // Same protocol as @deepseek-ai/dsh-atomic-write withFileLock: a `wx`-created `<file>.lock` sibling.
++  const lock = `${filename}.lock`
++  const deadline = Date.now() + waitMs
++  let delay = 10
++  for (;;) {
++    try {
++      const handle = await open(lock, 'wx')
++      await handle.close()
++      break
++    } catch (error) {
++      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
++      if (Date.now() >= deadline) throw new Error(`distribution settings: ${lock} is held by another writer`)
++      await new Promise(resolve => setTimeout(resolve, delay))
++      delay = Math.min(delay * 2, 200)
++    }
++  }
++  try {
++    return await operation()
++  } finally {
++    await rm(lock, { force: true })
++  }
++}
++
++async function writeAtomic(filename: string, text: string, mode: number): Promise<void> {
++  const temp = `${filename}.${randomBytes(6).toString('hex')}.tmp`
++  await writeFile(temp, text, { mode, flag: 'wx' })
++  await rename(temp, filename)
++}
++
++async function readText(filename: string): Promise<string | undefined> {
++  try {
++    return await readFile(filename, 'utf8')
++  } catch (error) {
++    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
++    throw error
++  }
++}
++
++/** Seed missing distribution namespaces into the user's settings document. */
++export async function seedDistributionSettings(options: DistributionSettingsOptions): Promise<DistributionSettingsResult> {
++  const source = await readText(options.source)
++  if (source === undefined) return { applied: [], skipped: [], droppedMissingFiles: [] }
++  if (topLevelKeys(source) === undefined) return { applied: [], skipped: [], droppedMissingFiles: [], refused: 'distribution document is not block-style YAML' }
++  const blocks = namespaceBlocks(source)
++  const now = (options.now ?? (() => new Date()))().toISOString()
++  await mkdir(dirname(options.settings), { recursive: true, mode: 0o700 })
++  return withLock(options.settings, options.lockWaitMs ?? 2000, async () => {
++    const current = await readText(options.settings)
++    const keys = current === undefined ? new Set<string>() : topLevelKeys(current)
++    if (keys === undefined) return { applied: [], skipped: [], droppedMissingFiles: [], refused: 'settings document is not block-style YAML; left unchanged' }
++    const stateText = await readText(options.state)
++    let state: SeedState = { schemaVersion: 1, seeded: {} }
++    if (stateText !== undefined) {
++      try {
++        const parsed = JSON.parse(stateText) as Partial<SeedState>
++        if (parsed && typeof parsed.seeded === 'object' && parsed.seeded !== null) state = { schemaVersion: 1, seeded: { ...parsed.seeded } }
++      } catch {
++        // A damaged record seeds nothing new rather than risk re-adding namespaces the user removed.
++        return { applied: [], skipped: [], droppedMissingFiles: [], refused: `seed record ${options.state} is unreadable` }
++      }
++    }
++    const applied: string[] = []
++    const skipped: Array<{ namespace: string, reason: 'present' | 'seeded-before' }> = []
++    const droppedMissingFiles: string[] = []
++    let append = ''
++    for (const { namespace, block } of blocks) {
++      if (keys.has(namespace)) { skipped.push({ namespace, reason: 'present' }); continue }
++      if (state.seeded[namespace] !== undefined) { skipped.push({ namespace, reason: 'seeded-before' }); continue }
++      const kept = dropMissingFiles(block)
++      droppedMissingFiles.push(...kept.dropped.map(line => `${namespace}.${line}`))
++      append += kept.block
++      applied.push(namespace)
++      state.seeded[namespace] = { at: now, ...(options.releaseTag ? { releaseTag: options.releaseTag } : {}), sha256: createHash('sha256').update(block).digest('hex') }
++    }
++    if (applied.length === 0) return { applied, skipped, droppedMissingFiles }
++    const header = `# Added by DeepSeek Harness Audio${options.releaseTag ? ` ${options.releaseTag}` : ''} distribution defaults (${now}); edit freely, it is not added again.\n`
++    const base = current === undefined || current.trim() === '' ? '' : current.endsWith('\n') ? `${current}\n` : `${current}\n\n`
++    await writeAtomic(options.settings, `${base}${header}${append}`, 0o600)
++    await mkdir(dirname(options.state), { recursive: true })
++    await writeAtomic(options.state, `${JSON.stringify(state, null, 2)}\n`, 0o600)
++    return { applied, skipped, droppedMissingFiles }
++  })
++}
+diff --git a/apps/desktop/src/main.ts b/apps/desktop/src/main.ts
+index c6d31d6..8c43c0a 100644
+--- a/apps/desktop/src/main.ts
++++ b/apps/desktop/src/main.ts
+@@ -15,6 +15,8 @@ import {
+   type IpcMainInvokeEvent,
+ } from 'electron'
+ import { decidePermissionCheck, decidePermissionRequest } from './permissions.ts'
++import { seedDistributionSettings } from './distribution-settings.ts'
++import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
+ import { resolveDesktopPaths } from './paths.ts'
+ import { DesktopProjectManager, type DesktopProjectHooks } from './project-manager.ts'
+ import { DesktopHostProcess } from './host-process.ts'
+@@ -236,6 +238,18 @@ async function main(): Promise<void> {
+     },
+   }
+ 
++  // LOCAL PATCH (sbplab): distribution default settings (Resources/distribution-settings.yaml) fill namespaces the user
++  // does not have yet, before the host reads settings.yaml. A failure is logged and never blocks launch.
++  if (app.isPackaged) {
++    await seedDistributionSettings({
++      source: join(process.resourcesPath, 'distribution-settings.yaml'),
++      settings: join(resolveDshHome(), 'settings.yaml'),
++      state: join(paths.root, 'distribution-settings.json'),
++      releaseTag: localReleaseTag(),
++    }).then((result) => {
++      if (result.applied.length > 0 || result.refused !== undefined) console.info(`dsh desktop: distribution settings ${JSON.stringify(result)}`)
++    }, (error: unknown) => { console.warn(`dsh desktop: distribution settings not applied: ${errorOf(error, 'unknown error').message}`) })
++  }
+   if (development === undefined) {
+     await manager.applyRelease(resources.seed, app.getVersion(), {
+       ...hooks,
+diff --git a/apps/desktop/tests/distribution-settings.spec.ts b/apps/desktop/tests/distribution-settings.spec.ts
+new file mode 100644
+index 0000000..ca958f6
+--- /dev/null
++++ b/apps/desktop/tests/distribution-settings.spec.ts
+@@ -0,0 +1,87 @@
++import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { afterEach, beforeEach, describe, expect, it } from 'vitest'
++import { dropMissingFiles, namespaceBlocks, seedDistributionSettings, topLevelKeys } from '../src/distribution-settings.ts'
++
++const DISTRIBUTION = `# library server
++dsh-audio-model-library:
++  servers:
++    - id: dgx-spark
++      modelHost: 100.83.70.119
++  referenceVoiceFile: /definitely/missing/voice.wav
++dsh-dgx-audio:
++  routes: []
++`
++
++describe('distribution settings seed', () => {
++  let dir: string
++  beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'dsh-dist-settings-')) })
++  afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
++
++  const options = () => ({ source: join(dir, 'distribution-settings.yaml'), settings: join(dir, 'home', 'settings.yaml'), state: join(dir, 'profile', 'distribution-settings.json'), releaseTag: 'audio.2-test', now: () => new Date('2026-09-15T10:00:00Z') })
++
++  it('reads top-level keys of block YAML and refuses flow documents', () => {
++    expect([...topLevelKeys('# c\nui-onboarding: { a: 1 }\nagent-default-model:\n  provider: x\n')!]).toEqual(['ui-onboarding', 'agent-default-model'])
++    expect(topLevelKeys('{ "a": 1 }')).toBeUndefined()
++    expect(namespaceBlocks(DISTRIBUTION).map(block => block.namespace)).toEqual(['dsh-audio-model-library', 'dsh-dgx-audio'])
++    expect(namespaceBlocks(DISTRIBUTION)[0]!.block.startsWith('# library server\n')).toBe(true)
++  })
++
++  it('drops file settings whose path is missing and keeps existing ones', () => {
++    const kept = dropMissingFiles('a:\n  voiceFile: /missing.wav\n  otherFile: /present.wav\n', path => path === '/present.wav')
++    expect(kept.block).toBe('a:\n  otherFile: /present.wav\n')
++    expect(kept.dropped).toEqual(['voiceFile: /missing.wav'])
++  })
++
++  it('appends only missing namespaces, keeps user text, and never re-seeds a removed namespace', async () => {
++    const o = options()
++    await writeFile(o.source, DISTRIBUTION)
++    const user = '# my comment\nagent-default-model: { provider: p, model: m }\ndsh-dgx-audio:\n  routes:\n    - provider: mine\n'
++    await mkdir(join(dir, 'home'))
++    await writeFile(o.settings, user)
++    const first = await seedDistributionSettings(o)
++    expect(first.applied).toEqual(['dsh-audio-model-library'])
++    expect(first.skipped).toEqual([{ namespace: 'dsh-dgx-audio', reason: 'present' }])
++    expect(first.droppedMissingFiles).toEqual(['dsh-audio-model-library.referenceVoiceFile: /definitely/missing/voice.wav'])
++    const after = await readFile(o.settings, 'utf8')
++    expect(after.startsWith(user)).toBe(true)
++    expect(after).toContain('modelHost: 100.83.70.119')
++    expect(after).not.toContain('referenceVoiceFile')
++    expect(after.match(/provider: mine/gu)).toHaveLength(1)
++
++    // Second launch: nothing new.
++    expect((await seedDistributionSettings(o)).applied).toEqual([])
++    // The user deletes the seeded section: it stays deleted.
++    await writeFile(o.settings, user)
++    const third = await seedDistributionSettings(o)
++    expect(third.applied).toEqual([])
++    expect(third.skipped).toContainEqual({ namespace: 'dsh-audio-model-library', reason: 'seeded-before' })
++    expect(await readFile(o.settings, 'utf8')).toBe(user)
++  })
++
++  it('creates the settings document on a fresh home and leaves flow documents alone', async () => {
++    const o = options()
++    await writeFile(o.source, DISTRIBUTION)
++    const fresh = await seedDistributionSettings(o)
++    expect(fresh.applied).toEqual(['dsh-audio-model-library', 'dsh-dgx-audio'])
++    expect(topLevelKeys(await readFile(o.settings, 'utf8'))).toEqual(new Set(['dsh-audio-model-library', 'dsh-dgx-audio']))
++
++    const flow = { ...o, settings: join(dir, 'flow.yaml'), state: join(dir, 'flow-state.json') }
++    await writeFile(flow.settings, '{ "ui-onboarding": {} }\n')
++    expect((await seedDistributionSettings(flow)).refused).toMatch(/not block-style/u)
++    expect(await readFile(flow.settings, 'utf8')).toBe('{ "ui-onboarding": {} }\n')
++  })
++
++  it('waits for and respects the settings writer lock', async () => {
++    const o = { ...options(), lockWaitMs: 50 }
++    await writeFile(o.source, DISTRIBUTION)
++    await mkdir(join(dir, 'home'))
++    await writeFile(`${o.settings}.lock`, '')
++    await expect(seedDistributionSettings(o)).rejects.toThrow(/held by another writer/u)
++  })
++
++  it('does nothing without a distribution document', async () => {
++    expect(await seedDistributionSettings(options())).toEqual({ applied: [], skipped: [], droppedMissingFiles: [] })
++  })
++})

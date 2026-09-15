@@ -43,9 +43,13 @@ window.__ModuleLoader__.load({
 			fieldName: "Name",
 			fieldNamePlaceholder: "Lab speech server",
 			fieldUrl: "Server address",
-			fieldUrlHint: "Base URL ending in /v1, e.g. http://192.168.1.20:8000/v1",
+			fieldUrlHint: "Base URL ending in /v1. Pre-filled with the DGX Spark address; change it only for another server.",
+			presets: "DGX Spark:",
+			managedTitle: "From Audio models",
+			managedBody: "These DGX Spark servers are set up by the Audio models page, which also switches the model on the DGX. Nothing to add here.",
+			duplicateOfManaged: "This address is already provided by Audio models above; adding it here creates duplicate entries in the model picker.",
 			fieldModel: "Model",
-			fieldModelHint: "The model name the server expects, e.g. Qwen/Qwen2.5-Omni-7B",
+			fieldModelHint: "The exact model name the server expects (pre-filled for the DGX Spark).",
 			fieldMode: "Use",
 			fieldSpeech: "Ask for spoken replies",
 			fieldKeyEnv: "API key environment variable (optional)",
@@ -104,9 +108,13 @@ window.__ModuleLoader__.load({
 			fieldName: "名称",
 			fieldNamePlaceholder: "实验室语音服务器",
 			fieldUrl: "服务器地址",
-			fieldUrlHint: "以 /v1 结尾的 Base URL，例如 http://192.168.1.20:8000/v1",
+			fieldUrlHint: "以 /v1 结尾的 Base URL。已预填 DGX Spark 地址；只有连接其他服务器时才需要修改。",
+			presets: "DGX Spark：",
+			managedTitle: "来自“音频模型”",
+			managedBody: "这些 DGX Spark 服务器已由“音频模型”页面配置，该页面也会切换 DGX 上的模型。这里无需再添加。",
+			duplicateOfManaged: "上方“音频模型”已提供这个地址；在这里再添加会让模型选择器出现重复项。",
 			fieldModel: "模型",
-			fieldModelHint: "服务器使用的模型名称，例如 Qwen/Qwen2.5-Omni-7B",
+			fieldModelHint: "服务器使用的准确模型名称（已为 DGX Spark 预填）。",
 			fieldMode: "用途",
 			fieldSpeech: "请求语音回复",
 			fieldKeyEnv: "API 密钥环境变量（可选）",
@@ -136,7 +144,7 @@ window.__ModuleLoader__.load({
 			return text.replaceAll(/\{([^{}]+)\}/gu, (placeholder, key) => values[key] ?? placeholder);
 		}
 		//#endregion
-		//#region \0dsh-css:src/client/kit.module.css.mjs
+		//#region \0dsh-css:packages/third-party/dsh-audio-release-kit/src/client/kit.module.css.mjs
 		const css = "._2wzUyW_chipWrap{align-items:center;gap:8px;min-width:0;display:inline-flex}._2wzUyW_chip{border:.5px solid var(--dsw-alias-border-l4);background:var(--dsw-alias-bg-layer-3);height:28px;color:var(--dsw-alias-label-primary);font:inherit;white-space:nowrap;cursor:pointer;border-radius:999px;align-items:center;gap:6px;padding:0 10px;font-size:12px;display:inline-flex}._2wzUyW_chip:hover{border-color:var(--dsw-alias-label-dimmed)}._2wzUyW_chip:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}._2wzUyW_chip:disabled{opacity:.6;cursor:progress}._2wzUyW_chipDot{background:var(--dsw-alias-brand-primary);border-radius:50%;width:6px;height:6px}._2wzUyW_chipError{color:var(--dsw-alias-label-tertiary);white-space:nowrap;text-overflow:ellipsis;max-width:240px;font-size:12px;overflow:hidden}._2wzUyW_card{border:.5px solid var(--dsw-alias-border-l4);background:var(--dsw-alias-bg-layer-3);border-radius:16px;list-style:none;transition:border-color .16s,background .16s}._2wzUyW_card:hover{border-color:var(--dsw-alias-label-dimmed)}._2wzUyW_cardOpen{background:var(--dsw-alias-bg-layer-2);border-color:var(--dsw-alias-label-dimmed)}._2wzUyW_header{appearance:none;width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer;background:0 0;border:0;border-radius:12px;align-items:center;gap:12px;padding:14px 16px;display:flex}._2wzUyW_header:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:-2px}._2wzUyW_headText{flex-direction:column;flex:1;gap:4px;min-width:0;display:flex}._2wzUyW_name{color:var(--dsw-alias-label-primary);font-size:15px;font-weight:600;line-height:1.4}._2wzUyW_description{color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:1.5}._2wzUyW_count{border:.5px solid var(--dsw-alias-border-l4);text-align:center;min-width:22px;color:var(--dsw-alias-label-tertiary);border-radius:999px;padding:1px 7px;font-size:12px}._2wzUyW_chevron{color:var(--dsw-alias-label-tertiary);flex:none;line-height:1;transition:transform .16s}._2wzUyW_chevronOpen{transform:rotate(180deg)}._2wzUyW_body{border-top:.5px solid var(--dsw-alias-border-l2);flex-direction:column;gap:14px;margin:0 16px;padding:12px 0 14px;display:flex}._2wzUyW_muted{color:var(--dsw-alias-label-tertiary);margin:0;font-size:13px;line-height:1.5}._2wzUyW_empty{border:.5px dashed var(--dsw-alias-border-l4);border-radius:12px;padding:12px 14px}._2wzUyW_emptyTitle{color:var(--dsw-alias-label-primary);margin:0 0 4px;font-size:14px;font-weight:600}._2wzUyW_routes{flex-direction:column;gap:10px;margin:0;padding:0;list-style:none;display:flex}._2wzUyW_route{background:var(--dsw-alias-bg-layer-3);border:.5px solid var(--dsw-alias-border-l2);border-radius:12px;flex-direction:column;gap:8px;padding:12px 14px;display:flex}._2wzUyW_routeHead{flex-wrap:wrap;align-items:baseline;gap:8px 12px;display:flex}._2wzUyW_routeName{color:var(--dsw-alias-label-primary);font-size:14px;font-weight:600}._2wzUyW_routeUrl{color:var(--dsw-alias-label-tertiary);overflow-wrap:anywhere;font-size:12px}._2wzUyW_routeMeta{color:var(--dsw-alias-label-tertiary);font-size:12px}._2wzUyW_modelList{flex-direction:column;gap:6px;margin:0;padding:0;list-style:none;display:flex}._2wzUyW_modelRow{flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:13px;display:flex}._2wzUyW_modelName{color:var(--dsw-alias-label-primary)}._2wzUyW_pill{border:.5px solid var(--dsw-alias-border-l4);color:var(--dsw-alias-label-secondary,var(--dsw-alias-label-tertiary));border-radius:999px;padding:1px 8px;font-size:12px}._2wzUyW_caps{flex-wrap:wrap;gap:4px 10px;display:flex}._2wzUyW_cap{color:var(--dsw-alias-label-tertiary);font-size:12px}._2wzUyW_capVerified{color:var(--dsw-alias-label-primary)}._2wzUyW_routeActions{flex-wrap:wrap;align-items:center;gap:8px 10px;display:flex}._2wzUyW_primary,._2wzUyW_secondary,._2wzUyW_ghost{height:32px;font:inherit;white-space:nowrap;cursor:pointer;border-radius:16px;justify-content:center;align-items:center;padding:0 14px;font-size:13px;line-height:20px;display:inline-flex}._2wzUyW_primary{background:var(--dsw-alias-button-primary-fill);color:var(--dsw-alias-label-primary-foreground);border:0}._2wzUyW_primary:hover:not(:disabled){background:var(--dsw-alias-button-primary-hover)}._2wzUyW_secondary{border:.5px solid var(--dsw-alias-border-l3);color:var(--dsw-alias-label-primary);background:0 0}._2wzUyW_secondary:hover:not(:disabled),._2wzUyW_ghost:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}._2wzUyW_ghost{color:var(--dsw-alias-label-tertiary);background:0 0;border:0}._2wzUyW_primary:disabled,._2wzUyW_secondary:disabled,._2wzUyW_ghost:disabled{opacity:.4;cursor:not-allowed}._2wzUyW_primary:focus-visible,._2wzUyW_secondary:focus-visible,._2wzUyW_ghost:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}._2wzUyW_ok{color:var(--dsw-alias-label-primary);font-size:12px}._2wzUyW_bad{color:var(--dsw-alias-label-error,var(--dsw-alias-label-tertiary));overflow-wrap:anywhere;font-size:12px}._2wzUyW_form{border-top:.5px solid var(--dsw-alias-border-l2);flex-direction:column;gap:10px;padding-top:12px;display:flex}._2wzUyW_formTitle{color:var(--dsw-alias-label-primary);margin:0;font-size:14px;font-weight:600}._2wzUyW_row{flex-wrap:wrap;align-items:flex-end;gap:12px;display:flex}._2wzUyW_field{flex-direction:column;gap:4px;min-width:0;display:flex}._2wzUyW_row ._2wzUyW_field{flex:220px}._2wzUyW_label{color:var(--dsw-alias-label-primary);font-size:13px}._2wzUyW_hint{color:var(--dsw-alias-label-tertiary);font-size:12px}._2wzUyW_input{border:.5px solid var(--dsw-alias-border-l4);background:var(--dsw-alias-bg-layer-1,var(--dsw-alias-bg-layer-2));height:32px;color:var(--dsw-alias-label-primary);font:inherit;border-radius:8px;min-width:0;padding:0 10px;font-size:13px}._2wzUyW_input:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:0}._2wzUyW_check{height:32px;color:var(--dsw-alias-label-primary);align-items:center;gap:6px;font-size:13px;display:inline-flex}._2wzUyW_footer{justify-content:space-between;align-items:center;gap:12px;display:flex}";
 		const tagId = "dsh-audio-release-kit/kit.module.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
@@ -368,6 +376,34 @@ window.__ModuleLoader__.load({
 		* each configured model has actually been verified to do on this computer. Nothing is contacted automatically;
 		* "Test connection" is an explicit user action that asks the host for a reachability probe (no inference).
 		*/
+		/**
+		* Distribution defaults for this local build (the SBPLab DGX Spark serving vLLM-Omni). The add form opens pre-filled
+		* with the first preset so nobody has to type an address or an exact model id; every field stays editable.
+		*/
+		const SERVER_PRESETS = [{
+			key: "minicpm",
+			label: "MiniCPM-o 4.5",
+			name: "DGX Spark · MiniCPM-o 4.5",
+			url: "http://100.83.70.119:18124/v1",
+			model: "openbmb/MiniCPM-o-4_5"
+		}, {
+			key: "mimo",
+			label: "MiMo-Audio-7B-Instruct",
+			name: "DGX Spark · MiMo-Audio-7B-Instruct",
+			url: "http://100.83.70.119:18212/v1",
+			model: "XiaomiMiMo/MiMo-Audio-7B-Instruct"
+		}];
+		function presetForm(preset) {
+			return {
+				name: preset.name,
+				url: preset.url,
+				model: preset.model,
+				mode: "chat",
+				speech: true,
+				keyEnv: ""
+			};
+		}
+		const sameUrl = (a, b) => a.trim().replace(/\/+$/u, "") === b.trim().replace(/\/+$/u, "");
 		function slug(text) {
 			const base = text.normalize("NFKD").toLowerCase().replaceAll(/[^a-z0-9]+/gu, "-").replaceAll(/^-+|-+$/gu, "").slice(0, 32);
 			return base === "" ? "audio-server" : base;
@@ -415,14 +451,7 @@ window.__ModuleLoader__.load({
 			const live = (0, react.useSyncExternalStore)(face.routes.subscribe, face.routes.getSnapshot);
 			const [open, setOpen] = (0, react.useState)(false);
 			const [probe, setProbe] = (0, react.useState)({});
-			const [form, setForm] = (0, react.useState)({
-				name: "",
-				url: "",
-				model: "",
-				mode: "chat",
-				speech: true,
-				keyEnv: ""
-			});
+			const [form, setForm] = (0, react.useState)(() => presetForm(SERVER_PRESETS[0]));
 			const [status, setStatus] = (0, react.useState)("");
 			const [saving, setSaving] = (0, react.useState)(false);
 			(0, react.useEffect)(() => {
@@ -431,7 +460,10 @@ window.__ModuleLoader__.load({
 			if (settings.status === "unavailable") return null;
 			const configured = Array.isArray(settings.value?.routes) ? settings.value.routes : [];
 			const liveByProvider = new Map(live.routes.map((route) => [route.provider, route]));
+			const managed = live.routes.filter((route) => !configured.some((own) => own.provider === route.provider));
 			const writable = settings.writable;
+			const nextPreset = (routes) => SERVER_PRESETS.find((preset) => !routes.some((route) => sameUrl(route.baseURL, preset.url) && route.models.some((model) => model.upstreamModel === preset.model))) ?? SERVER_PRESETS[0];
+			const duplicateOfManaged = managed.some((route) => sameUrl(route.baseURL, form.url));
 			const write = async (routes, done) => {
 				setSaving(true);
 				setStatus(t("saving"));
@@ -487,14 +519,8 @@ window.__ModuleLoader__.load({
 						} : {}
 					}]
 				};
-				if (await write([...configured, route], t("saved"))) setForm({
-					name: "",
-					url: "",
-					model: "",
-					mode: "chat",
-					speech: true,
-					keyEnv: ""
-				});
+				const routes = [...configured, route];
+				if (await write(routes, t("saved"))) setForm(presetForm(nextPreset(routes)));
 			};
 			const remove = async (provider, name) => {
 				if (!window.confirm(t("removeConfirm", { name }))) return;
@@ -557,7 +583,74 @@ window.__ModuleLoader__.load({
 							role: "status",
 							children: t("readOnly")
 						}) : null,
-						configured.length === 0 && settings.status === "ready" ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+						managed.length > 0 ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+							"data-testid": "dsh-audio-servers-managed",
+							children: [
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+									className: kit_module_css_default.formTitle,
+									children: t("managedTitle")
+								}),
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+									className: kit_module_css_default.muted,
+									children: t("managedBody")
+								}),
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("ul", {
+									className: kit_module_css_default.routes,
+									children: managed.map((route) => {
+										const firstModel = String(route.models[0]?.id ?? "");
+										const result = probe[route.provider];
+										return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("li", {
+											className: kit_module_css_default.route,
+											"data-testid": "dsh-audio-server-managed-row",
+											"data-provider": route.provider,
+											children: [
+												/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+													className: kit_module_css_default.routeHead,
+													children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+														className: kit_module_css_default.routeName,
+														children: route.displayName ?? route.provider
+													}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("code", {
+														className: kit_module_css_default.routeUrl,
+														children: route.baseURL
+													})]
+												}),
+												/* @__PURE__ */ (0, react_jsx_runtime.jsx)("ul", {
+													className: kit_module_css_default.modelList,
+													"aria-label": t("models"),
+													children: route.models.map((model) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("li", {
+														className: kit_module_css_default.modelRow,
+														children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+															className: kit_module_css_default.modelName,
+															children: model.name ?? model.id
+														}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+															className: kit_module_css_default.pill,
+															children: modeLabel(t, model)
+														})]
+													}, model.id))
+												}),
+												/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+													className: kit_module_css_default.routeActions,
+													children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+														type: "button",
+														className: kit_module_css_default.secondary,
+														disabled: result === "running" || firstModel === "",
+														onClick: () => {
+															test(route.provider, firstModel);
+														},
+														children: result === "running" ? t("testing") : t("test")
+													}), result !== void 0 && result !== "running" ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+														role: "status",
+														className: result.ok ? kit_module_css_default.ok : kit_module_css_default.bad,
+														children: result.ok ? t("testOk", { detail: result.message }) : t("testFailed", { message: result.message })
+													}) : null]
+												})
+											]
+										}, route.provider);
+									})
+								})
+							]
+						}) : null,
+						configured.length === 0 && managed.length === 0 && settings.status === "ready" ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 							className: kit_module_css_default.empty,
 							"data-testid": "dsh-audio-servers-empty",
 							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
@@ -665,6 +758,23 @@ window.__ModuleLoader__.load({
 									className: kit_module_css_default.formTitle,
 									children: t("addTitle")
 								}),
+								/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+									className: kit_module_css_default.row,
+									"data-testid": "dsh-audio-server-presets",
+									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+										className: kit_module_css_default.label,
+										children: t("presets")
+									}), SERVER_PRESETS.map((preset) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+										type: "button",
+										className: kit_module_css_default.ghost,
+										disabled: !writable,
+										"data-preset": preset.key,
+										onClick: () => {
+											setForm(presetForm(preset));
+										},
+										children: preset.label
+									}, preset.key))]
+								}),
 								/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", {
 									className: kit_module_css_default.field,
 									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
@@ -693,9 +803,10 @@ window.__ModuleLoader__.load({
 										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
 											className: kit_module_css_default.input,
 											value: form.url,
-											placeholder: "http://127.0.0.1:8000/v1",
+											placeholder: "http://100.83.70.119:18124/v1",
 											inputMode: "url",
 											disabled: !writable,
+											"data-testid": "dsh-audio-server-url",
 											onChange: (event) => {
 												setForm({
 													...form,
@@ -705,7 +816,7 @@ window.__ModuleLoader__.load({
 										}),
 										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 											className: kit_module_css_default.hint,
-											children: t("fieldUrlHint")
+											children: duplicateOfManaged ? t("duplicateOfManaged") : t("fieldUrlHint")
 										})
 									]
 								}),
@@ -720,6 +831,7 @@ window.__ModuleLoader__.load({
 											className: kit_module_css_default.input,
 											value: form.model,
 											disabled: !writable,
+											"data-testid": "dsh-audio-server-model",
 											onChange: (event) => {
 												setForm({
 													...form,

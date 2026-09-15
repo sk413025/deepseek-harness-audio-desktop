@@ -13,7 +13,9 @@ Safety model
     It refuses to bind 0.0.0.0/::.
   * A transition is refused while the GPU owner lock is not delegated to the controller, during a
     measurement reservation, while a foreign GPU workload runs, or while model ports still carry
-    established client connections after a bounded drain (an audio turn in progress).
+    established client connections after a bounded drain (an audio turn in progress), or while an
+    offline-job worker still reports active jobs (a job runs on without any stream client; unreadable
+    worker state refuses too). Workers drained for a switch that does not happen are re-opened.
   * One transition at a time (file lock). A failed load stops the target and restores the
     previously active recipe when the policy says so.
 
@@ -43,7 +45,7 @@ from pathlib import Path
 from typing import Any
 
 PROTOCOL = "dsh.audio-controller/0.1"
-VERSION = "0.1.0"
+VERSION = "0.1.1"  # 0.1.1: offline-job worker active-jobs/drain guard (R-CTL-1); protocol unchanged
 
 RECIPE_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 JOB_ID = re.compile(r"^job-[0-9a-f]{16}$")
@@ -53,6 +55,11 @@ CONTAINER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 SECRETISH = re.compile(r"(hf_[A-Za-z0-9]{8,}|Bearer\s+\S+|(?i:token|password|secret)=\S+)")
 
 TERMINAL = {"ready", "stopped", "failed", "cancelled", "refused"}
+# Offline fixed-recipe job workers (dsh.offline-job/0.1, OWNER_REQUESTS R-CTL-1): private controller-only paths.
+OFFLINE_JOB_PROTOCOL = "dsh.offline-job/0.1"
+WORKER_PATH = re.compile(r"^/[A-Za-z0-9/_.-]{1,200}(\?[A-Za-z0-9=&_.-]{1,100})?$")
+OFFLINE_PRIVATE_KEYS = ("activeJobsPath", "drainPath", "tokenFile")
+REFUSAL_CODES = {"GPU_OWNER_LOCKED", "RESERVED_MEASUREMENT", "RESERVED_INTEGRATION", "RESERVATION_UNREADABLE", "MODEL_BUSY", "FOREIGN_GPU_WORKLOAD", "ACTIVE_JOBS_UNREADABLE"}
 ACTIVE_PHASES = ["queued", "preflight", "draining", "stopping", "starting", "loading", "verifying", "restoring"]
 
 
@@ -129,6 +136,8 @@ class Config:
         self.drain_seconds = float(policy.get("drainSeconds", 20))
         self.restore_previous = bool(policy.get("restorePreviousOnFailure", True))
         self.health_host = str(policy.get("healthHost", "127.0.0.1"))
+        # Offline-job worker active/drain calls (R-CTL-1): per-request timeout; a timeout counts as unreadable.
+        self.worker_timeout = float(policy.get("workerTimeoutSeconds", 5))
         http = raw.get("http", {})
         self.http_bind = str(http.get("bind", "127.0.0.1:18190"))
         self.http_token_file = (base / http["tokenFile"]).resolve() if http.get("tokenFile") else None
@@ -158,6 +167,13 @@ class Config:
             for key in (compose.get("env") or {}):
                 if not ENV_KEY.match(key) or "\n" in str(compose["env"][key]):
                     raise SystemExit(f"recipe {rid}: env {key!r} is invalid")
+            guard = offline_guard_config(recipe)
+            if isinstance(guard, dict):
+                for key in ("activeJobsPath", "drainPath"):
+                    if not WORKER_PATH.match(str(guard.get(key, ""))):
+                        raise SystemExit(f"recipe {rid}: offlineJob.{key} must be an absolute worker path")
+                if guard.get("tokenFile") is not None and not os.path.isabs(str(guard["tokenFile"])):
+                    raise SystemExit(f"recipe {rid}: offlineJob.tokenFile must be an absolute path")
             if port in ports and ports[port] != recipe["container"]:
                 # Two recipes may share a port only if they are mutually exclusive services.
                 recipe.setdefault("_sharedPortWith", ports[port])
@@ -174,11 +190,36 @@ class Config:
         return recipe
 
 
+def offline_guard_config(recipe: dict[str, Any]) -> dict[str, Any] | str | None:
+    """Private offline-job worker guard settings (OWNER_REQUESTS R-CTL-1) for a recipe.
+
+    Returns the settings ({activeJobsPath, drainPath, tokenFile?}) from the recipe-level private `offlineJob`
+    object, or from an `adapterMode: offline-job` endpoint's `offlineJob`; "missing" when the recipe serves an
+    offline job but names no guard paths (switching away from it then fails closed); None for any other recipe.
+    """
+    endpoints = [e for e in recipe.get("endpoints") or [] if isinstance(e, dict)]
+    offline_endpoints = [e for e in endpoints if e.get("adapterMode") == "offline-job" or isinstance(e.get("offlineJob"), dict)]
+    candidates = [recipe.get("offlineJob")] + [e.get("offlineJob") for e in offline_endpoints]
+    for candidate in candidates:
+        if isinstance(candidate, dict) and candidate.get("activeJobsPath") and candidate.get("drainPath"):
+            return candidate
+    if isinstance(recipe.get("offlineJob"), dict) or offline_endpoints:
+        return "missing"
+    return None
+
+
 def public_recipe(recipe: dict[str, Any]) -> dict[str, Any]:
-    """Fields safe to show to clients (no host paths, no env values)."""
+    """Fields safe to show to clients (no host paths, no env values, no private worker guard paths)."""
     keys = ["id", "displayName", "catalogIds", "runtime", "port", "endpoints", "servedModels",
             "typicalLoadSeconds", "startTimeoutSeconds", "memoryGiB", "tasks", "notes"]
-    return {k: recipe[k] for k in keys if k in recipe}
+    out = {k: recipe[k] for k in keys if k in recipe}
+    if isinstance(out.get("endpoints"), list):
+        out["endpoints"] = [
+            {**e, "offlineJob": {k: v for k, v in e["offlineJob"].items() if k not in OFFLINE_PRIVATE_KEYS}}
+            if isinstance(e, dict) and isinstance(e.get("offlineJob"), dict) else e
+            for e in out["endpoints"]
+        ]
+    return out
 
 
 # --------------------------------------------------------------------------- system probes
@@ -223,6 +264,24 @@ class System:
         except urllib.error.HTTPError as error:
             return error.code, b""
         except (urllib.error.URLError, OSError, TimeoutError):
+            return 0, b""
+
+    def worker_request(self, port: int, method: str, path: str, body: dict[str, Any] | None = None, token: str | None = None,
+                       timeout: float = 5) -> tuple[int, bytes]:
+        """Private offline-job worker call on the recipe port (loopback/private health host only)."""
+        url = f"http://{self.config.health_host}:{port}{path}"
+        data = json.dumps(body).encode() if body is not None else None
+        request = urllib.request.Request(url, data=data, method=method)  # noqa: S310 (fixed private URL from owner config)
+        if data is not None:
+            request.add_header("content-type", "application/json")
+        if token:
+            request.add_header("authorization", f"Bearer {token}")
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
+                return response.status, response.read(1 << 20)
+        except urllib.error.HTTPError as error:
+            return error.code, b""
+        except (urllib.error.URLError, OSError, TimeoutError, ValueError):
             return 0, b""
 
     def compose(self, recipe: dict[str, Any], *args: str, timeout: float) -> subprocess.CompletedProcess[str]:
@@ -395,14 +454,63 @@ class Controller:
         for rid, recipe in self.config.recipes.items():
             if recipe["container"] in running:
                 h = self.health(rid)
-                active.append({"recipeId": rid, "port": recipe["port"], "containerStatus": running[recipe["container"]],
-                               "healthy": h["healthy"], "modelsListed": h["modelsListed"], "servedModels": recipe.get("servedModels", [])})
+                entry = {"recipeId": rid, "port": recipe["port"], "containerStatus": running[recipe["container"]],
+                         "healthy": h["healthy"], "modelsListed": h["modelsListed"], "servedModels": recipe.get("servedModels", [])}
+                if offline_guard_config(recipe) is not None:
+                    reading = self.active_jobs(recipe)
+                    entry["activeJobs"] = reading["active"] if reading["ok"] else None
+                active.append(entry)
         verdict = switching_verdict(self.config, None, [a["recipeId"] for a in active])
         return {"ok": True, "protocol": PROTOCOL, "controller": {"version": VERSION, "serverId": self.config.server_id},
                 "time": now_iso(), "active": active, "foreignWorkloads": self.foreign(running),
                 "switching": {"allowed": verdict["allowed"] and not self.foreign(running), "code": verdict["code"] or ("FOREIGN_GPU_WORKLOAD" if self.foreign(running) else None),
                               "reason": verdict["reason"], "reservation": verdict["reservation"], "ownerLock": verdict["lock"]},
                 "job": self.current_job()}
+
+    # ---- offline-job worker guard (R-CTL-1)
+    def worker_token(self, guard: dict[str, Any]) -> tuple[bool, str | None]:
+        if not guard.get("tokenFile"):
+            return True, None
+        try:
+            return True, Path(str(guard["tokenFile"])).read_text(encoding="utf-8").strip()
+        except OSError:
+            return False, None
+
+    def active_jobs(self, recipe: dict[str, Any]) -> dict[str, Any]:
+        """Read the worker's active jobs. ok=False when missing config, unreadable token, non-200, bad JSON or timeout."""
+        guard = offline_guard_config(recipe)
+        if not isinstance(guard, dict):
+            return {"ok": False, "reason": "no activeJobsPath/drainPath configured for this offline-job recipe"}
+        token_ok, token = self.worker_token(guard)
+        if not token_ok:
+            return {"ok": False, "reason": "worker token file unreadable"}
+        status, body = self.system.worker_request(recipe["port"], "GET", str(guard["activeJobsPath"]), token=token, timeout=self.config.worker_timeout)
+        if status != 200:
+            return {"ok": False, "reason": "active jobs request failed" if status == 0 else f"active jobs HTTP {status}", "httpStatus": status}
+        try:
+            data = json.loads(body)
+            active = data["active"]
+            jobs = data.get("jobs", [])
+            if not isinstance(active, int) or isinstance(active, bool) or active < 0 or not isinstance(jobs, list):
+                raise ValueError("active must be a non-negative integer and jobs a list")
+            if active == 0 and jobs:
+                # JOBWORKER_CONTRACT_gepard-1.0 P1(b): only non-terminal jobs are listed, so a listed job with active 0 is inconsistent
+                raise ValueError("active is 0 but non-terminal jobs are listed")
+        except (ValueError, KeyError, TypeError) as error:
+            return {"ok": False, "reason": scrub(f"active jobs reply invalid: {error}", 200), "httpStatus": status}
+        fields = ("jobId", "status", "startedAt", "streamClients")
+        return {"ok": True, "active": active, "draining": data.get("draining"),
+                "jobs": [{k: j.get(k) for k in fields} for j in jobs[:32] if isinstance(j, dict)]}
+
+    def set_draining(self, recipe: dict[str, Any], draining: bool) -> dict[str, Any]:
+        guard = offline_guard_config(recipe)
+        if not isinstance(guard, dict):
+            return {"ok": False, "reason": "no drainPath configured"}
+        token_ok, token = self.worker_token(guard)
+        if not token_ok:
+            return {"ok": False, "reason": "worker token file unreadable"}
+        status, _ = self.system.worker_request(recipe["port"], "POST", str(guard["drainPath"]), {"draining": draining}, token=token, timeout=self.config.worker_timeout)
+        return {"ok": status == 200, "httpStatus": status}
 
     def recipes(self) -> dict[str, Any]:
         return {"ok": True, "protocol": PROTOCOL, "serverId": self.config.server_id,
@@ -496,6 +604,8 @@ class Worker:
         self.sleep = sleep
         self.started_target = False
         self.stopped_previous = False
+        # offline-job workers this job set draining and has not stopped yet (undrained before any terminal state)
+        self.drained: list[dict[str, Any]] = []
 
     def phase(self, name: str, detail: Any = None) -> None:
         self.job["cancelRequested"] = self.c.cancel_path(self.job["jobId"]).exists()
@@ -551,7 +661,7 @@ class Worker:
         except Cancelled:
             self.recover("cancelled", {"code": "CANCELLED", "message": "cancelled by client"})
         except ControllerError as error:
-            if error.code in {"GPU_OWNER_LOCKED", "RESERVED_MEASUREMENT", "RESERVED_INTEGRATION", "RESERVATION_UNREADABLE", "MODEL_BUSY", "FOREIGN_GPU_WORKLOAD"} and not self.started_target and self.job["phase"] in {"preflight", "draining"}:
+            if error.code in REFUSAL_CODES and not self.started_target and self.job["phase"] in {"preflight", "draining"}:
                 self.finish("refused", None, {"code": error.code, "message": error.message, **error.extra})
             else:
                 self.recover("failed", {"code": error.code, "message": error.message, **error.extra})
@@ -571,8 +681,63 @@ class Worker:
             raise ControllerError("FOREIGN_GPU_WORKLOAD", "an unmanaged GPU workload is running", foreign=foreign)
         return active
 
+    def undrain_all(self) -> list[dict[str, Any]]:
+        """Re-open every worker this job drained but did not stop (refusal, failure, cancel)."""
+        results = []
+        for recipe in list(self.drained):
+            reply = self.c.set_draining(recipe, False)
+            results.append({"recipeId": recipe["id"], "ok": reply["ok"], "httpStatus": reply.get("httpStatus")})
+            self.drained.remove(recipe)
+        if results:
+            self.job["offlineUndrain"] = (self.job.get("offlineUndrain") or []) + results
+            self.c.write_job(self.job)
+        return results
+
+    def guard_offline_jobs(self, recipes: list[dict[str, Any]]) -> None:
+        """R-CTL-1: before stopping an offline-job recipe, drain its worker and wait for its active jobs to end.
+        A job counts while it runs, whatever its stream clients (an SSE disconnect does not free the GPU)."""
+        guarded = [r for r in recipes if offline_guard_config(r) is not None]
+        if not guarded:
+            return
+        deadline = time.monotonic() + self.config.drain_seconds
+        try:
+            for recipe in guarded:
+                if not isinstance(offline_guard_config(recipe), dict):
+                    raise ControllerError("ACTIVE_JOBS_UNREADABLE", f"{recipe['id']} serves offline jobs but has no activeJobsPath/drainPath; refusing to stop it", recipe=recipe["id"])
+                self.check_cancel()
+                drained = self.c.set_draining(recipe, True)
+                if not drained["ok"]:
+                    self.drained.append(recipe)  # best-effort undrain below: the POST may have been applied without a reply
+                    raise ControllerError("ACTIVE_JOBS_UNREADABLE", f"{recipe['id']}: worker drain request failed (HTTP {drained.get('httpStatus')})", recipe=recipe["id"], step="drain", httpStatus=drained.get("httpStatus"))
+                self.drained.append(recipe)
+            pending = list(guarded)
+            while pending:
+                still: list[dict[str, Any]] = []
+                busy: dict[str, list[dict[str, Any]]] = {}
+                for recipe in pending:
+                    reading = self.c.active_jobs(recipe)
+                    if not reading["ok"]:
+                        raise ControllerError("ACTIVE_JOBS_UNREADABLE", f"{recipe['id']}: {reading['reason']}", recipe=recipe["id"], step="activeJobs",
+                                              **({"httpStatus": reading["httpStatus"]} if "httpStatus" in reading else {}))
+                    if reading["active"] > 0:
+                        still.append(recipe)
+                        busy[recipe["id"]] = reading["jobs"]
+                if not still:
+                    return
+                if time.monotonic() >= deadline:
+                    raise ControllerError("MODEL_BUSY", "offline generator job(s) still running (the job keeps running without a stream client)",
+                                          activeJobs=[{"recipeId": rid, **job} for rid, jobs in busy.items() for job in jobs] or [{"recipeId": r["id"]} for r in still])
+                self.check_cancel()
+                self.sleep(1)
+                pending = still
+        except (ControllerError, Cancelled):
+            self.undrain_all()
+            raise
+
     def drain(self, recipes: list[dict[str, Any]]) -> None:
-        self.phase("draining", {"ports": [r["port"] for r in recipes], "drainSeconds": self.config.drain_seconds})
+        offline = [r["id"] for r in recipes if offline_guard_config(r) is not None]
+        self.phase("draining", {"ports": [r["port"] for r in recipes], "drainSeconds": self.config.drain_seconds, **({"offlineJobRecipes": offline} if offline else {})})
+        self.guard_offline_jobs(recipes)
         deadline = time.monotonic() + self.config.drain_seconds
         while True:
             counts = {r["id"]: self.system.established(r["port"]) for r in recipes}
@@ -587,6 +752,7 @@ class Worker:
         proc = self.system.compose(recipe, "stop", "-t", str(int(recipe.get("stopTimeoutSeconds", 90))), recipe["compose"]["service"], timeout=float(recipe.get("stopTimeoutSeconds", 90)) + 60)
         if proc.returncode != 0:
             raise ControllerError("STOP_FAILED", scrub(proc.stderr or proc.stdout or "compose stop failed", 1200), recipe=recipe["id"])
+        self.drained = [r for r in self.drained if r["id"] != recipe["id"]]
 
     def wait_ready(self, recipe: dict[str, Any], timeout: float, cancellable: bool = False) -> bool:
         deadline = time.monotonic() + timeout
@@ -645,6 +811,7 @@ class Worker:
         self.finish(terminal, None, error, restored)
 
     def finish(self, terminal: str, detail: Any = None, error: dict[str, Any] | None = None, restored: Any = None) -> None:
+        self.undrain_all()
         self.phase(terminal, detail)
         self.job["error"] = error
         self.job["restored"] = restored

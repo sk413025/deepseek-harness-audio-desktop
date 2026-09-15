@@ -20,14 +20,18 @@ cp desktop/scripts/*.sh "$DSH_ROOT/desktop-local-build/"
 ## 3. Build (ad-hoc signed, not notarized)
 ```bash
 zsh "$DSH_ROOT/desktop-local-build/build-desktop-release.sh" --out "$DSH_ROOT/out/app" --bundled-dir "$DSH_ROOT/bundled" \
-  --product-name "DeepSeek Harness Audio (Local Build)" --app-id local.sbplab.deepseek-harness-audio --profile desktop-audio --log "$DSH_ROOT/out/build.log"
+  --release-tag audio.2-pre23 --product-name "DeepSeek Harness Audio pre23 (Local Build)" \
+  --app-id local.sbplab.deepseek-harness-audio --profile desktop-audio \
+  --distribution-settings desktop/distribution-settings/dgx-spark.yaml --log "$DSH_ROOT/out/build.log"
 ```
-The script applies the patch stack to the upstream checkout and bundles the plugin files into the offline seed.
+- The script applies the patch stack to the upstream checkout and bundles the plugin files into the offline seed.
+- `--release-tag` (patch 0006) is shown in the window title and becomes CFBundleVersion.
+- `--distribution-settings` (patch 0007) ships a settings file that fills in, on first launch, the settings sections the user does not have yet. `desktop/distribution-settings/dgx-spark.yaml` holds the SBPLab DGX Spark defaults: audio model library server with the ssh controller, the two demo models, and the default model. Omit the flag for a build without defaults.
 
 ## 4. Package (dmg + plugins + docs)
 - Put the app in `<REL>/work/app/` and the bundled plugins in `<REL>/work/bundled-plugins/`.
 - Put `releases/<version>/QUICKSTART.zh-TW.md` in `<REL>/work/docs/`.
-- Put `releases/<version>/settings.example.yaml` and a public-domain example WAV in `<REL>/work/examples/`.
+- Put a public-domain example WAV (and, for releases since audio.2-pre22, a copy of the distribution settings file) in `<REL>/work/examples/`.
 
 ```bash
 bash "$DSH_ROOT/desktop-local-build/package-release.sh" "<REL>" <version>

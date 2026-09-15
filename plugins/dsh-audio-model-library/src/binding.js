@@ -33,7 +33,7 @@ const ADAPTER_TASK = {
   text_to_video_with_audio: 'video.generate', image_to_video_with_audio: 'video.generate',
 }
 /** Adapter task by mode where the catalog task alone is ambiguous (`timestamps` is served by transcribe or align). */
-const ADAPTER_TASK_FOR_MODE = { align: 'asr.align', 'generate-video': 'video.generate' }
+const ADAPTER_TASK_FOR_MODE = { align: 'asr.align', 'generate-video': 'video.generate', 'offline-job': 'tts.offline-job' }
 
 /**
  * Catalog `adapter_models[].wire` names → the adapter mode they require (dsh-dgx-audio TASK_CONTRACT §A; `align` from
@@ -44,6 +44,8 @@ export const CATALOG_WIRE_MODES = Object.freeze({
   'openai-chat-audio': 'chat', 'omni-chat-s2s': 'chat', 'openai-transcriptions': 'transcribe', 'openai-translations': 'translate',
   'omni-speech-http': 'speech', 'omni-audio-generate': 'generate-audio', 'vllm-pooling-forced-align': 'align', 'omni-videos': 'generate-video',
   'omni-duplex': 'realtime', 'vllm-asr': 'realtime', 'omni-turn': 'realtime', 'omni-speech-ws': 'realtime',
+  // dsh-dgx-audio ≥ 0.5.0 (offline fixed-recipe job worker, dsh.offline-job/0.1; OWNER_REQUESTS R-LIB)
+  'dsh-offline-job': 'offline-job',
 })
 
 /** Streaming-mode vocabulary (catalog) → adapter capability keys that a recipe may *declare*. */
@@ -57,6 +59,8 @@ const DECLARES = {
   incremental_audio_input: ['liveInput'],
   barge_in_interruption: ['bargeIn'],
   resume_reconnect: ['sessionResume'],
+  // Offline generator job: one text in, one audio out; never streaming/realtime/live capability keys.
+  offline_streaming_generator: ['offlineChunkedAudio'],
 }
 const CAPABILITY_FOR_MODE = {
   chat: ['textStreaming'],
@@ -66,6 +70,7 @@ const CAPABILITY_FOR_MODE = {
   transcribe: ['textStreaming'],
   translate: ['textStreaming'],
   realtime: ['liveInput', 'fullDuplex', 'bargeIn', 'sessionResume', 'playbackAck'],
+  'offline-job': ['audioOutput', 'offlineChunkedAudio'],
 }
 
 const plainObject = value => value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -78,7 +83,25 @@ const stringDict = value => (plainObject(value) ? Object.fromEntries(Object.entr
  */
 const ADAPTER_MODEL_KEYS = new Set(['name', 'catalogId', 'catalogTasks', 'mode', 'tasks', 'streaming', 'capabilities', 'speech', 'asr', 'generate', 'realtime',
   'outputAudio', 'sendModalities', 'audioFormat', 'systemPrompt', 'systemPromptWithAudio', 'language', 'contextWindow', 'maxTokens', 'temperature', 'maxAudioPerRequest', 'extraBody',
-  'requestOptions', 'requestOptionsMap', 'requestOptionsScope', 'requestOptionsEvidence', 'align', 'video', 'params_required', 'paramsRequired', 'wire'])
+  'requestOptions', 'requestOptionsMap', 'requestOptionsScope', 'requestOptionsEvidence', 'align', 'video', 'params_required', 'paramsRequired', 'wire',
+  'offlineJob'])
+
+/** Controller-private worker guard fields (R-CTL-1): never forwarded to the adapter or shown in the renderer. */
+const OFFLINE_JOB_PRIVATE_KEYS = new Set(['activeJobsPath', 'drainPath', 'tokenFile'])
+export const OFFLINE_JOB_PROTOCOL = 'dsh.offline-job/0.1'
+
+/** The public offline-job object, verbatim except for controller-private keys. */
+function publicOfflineJob(value) {
+  return plainObject(value) ? Object.fromEntries(Object.entries(value).filter(([key]) => !OFFLINE_JOB_PRIVATE_KEYS.has(key))) : undefined
+}
+
+/** Same rule as the adapter's config (0.5.0): exact protocol, absolute path, integer rate, 1 or 2 channels — never guessed. */
+function offlineJobReason(offlineJob) {
+  const o = offlineJob
+  if (!plainObject(o) || o.protocol !== OFFLINE_JOB_PROTOCOL || !(typeof o.path === 'string' && /^\/[A-Za-z0-9/_.-]{1,200}$/.test(o.path))) return 'OFFLINE_JOB_CONFIG_MISSING'
+  if (!(Number.isInteger(o.outputSampleRate) && o.outputSampleRate > 0) || !(o.channels === 1 || o.channels === 2)) return 'OFFLINE_JOB_CONFIG_MISSING'
+  return null
+}
 
 /**
  * §K.5 request options and the catalog's per-variant classification (checkpoint 0515), forwarded verbatim so the
@@ -115,6 +138,8 @@ export function resolveEndpoint(row, endpoint) {
   if (source === undefined) return endpoint
   const cleaned = Object.fromEntries(Object.entries(withoutNulls(source)).filter(([key, value]) => ADAPTER_MODEL_KEYS.has(key) && value !== undefined))
   if (cleaned.wire !== undefined && typeof cleaned.wire !== 'string') delete cleaned.wire
+  if (cleaned.offlineJob !== undefined) cleaned.offlineJob = publicOfflineJob(cleaned.offlineJob)
+  if (cleaned.offlineJob === undefined) delete cleaned.offlineJob
   for (const [key, valid] of Object.entries(REQUEST_OPTION_FIELDS)) {
     if (cleaned[key] !== undefined && !valid(cleaned[key])) delete cleaned[key]
   }
@@ -140,6 +165,7 @@ function adapterModelReason(adapterModel, mode) {
     if (expected === 'realtime' && adapterModel.realtime?.wire !== undefined && adapterModel.realtime.wire !== wire) return 'WIRE_MODE_MISMATCH'
   }
   if (mode === 'align' && !(typeof adapterModel.align?.timestampSegmentTime === 'number' && adapterModel.align.timestampSegmentTime > 0)) return 'ALIGN_CONFIG_MISSING'
+  if (mode === 'offline-job') return offlineJobReason(adapterModel.offlineJob)
   return null
 }
 
@@ -174,7 +200,7 @@ function groupKey(endpoint, task) {
   if (typeof endpoint.modelKey === 'string' && /^[a-z0-9-]{1,24}$/.test(endpoint.modelKey)) return { key: endpoint.modelKey, mode, outputAudio }
   const wire = endpointFeature(endpoint, task).split(':')[1]
   const key = {
-    chat: outputAudio ? 'speech' : 'chat', transcribe: 'transcribe', translate: 'translate', speech: 'tts', 'generate-audio': 'generate', align: 'align', 'generate-video': 'video',
+    chat: outputAudio ? 'speech' : 'chat', transcribe: 'transcribe', translate: 'translate', speech: 'tts', 'generate-audio': 'generate', align: 'align', 'generate-video': 'video', 'offline-job': 'tts-offline',
     realtime: { 'omni-duplex': 'live', 'vllm-asr': 'live-asr', 'omni-turn': 'live-turn', 'omni-speech-ws': 'tts-stream' }[wire] ?? `live-${wire}`,
   }[mode] ?? mode
   return { key, mode, outputAudio }
@@ -199,6 +225,10 @@ export function bindReason(task, endpoint, recipe, features) {
   const modelReason = adapterModelReason(endpoint.adapterModel, mode)
   if (modelReason !== null) return modelReason
   if (mode === 'align' && endpoint.adapterModel === undefined && !(typeof endpoint.align?.timestampSegmentTime === 'number' && endpoint.align.timestampSegmentTime > 0)) return 'ALIGN_CONFIG_MISSING'
+  if (mode === 'offline-job' && endpoint.adapterModel === undefined) {
+    const reason = offlineJobReason(endpoint.offlineJob)
+    if (reason !== null) return reason
+  }
   if (mode === 'realtime') {
     const rates = realtimeFacts(endpoint)
     const need = RATE_REQUIREMENTS[endpointFeature(endpoint, task)] ?? { input: true, output: true }
@@ -261,7 +291,7 @@ export function buildRoute({ server, recipe, rows, tasks, features, provider, re
     throw new LibraryError('TASK_NOT_BINDABLE', `no task can be used with this adapter on ${recipe.displayName}`, 409, { reasons })
   }
   const upstreamModel = recipe.servedModels[0]
-  const suffix = { chat: 'audio → text', speech: 'audio → text + speech', transcribe: 'transcription', translate: 'speech translation', tts: 'text → speech', generate: 'audio generation', align: 'forced alignment', video: 'video generation', live: 'live duplex', 'live-asr': 'live transcription', 'live-turn': 'live turn-based speech', 'tts-stream': 'streaming text → speech' }
+  const suffix = { chat: 'audio → text', speech: 'audio → text + speech', transcribe: 'transcription', translate: 'speech translation', tts: 'text → speech', generate: 'audio generation', align: 'forced alignment', video: 'video generation', 'tts-offline': 'offline job', live: 'live duplex', 'live-asr': 'live transcription', 'live-turn': 'live turn-based speech', 'tts-stream': 'streaming text → speech' }
   const models = [...groups.values()].map((group) => {
     const first = group.endpoints[0]
     const verbatim = plainObject(first.adapterModel) ? first.adapterModel : {}
@@ -292,6 +322,7 @@ export function buildRoute({ server, recipe, rows, tasks, features, provider, re
     // Inline recipe endpoints (no catalog object) may carry the same §K objects.
     if (group.mode === 'align' && plainObject(first.align) && entry.align === undefined) entry.align = first.align
     if (group.mode === 'generate-video' && plainObject(first.video) && entry.video === undefined) entry.video = first.video
+    if (group.mode === 'offline-job' && plainObject(first.offlineJob) && entry.offlineJob === undefined) entry.offlineJob = publicOfflineJob(first.offlineJob)
     if (entry.requestOptions === undefined && REQUEST_OPTION_FIELDS.requestOptions(first.requestOptions)) entry.requestOptions = first.requestOptions.map(o => (typeof o === 'string' ? o : JSON.stringify(o)))
     if (group.mode === 'realtime') {
       const base = plainObject(verbatim.realtime) ? verbatim.realtime : {}
@@ -322,7 +353,7 @@ export function buildRoute({ server, recipe, rows, tasks, features, provider, re
     if (Object.keys(declared).length > 0) entry.capabilities = { ...(plainObject(entry.capabilities) ? entry.capabilities : {}), ...declared }
     return { entry, group }
   })
-  const order = ['speech', 'chat', 'transcribe', 'translate', 'tts', 'generate', 'align', 'video', 'live', 'live-turn', 'live-asr', 'tts-stream']
+  const order = ['speech', 'chat', 'transcribe', 'translate', 'tts', 'tts-offline', 'generate', 'align', 'video', 'live', 'live-turn', 'live-asr', 'tts-stream']
   models.sort((a, b) => (order.indexOf(a.group.key) + 100) % 100 - (order.indexOf(b.group.key) + 100) % 100)
   const route = {
     provider,
@@ -330,6 +361,14 @@ export function buildRoute({ server, recipe, rows, tasks, features, provider, re
     baseURL: `${server.modelScheme ?? 'http'}://${server.modelHost}:${recipe.port}/v1`,
     ...(server.apiKeyEnv ? { apiKeyEnv: server.apiKeyEnv } : {}),
     models: models.map(m => m.entry),
+  }
+  // How the microphone UI should use each model (0.1.6): a recorded turn (record → stop → send), a Live duplex
+  // session started from this runtime's chat model, or a typed prompt. The paired chat model prefers an audio reply.
+  const chatForLive = models.find(m => m.group.key === 'speech') ?? models.find(m => m.group.key === 'chat')
+  const interactionOf = (entry) => {
+    if (entry.mode === 'realtime') return { 'omni-duplex': 'live-duplex', 'omni-turn': 'live-turn', 'vllm-asr': 'live-transcription', 'omni-speech-ws': 'live-text-to-speech' }[entry.realtime?.wire ?? 'omni-duplex'] ?? 'live'
+    if (entry.mode === 'chat' || entry.mode === 'transcribe' || entry.mode === 'translate' || entry.mode === 'align') return 'recorded-turn'
+    return 'typed-prompt'
   }
   const summary = {
     provider,
@@ -345,6 +384,9 @@ export function buildRoute({ server, recipe, rows, tasks, features, provider, re
       mode: entry.mode,
       tasks: group.tasks,
       liveOnly: entry.mode === 'realtime',
+      interaction: interactionOf(entry),
+      useModel: entry.mode === 'realtime' ? (chatForLive?.entry.id ?? null) : entry.id,
+      ...(entry.mode === 'offline-job' && plainObject(entry.offlineJob) ? { offlineJob: { outputSampleRate: entry.offlineJob.outputSampleRate, channels: entry.offlineJob.channels, maxConcurrentJobs: entry.offlineJob.maxConcurrentJobs ?? null } } : {}),
       deploymentId: entry.deploymentId,
       outputAudio: entry.outputAudio === true,
       ...(entry.wire !== undefined ? { catalogWire: entry.wire } : {}),

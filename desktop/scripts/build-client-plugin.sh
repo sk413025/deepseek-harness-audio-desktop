@@ -30,6 +30,8 @@ while [ $# -gt 0 ]; do
   esac
 done
 export PATH="$NODE_BIN:$PATH"
+# npm pack runs inside a temp copy: a relative --out would resolve there and pack nothing (exit 254, 2026-09-15 kit 0.2.3).
+mkdir -p "$OUT"; OUT="$(cd "$OUT" && pwd)"
 
 # Rolldown region comments for the preset's CSS virtual modules carry the absolute staging path
 # (e.g. "//#region \0dsh-css:/Users/.../packages/third-party/<name>/src/x.module.css.mjs"). Rewrite

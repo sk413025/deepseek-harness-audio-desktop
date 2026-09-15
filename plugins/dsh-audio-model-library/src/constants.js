@@ -1,5 +1,5 @@
 export const PLUGIN_NAME = 'dsh-audio-model-library'
-export const PLUGIN_VERSION = '0.1.4'
+export const PLUGIN_VERSION = '0.1.6'
 export const CONTRACT_VERSION = '0.1'
 export const CONTROLLER_PROTOCOL = 'dsh.audio-controller/0.1'
 export const ROUTE_PREFIX = '/api/dsh-audio-model-library/v1'

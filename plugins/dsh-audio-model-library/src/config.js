@@ -19,6 +19,8 @@ export const CONFIG_DEFAULTS = Object.freeze({
   servers: Object.freeze([]),
   bindingProvider: 'dgx-library',
   referenceVoiceFile: undefined,
+  // Demo focus (0.1.6): catalog rows shown and recipes offered; empty = the whole catalog.
+  focus: Object.freeze({ rows: Object.freeze([]), recipes: Object.freeze([]) }),
   stateDir: undefined, // default <DSH home>/dsh-audio-model-library
   sshBinary: '/usr/bin/ssh',
   controllerTimeoutMs: 30000,
@@ -47,7 +49,16 @@ export function resolveConfig(raw = {}, options = {}) {
   const input = defined(raw)
   const config = { ...CONFIG_DEFAULTS, ...input }
   if (!PROVIDER.test(String(config.bindingProvider))) fail('bindingProvider must be a lowercase id')
-  if (config.referenceVoiceFile !== undefined && !isAbsolute(String(config.referenceVoiceFile))) fail('referenceVoiceFile must be an absolute path')
+  // A recipient's own voice prompt: absolute or ~/ (expanded per user); nothing is shipped with the plugin.
+  if (typeof config.referenceVoiceFile === 'string' && (config.referenceVoiceFile === '~' || config.referenceVoiceFile.startsWith('~/'))) config.referenceVoiceFile = join(homedir(), config.referenceVoiceFile.slice(2))
+  if (config.referenceVoiceFile !== undefined && !isAbsolute(String(config.referenceVoiceFile))) fail('referenceVoiceFile must be an absolute path or start with ~/')
+  const focus = config.focus ?? {}
+  const list = (value, name, pattern) => {
+    if (value === undefined) return []
+    if (!Array.isArray(value) || value.length > 16 || !value.every(v => typeof v === 'string' && pattern.test(v))) fail(`focus.${name} must be a short list of ids`)
+    return [...new Set(value)]
+  }
+  config.focus = { rows: list(focus.rows, 'rows', /^[A-Za-z0-9][A-Za-z0-9._:@/+-]{0,199}$/), recipes: list(focus.recipes, 'recipes', /^[a-z0-9][a-z0-9._-]{0,63}$/) }
   config.stateDir = config.stateDir === undefined ? join(dshHome(options.env), 'dsh-audio-model-library') : String(config.stateDir)
   if (!isAbsolute(config.stateDir)) fail('stateDir must be absolute')
   if (!isAbsolute(String(config.sshBinary))) fail('sshBinary must be absolute')
@@ -102,7 +113,11 @@ export function settingsSchema(z) {
   return z.object({
     servers: z.array(server).default([]),
     bindingProvider: z.string().default('dgx-library').description('Provider id the library manages inside dsh-dgx-audio'),
-    referenceVoiceFile: z.string().description('Absolute path of a voice prompt WAV you may use (realtime speech models)'),
+    referenceVoiceFile: z.string().description('Voice prompt WAV you have the right to use, absolute or ~/ path (Live duplex models that need a reference voice)'),
+    focus: z.object({
+      rows: z.array(z.string()).default([]).description('Catalog row ids shown in the library (empty: all rows)'),
+      recipes: z.array(z.string()).default([]).description('Server recipe ids offered for those rows (empty: every recipe serving them)'),
+    }).description('Demo focus: only these models appear in the library and the model picker'),
   })
 }
 
@@ -117,5 +132,6 @@ export async function loadSchemastery(importer = specifier => import(specifier))
 }
 
 export function definedEntries(value) {
-  return Object.fromEntries(Object.entries(value ?? {}).filter(([, v]) => v !== undefined))
+  // An empty settings focus (schema defaults) must not hide a focus given in the loader row config.
+  return Object.fromEntries(Object.entries(value ?? {}).filter(([k, v]) => v !== undefined && !(k === 'focus' && !(Array.isArray(v?.rows) && v.rows.length > 0))))
 }

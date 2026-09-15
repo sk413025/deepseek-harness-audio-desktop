@@ -1,0 +1,50 @@
+--- a/apps/desktop/electron-builder.config.mjs	2026-09-15 17:15:53
++++ b/apps/desktop/electron-builder.config.mjs	2026-09-15 17:15:53
+@@ -60,9 +60,13 @@
+           extraMetadata: {
+             productName: env.DSH_DESKTOP_LOCAL_PRODUCT_NAME,
+             ...(env.DSH_DESKTOP_LOCAL_PROFILE ? { dshDesktopProfile: env.DSH_DESKTOP_LOCAL_PROFILE } : {}),
++            ...(env.DSH_DESKTOP_LOCAL_RELEASE_TAG ? { dshDesktopReleaseTag: env.DSH_DESKTOP_LOCAL_RELEASE_TAG } : {}),
+           },
+         }
+       : {}),
++    // LOCAL PATCH (sbplab): a local release tag (e.g. audio.2-pre20) becomes CFBundleVersion, so About / Get Info read
++    // "0.1.5-rc.1 (audio.2-pre20)"; the app version itself (host protocol, seed) is unchanged.
++    ...(localUnsigned && env.DSH_DESKTOP_LOCAL_RELEASE_TAG ? { buildVersion: env.DSH_DESKTOP_LOCAL_RELEASE_TAG } : {}),
+     artifactName: 'deepseek-harness-${version}-${os}-${arch}.${ext}',
+     directories: { output: buildPaths.artifacts },
+     asar: true,
+--- a/apps/desktop/src/main.ts	2026-09-15 17:15:53
++++ b/apps/desktop/src/main.ts	2026-09-15 17:15:53
+@@ -130,6 +130,16 @@
+     return new Response(body, { headers: { 'content-type': MIME[extname(target)] ?? 'application/octet-stream' } })
+   } catch {
+     return new Response(null, { status: 404 })
++  }
++}
++
++/** LOCAL PATCH (sbplab): optional release tag baked into the packaged package.json (`dshDesktopReleaseTag`). */
++function localReleaseTag(): string | undefined {
++  try {
++    const manifest = JSON.parse(readFileSync(join(app.getAppPath(), 'package.json'), 'utf8')) as { dshDesktopReleaseTag?: unknown }
++    return typeof manifest.dshDesktopReleaseTag === 'string' && manifest.dshDesktopReleaseTag !== '' ? manifest.dshDesktopReleaseTag : undefined
++  } catch {
++    return undefined
+   }
+ }
+ 
+@@ -388,6 +398,14 @@
+   const createMainWindow = (): BrowserWindow => {
+     const window = createWindow(appPreload)
+     mainWindow = window
++    // LOCAL PATCH (sbplab): a local release shows its release tag in the window title ("<page title> · audio.2-pre20").
++    const releaseTag = localReleaseTag()
++    if (releaseTag !== undefined) {
++      window.on('page-title-updated', (event, title) => {
++        event.preventDefault()
++        window.setTitle(`${title} · ${releaseTag}`)
++      })
++    }
+     window.once('ready-to-show', () => { if (!window.isDestroyed()) window.show() })
+     window.on('closed', () => { if (mainWindow === window) mainWindow = undefined })
+     return window
