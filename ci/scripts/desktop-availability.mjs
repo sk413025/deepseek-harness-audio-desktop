@@ -102,6 +102,7 @@ async function main() {
   const proxy = await createFaultProxy({ targetPort: mockPort })
   cleanups.push(async () => { writeFileSync(join(outDir, 'fault-proxy.json'), JSON.stringify(proxy.journal, null, 2)); await proxy.close() })
   const mockRequests = () => readFileSync(mockLog, 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line)).filter(r => r.kind === 'http' && String(r.path).includes('/chat/completions'))
+  const turnRequests = (prompt, since = 0) => mockRequests().slice(since).filter(r => (r.text ?? []).at(-1) === prompt)
   note(`mock backend 127.0.0.1:${mockPort}, fault proxy 127.0.0.1:${proxy.port}`)
 
   // Fresh recipient home: only an endpoint in settings (no lab tools, no window files, no SSH).
@@ -205,7 +206,9 @@ async function main() {
   await send('CI availability ping')
   const replied = await waitUntil('mock reply rendered', async () => page.evaluate(() => /Mock spoken reply/.test(document.querySelector('main')?.innerText ?? document.body.innerText)), { timeoutMs: 60_000, intervalMs: 500 }).then(r => r.ms).catch(() => null)
   await shot('02-endpoint-only-reply')
-  report.expect('a12.endpoint-only', replied !== null && mockRequests().length === before12 + 1, U, `${label('none')} fresh home with only an endpoint: composer send reached the configured endpoint once and the reply rendered${replied !== null ? ` after ${replied} ms` : ''}`, { upstreamRequests: mockRequests().length - before12, lastInvocation: invocations().at(-1) ?? null })
+  await waitIdle(page)
+  const pingRequests = turnRequests('CI availability ping', before12)
+  report.expect('a12.endpoint-only', replied !== null && pingRequests.length === 1 && pingRequests[0].modalities?.includes('audio'), U, `${label('none')} fresh home with only an endpoint: the composer turn reached the configured endpoint ${pingRequests.length}× (text+audio) and the reply rendered${replied !== null ? ` after ${replied} ms` : ''}; ${mockRequests().length - before12 - pingRequests.length} auxiliary request(s) (session title)`, { turnRequests: pingRequests, allRequests: mockRequests().slice(before12) })
 
   // a8.output-stop-active-buffer: Stop during an audibly scheduled output buffer (not an underrun gap).
   const stopCase = await stopDuringActiveBuffer(page, send)
@@ -217,6 +220,7 @@ async function main() {
   await proxy.setMode('absent')
   const before1 = mockRequests().length
   const invBefore = invocations().length
+  if (!(await waitIdle(page))) note('conversation not idle before the absent-server case')
   const sentAt = await send('CI availability offline check')
   const errorSeen = await waitUntil('explicit unavailable error in the conversation', async () => page.evaluate(() => {
     const text = document.querySelector('main')?.innerText ?? document.body.innerText
@@ -225,10 +229,11 @@ async function main() {
   }), { timeoutMs: 30_000, intervalMs: 300 }).catch(() => null)
   await shot('04-absent-server')
   const promptKept = await page.evaluate(() => (document.querySelector('main')?.innerText ?? document.body.innerText).includes('CI availability offline check'))
+  const retries = await page.evaluate(() => (document.querySelector('main')?.innerText ?? '').match(/Retried model request \((\d+)\/(\d+)\)[^\n]*/)?.[0] ?? null)
   const failedRecord = invocations().slice(invBefore).find(record => record.ok === false)
   report.expect('a1.send-to-absent-server', errorSeen !== null && promptKept && failedRecord?.code === 'TRANSPORT' && mockRequests().length === before1, U,
-    `${label('none')} upstream absent: explicit error "${errorSeen?.value ?? '(none)'}" after ${errorSeen?.ms ?? '?'} ms, prompt kept in the conversation=${promptKept}, host record ${failedRecord?.code ?? 'missing'}, upstream requests ${mockRequests().length - before1}`,
-    { sentAt, error: errorSeen, failedRecord })
+    `${label('none')} upstream absent: explicit error "${errorSeen?.value ?? '(none)'}" after ${errorSeen?.ms ?? '?'} ms (Harness: ${retries ?? 'no retry note'}), prompt kept in the conversation=${promptKept}, host record ${failedRecord?.code ?? 'missing'}, upstream requests ${mockRequests().length - before1}`,
+    { sentAt, error: errorSeen, harnessRetries: retries, failedRecord: failedRecord ? { code: failedRecord.code, error: failedRecord.error, latencySeconds: failedRecord.latencySeconds } : null, hostFailures: invocations().slice(invBefore).filter(r => r.ok === false).length })
   const recovered = await waitIdle(page)
   report.add('a1.ui-returns-to-idle', recovered ? 'pass' : 'fail', U, `${label('none')} composer usable again after the failure: ${recovered}`)
 
@@ -239,10 +244,12 @@ async function main() {
   await send('CI availability recovered')
   const recoveredReply = await waitUntil('reply after recovery', async () => page.evaluate(() => ((document.querySelector('main')?.innerText ?? document.body.innerText).match(/Mock spoken reply/g) ?? []).length >= 2), { timeoutMs: 60_000, intervalMs: 500 }).catch(() => null)
   await sleep(1500)
+  await waitIdle(page)
   const after = mockRequests().slice(before9)
-  const replayed = after.some(r => JSON.stringify(r.text ?? '').includes('offline check'))
+  const recoveredTurn = after.filter(r => (r.text ?? []).at(-1) === 'CI availability recovered')
+  const replayed = after.filter(r => (r.text ?? []).at(-1) === 'CI availability offline check').length > 0
   await shot('05-recovered')
-  report.expect('a9.recovery-no-replay', recoveredReply !== null && after.length === 1 && !replayed, U, `${label('none')} after recovery: ${after.length} upstream request(s), failed prompt replayed=${replayed}, reply rendered=${recoveredReply !== null}`, { requests: after })
+  report.expect('a9.recovery-no-replay', recoveredReply !== null && recoveredTurn.length === 1 && !replayed, U, `${label('none')} after recovery: the new turn reached the endpoint ${recoveredTurn.length}×, the failed turn was replayed=${replayed}, reply rendered=${recoveredReply !== null}`, { requests: after })
 
   // Capture-dependent cases: the microphone owner's fixture + adapter, never a CI-made microphone.
   for (const id of ['capture.a2-record-while-server-down', 'capture.a6-permission-delay-cancel', 'capture.mimo-record-stop-send-progressive', 'capture.duplex-abc-overlap-interrupt-cleanup']) {
@@ -276,11 +283,14 @@ async function dismissFirstRunDialogs(page) {
 }
 
 async function waitIdle(page) {
-  return waitUntil('conversation idle', async () => page.evaluate(() => {
-    const box = [...document.querySelectorAll('[role=textbox]')].at(-1)
-    const busy = /Stop generating|Generating|Running/i.test(document.querySelector('main')?.innerText ?? '')
-    return box !== undefined && box.getAttribute('aria-disabled') !== 'true' && !busy
-  }), { timeoutMs: 45_000, intervalMs: 500 }).then(() => true).catch(() => false)
+  // Idle = the composer offers no "Stop generating" and holds no queued message, continuously for 1.5 s.
+  let quietSince = null
+  return waitUntil('conversation idle', async () => {
+    const busy = await page.evaluate(() => Boolean(document.querySelector('button[aria-label="Stop generating"]')) || /queued message/i.test(document.body.innerText) || [...document.querySelectorAll('[aria-label]')].some(e => /queued message/i.test(e.getAttribute('aria-label') ?? '')))
+    if (busy) { quietSince = null; return false }
+    quietSince ??= Date.now()
+    return Date.now() - quietSince >= 1500
+  }, { timeoutMs: 90_000, intervalMs: 250 }).then(() => true).catch(() => false)
 }
 
 async function stopDuringActiveBuffer(page, send) {
@@ -299,6 +309,7 @@ async function stopDuringActiveBuffer(page, send) {
     const stopAt = Date.now()
     await page.locator('[data-testid=dsh-voice-capture-reply-stop]').first().click({ timeout: 5_000 })
     await sleep(3000)
+    await waitIdle(page)
     const facts = await page.evaluate(([since, stopAt]) => {
       const sources = window.__CI_OBS__.sources.filter(s => s.createdAt >= since)
       return {
