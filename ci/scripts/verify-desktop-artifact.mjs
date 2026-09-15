@@ -55,8 +55,13 @@ if (attach.status !== 0) finish()
 try {
   const top = readdirSync(mount).filter(name => !name.startsWith('.'))
   const missingTop = expected.dmg.requiredTopLevel.filter(name => !top.includes(name))
-  report.expect('dmg.layout', missingTop.length === 0 && lstatSync(join(mount, 'Applications')).isSymbolicLink(), P, `dmg root has app, Applications link, guide, examples (${top.join(' | ')})`, { top, missingTop })
-  const appDir = join(mount, `${expected.app.bundleName}.app`)
+  const namePattern = new RegExp(expected.app.bundleNamePattern ?? `^${expected.app.bundleName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`)
+  const apps = top.filter(name => name.endsWith('.app'))
+  const appName = apps.length === 1 && namePattern.test(apps[0].slice(0, -4)) ? apps[0].slice(0, -4) : null
+  report.meta.appName = apps.length === 1 ? apps[0].slice(0, -4) : apps
+  report.expect('dmg.layout', missingTop.length === 0 && appName !== null && lstatSync(join(mount, 'Applications')).isSymbolicLink(), P, `dmg root has exactly one app matching ${namePattern}, Applications link, guide, examples (${top.join(' | ')})`, { top, missingTop, apps })
+  if (appName === null) { run('hdiutil', ['detach', mount]); finish() }
+  const appDir = join(mount, `${appName}.app`)
   const contents = join(appDir, 'Contents')
 
   const info = JSON.parse(run('plutil', ['-convert', 'json', '-o', '-', join(contents, 'Info.plist')]).stdout)
@@ -153,11 +158,12 @@ try {
 
   if (args['copy-app-to']) {
     mkdirSync(args['copy-app-to'], { recursive: true })
+    // Later workflow steps use one fixed path; the published name stays in report.meta.appName.
     const target = join(args['copy-app-to'], `${expected.app.bundleName}.app`)
     rmSync(target, { recursive: true, force: true })
     const copy = run('ditto', [appDir, target])
     const again = run('codesign', ['--verify', '--deep', '--strict', target])
-    report.expect('app.copy', copy.status === 0 && again.status === 0, P, `app copied out of the image with a still-valid signature: ${target}`)
+    report.expect('app.copy', copy.status === 0 && again.status === 0, P, `app "${appName}" copied out of the image with a still-valid signature: ${target}`)
     report.meta.appCopy = target
   }
 } finally {

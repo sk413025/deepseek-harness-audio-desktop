@@ -3,6 +3,8 @@
   "comment": "Static expectations for the DeepSeek Harness Audio (Local Build) release artifacts. Values that change per release (plugin names, versions, hashes) are read from releases/<tag>/ in the tag tree, never from here.",
   "app": {
     "bundleName": "DeepSeek Harness Audio (Local Build)",
+    "bundleNamePattern": "^DeepSeek Harness Audio(?: [A-Za-z0-9.-]+)? \\(Local Build\\)$",
+    "bundleNameComment": "Since audio.2-pre20 the app carries its release in the name (e.g. \"DeepSeek Harness Audio pre23 (Local Build)\"). The dmg must hold exactly one .app matching bundleNamePattern; later steps get a copy under bundleName.",
     "bundleIdentifier": "local.sbplab.deepseek-harness-audio",
     "desktopProfile": "desktop-audio",
     "architecture": "arm64",
@@ -11,7 +13,7 @@
   },
   "dmg": {
     "namePattern": "^DeepSeek-Harness-Audio-Local-(?<shortVersion>[0-9][0-9A-Za-z.-]*)-(?<tag>audio\\.[0-9A-Za-z.-]+)-arm64\\.dmg$",
-    "requiredTopLevel": ["DeepSeek Harness Audio (Local Build).app", "Applications", "examples", "使用說明 Guide"]
+    "requiredTopLevel": ["Applications", "examples", "使用說明 Guide"]
   },
   "machO": {
     "allowedNonArm64": [
