@@ -1007,7 +1007,7 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 			* @param storage - device preference storage, when available.
 			* @param micBusyElsewhere - whether another feature (Live mode) holds the microphone.
 			*/
-			constructor(backend, upload, sessions, spec = DEFAULT_SPEC, clock = () => performance.now(), storage = safeLocalStorage(), micBusyElsewhere = () => false) {
+			constructor(backend, upload, sessions, spec = DEFAULT_SPEC, clock = () => performance.now(), storage = safeLocalStorage$1(), micBusyElsewhere = () => false) {
 				this.backend = backend;
 				this.upload = upload;
 				this.sessions = sessions;
@@ -1507,7 +1507,7 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 			const pad = (n) => String(n).padStart(2, "0");
 			return `recording-${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}.wav`;
 		}
-		function safeLocalStorage() {
+		function safeLocalStorage$1() {
 			try {
 				return typeof localStorage === "undefined" ? void 0 : localStorage;
 			} catch {
@@ -1588,6 +1588,15 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 			"reply.finalOnly": "服务器在回复结束时才送出完整音频（非串流语音）",
 			"reply.progressive": "已在回复结束前开始播放（{chunks} 段）",
 			"reply.gaps": "有 {gaps} 处音频遗失，已以静音补上",
+			"timeline.progressive": "实际播放：首段声音比生成结束早 {lead} 秒 · {played}/{received} 段依序播放",
+			"timeline.afterGeneration": "实际播放：声音在生成结束后才开始（未边生成边播放）",
+			"timeline.noPlayback": "实际播放：没有播放任何音频",
+			"timeline.pending": "实际播放：已播放 {played}/{received} 段",
+			"timeline.underruns": "{count} 处等待音频的停顿（最长 {ms} 毫秒）",
+			"timeline.stopClean": "停止后没有再出声（{ms} 毫秒内静音）",
+			"timeline.cancelClean": "回复已取消，排队的音频已静音",
+			"timeline.soundAfterStop": "停止后仍有音频开始播放",
+			"timeline.outOfOrder": "音频段未依序播放",
 			"reply.stop": "停止播放",
 			"reply.autoplay": "自动朗读回复",
 			"reply.generated.label": "生成音频播放",
@@ -1792,6 +1801,57 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 			"task.hint.alignment": "录音或附加音频，并在输入框输入这段音频的文字",
 			"task.action.generateVideo": "生成视频",
 			"task.output.video": "输出：视频文件（音轨依服务器结果）",
+			"recover.panel": "中断的离线生成作业",
+			"recover.title": "离线生成作业中断（{model}）",
+			"recover.status.interrupted": "主机重启时作业仍在进行，可以取回结果",
+			"recover.status.recovering": "正在恢复…",
+			"recover.status.fetching": "正在取回结果…",
+			"recover.status.reattaching": "作业仍在进行，已重新连接",
+			"recover.status.recovered": "已取回结果",
+			"recover.status.recovered-unverified": "已取回结果",
+			"recover.status.expired": "服务器上的结果已过期",
+			"recover.status.failed": "生成失败：{code}",
+			"recover.status.cancelled": "作业已被取消",
+			"recover.status.integrity-mismatch": "结果未通过验证",
+			"recover.status.retryable": "恢复中断，可以再试一次",
+			"recover.status.refused": "无法恢复",
+			"recover.status.refused-model-not-ready": "请先启动模型，再恢复",
+			"recover.status.refused-route-changed": "服务器或部署已变更，无法在此取回这个作业",
+			"recover.status.refused-in-flight": "作业仍在本应用中进行，无需恢复",
+			"recover.status.unknown": "恢复状态未知",
+			"recover.badge.verified": "已验证",
+			"recover.badge.unverified": "未验证",
+			"recover.action.recover": "取回结果",
+			"recover.action.again": "再次取回",
+			"recover.action.insert": "插入对话",
+			"recover.action.insertUnverified": "插入对话（未验证）",
+			"recover.action.inserted": "已插入",
+			"recover.player.verified": "取回的音频（已验证）",
+			"recover.player.unverified": "取回的音频（未验证）",
+			"recover.frames": "{frames} 帧",
+			"recover.reply.receiving": "正在接收取回的离线作业音频…",
+			"recover.reply.playing": "正在播放取回的离线作业音频",
+			"recover.reply.ended": "取回的离线作业音频播放完毕",
+			"offlineJob.label": "离线生成作业",
+			"offlineJob.status.created": "已建立",
+			"offlineJob.status.running": "生成中",
+			"offlineJob.status.reconnecting": "与生成作业的连接中断，正在重新连接（第 {attempt} 次）",
+			"offlineJob.status.test-stream-drop": "测试：连接被中断",
+			"offlineJob.status.completed": "已完成",
+			"offlineJob.status.failed": "失败",
+			"offlineJob.status.cancelled": "已取消",
+			"offlineJob.status.interrupted": "主机在作业进行中重启",
+			"offlineJob.status.unknown": "状态：{status}",
+			"offlineJob.frames": "已生成 {frames} 帧",
+			"offlineJob.finish": "结束原因：{reason}",
+			"offlineJob.delivery.progressive": "生成过程中分段送达（主机实测）",
+			"offlineJob.delivery.final-only": "生成结束后才送达完整音频（主机实测）",
+			"offlineJob.stopHint": "用对话的停止按钮取消作业",
+			"offlineJob.recoverPending": "取回结果需要支持作业恢复的主机版本",
+			"offlineJob.reply.label": "离线生成作业的音频",
+			"offlineJob.reply.receiving": "正在接收离线生成作业的音频…",
+			"offlineJob.reply.playing": "正在播放离线生成作业的音频",
+			"offlineJob.reply.ended": "离线生成作业的音频播放完毕",
 			"option.required": "必填",
 			"option.requiredWhen": "条件必填：{raw}",
 			"option.unverified": "来源列出，此模型尚未验证",
@@ -1944,6 +2004,15 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 			"reply.finalOnly": "The server sent the complete audio at the end of the reply (not streaming speech)",
 			"reply.progressive": "Playback started before the reply finished ({chunks} chunks)",
 			"reply.gaps": "{gaps} audio gaps were filled with silence",
+			"timeline.progressive": "Actual playback: first sound {lead} s before generation finished · {played}/{received} chunks played in order",
+			"timeline.afterGeneration": "Actual playback: sound started only after generation finished (not played while generating)",
+			"timeline.noPlayback": "Actual playback: no audio was played",
+			"timeline.pending": "Actual playback: {played}/{received} chunks played",
+			"timeline.underruns": "{count} pauses waiting for audio (longest {ms} ms)",
+			"timeline.stopClean": "No sound after Stop (silent within {ms} ms)",
+			"timeline.cancelClean": "Reply cancelled; queued audio was silenced",
+			"timeline.soundAfterStop": "Audio started playing after Stop",
+			"timeline.outOfOrder": "Chunks did not play in stream order",
 			"reply.stop": "Stop playback",
 			"reply.autoplay": "Read replies aloud",
 			"reply.generated.label": "Generated audio playback",
@@ -2148,6 +2217,57 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 			"task.hint.alignment": "Record or attach the audio and type its transcript in the message box",
 			"task.action.generateVideo": "Generate video",
 			"task.output.video": "Output: video file (sound track as reported by the server)",
+			"recover.panel": "Interrupted offline generator jobs",
+			"recover.title": "Offline generator job interrupted ({model})",
+			"recover.status.interrupted": "the host restarted while the job was running; the result can be recovered",
+			"recover.status.recovering": "Recovering…",
+			"recover.status.fetching": "Fetching the result…",
+			"recover.status.reattaching": "the job is still running; reattached",
+			"recover.status.recovered": "result recovered",
+			"recover.status.recovered-unverified": "result recovered",
+			"recover.status.expired": "Result expired on the server",
+			"recover.status.failed": "Generation failed: {code}",
+			"recover.status.cancelled": "Job was cancelled",
+			"recover.status.integrity-mismatch": "Result failed verification",
+			"recover.status.retryable": "recovery was interrupted; you can try again",
+			"recover.status.refused": "cannot recover",
+			"recover.status.refused-model-not-ready": "Activate the model, then Recover",
+			"recover.status.refused-route-changed": "Server/deployment changed; this job cannot be fetched here",
+			"recover.status.refused-in-flight": "the job is still running in this app; nothing to recover",
+			"recover.status.unknown": "recovery status unknown",
+			"recover.badge.verified": "verified",
+			"recover.badge.unverified": "not verified",
+			"recover.action.recover": "Recover result",
+			"recover.action.again": "Recover again",
+			"recover.action.insert": "Insert into conversation",
+			"recover.action.insertUnverified": "Insert into conversation (not verified)",
+			"recover.action.inserted": "Inserted",
+			"recover.player.verified": "Recovered audio (verified)",
+			"recover.player.unverified": "Recovered audio (not verified)",
+			"recover.frames": "{frames} frames",
+			"recover.reply.receiving": "Receiving recovered offline job audio…",
+			"recover.reply.playing": "Playing recovered offline job audio",
+			"recover.reply.ended": "Recovered offline job audio finished",
+			"offlineJob.label": "Offline generator job",
+			"offlineJob.status.created": "created",
+			"offlineJob.status.running": "generating",
+			"offlineJob.status.reconnecting": "connection to the job lost, reconnecting (attempt {attempt})",
+			"offlineJob.status.test-stream-drop": "test: connection dropped",
+			"offlineJob.status.completed": "completed",
+			"offlineJob.status.failed": "failed",
+			"offlineJob.status.cancelled": "cancelled",
+			"offlineJob.status.interrupted": "the host restarted while the job was running",
+			"offlineJob.status.unknown": "status: {status}",
+			"offlineJob.frames": "{frames} frames generated",
+			"offlineJob.finish": "finished: {reason}",
+			"offlineJob.delivery.progressive": "arrived in parts during generation (host-measured)",
+			"offlineJob.delivery.final-only": "complete audio arrived after generation finished (host-measured)",
+			"offlineJob.stopHint": "use the conversation Stop button to cancel the job",
+			"offlineJob.recoverPending": "retrieving the result needs a host version with job recovery",
+			"offlineJob.reply.label": "Offline generator job audio",
+			"offlineJob.reply.receiving": "Receiving offline generator job audio…",
+			"offlineJob.reply.playing": "Playing offline generator job audio",
+			"offlineJob.reply.ended": "Offline generator job audio finished",
 			"option.required": "required",
 			"option.requiredWhen": "required when: {raw}",
 			"option.unverified": "listed by source, not verified for this model",
@@ -3519,6 +3639,129 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 			}
 		};
 		//#endregion
+		//#region src/client/audio/offline-jobs.ts
+		const KNOWN = new Set([
+			"created",
+			"running",
+			"reconnecting",
+			"test-stream-drop",
+			"completed",
+			"failed",
+			"cancelled",
+			"interrupted"
+		]);
+		/** Statuses after which no event changes the job. */
+		const TERMINAL_JOB_STATUSES = new Set([
+			"completed",
+			"failed",
+			"cancelled",
+			"interrupted"
+		]);
+		const num$1 = (value) => typeof value === "number" && Number.isFinite(value) ? value : void 0;
+		const str$1 = (value) => typeof value === "string" && value !== "" ? value : void 0;
+		/**
+		* Key of one job: provider, model and the worker's job id.
+		* @param provider - route provider.
+		* @param model - model id.
+		* @param jobId - worker job id.
+		* @returns key.
+		*/
+		function offlineJobKey(provider, model, jobId) {
+			return `${provider ?? ""}\u0000${model ?? ""}\u0000${jobId}`;
+		}
+		/**
+		* Apply one `offline.job` feed event.
+		* @param jobs - current jobs by key ({@link offlineJobKey}).
+		* @param event - feed event (`type` already checked by the caller or ignored here).
+		* @returns the same object when nothing changed, else a new map.
+		*/
+		function applyOfflineJobEvent(jobs, event) {
+			if (event.type !== "offline.job") return jobs;
+			const jobId = str$1(event.jobId);
+			if (jobId === void 0) return jobs;
+			const key = offlineJobKey(str$1(event.provider), str$1(event.model), jobId);
+			const previous = jobs[key];
+			const rawStatus = str$1(event.status);
+			const status = rawStatus !== void 0 && KNOWN.has(rawStatus) ? rawStatus : "unknown";
+			if (previous !== void 0 && TERMINAL_JOB_STATUSES.has(previous.status)) return jobs;
+			const frames = num$1(event.framesGenerated);
+			const delivery = event.delivery === "progressive" || event.delivery === "final-only" ? event.delivery : void 0;
+			const next = {
+				jobId,
+				provider: str$1(event.provider) ?? previous?.provider,
+				model: str$1(event.model) ?? previous?.model,
+				status: status === "unknown" && previous !== void 0 ? previous.status : status,
+				rawStatus: status === "unknown" ? rawStatus : void 0,
+				framesGenerated: frames === void 0 ? previous?.framesGenerated : Math.max(frames, previous?.framesGenerated ?? 0),
+				maxTokens: num$1(event.maxTokens) ?? previous?.maxTokens,
+				delivery: delivery ?? previous?.delivery,
+				finishReason: str$1(event.finishReason) ?? previous?.finishReason,
+				reconnectAttempt: status === "reconnecting" ? num$1(event.attempt) ?? previous?.reconnectAttempt : previous?.reconnectAttempt,
+				code: str$1(event.code) ?? previous?.code,
+				order: previous?.order ?? Object.keys(jobs).length
+			};
+			if (previous !== void 0 && JSON.stringify(previous) === JSON.stringify(next)) return jobs;
+			return {
+				...jobs,
+				[key]: next
+			};
+		}
+		/**
+		* Close the running job of a route model when the shared audio stream of an offline job ends without a completed job
+		* event. Host 0.5.0-rc.1 publishes `offline.job` only up to `completed`: a turn Stop (DELETE sent), a worker failure or a
+		* deadline ends the job's audio stream as `cancelled` / `error` but sends no terminal job status.
+		* @param jobs - jobs by key.
+		* @param provider - provider of the ended stream (`audio.start`).
+		* @param model - model of the ended stream.
+		* @param status - `audio.end` status.
+		* @returns the same object when nothing changed.
+		*/
+		function applyOfflineStreamEnd(jobs, provider, model, status) {
+			if (status !== "cancelled" && status !== "error") return jobs;
+			const open = jobsOf(jobs, provider, model).filter((j) => !TERMINAL_JOB_STATUSES.has(j.status)).at(-1);
+			if (open === void 0) return jobs;
+			return {
+				...jobs,
+				[offlineJobKey(open.provider, open.model, open.jobId)]: {
+					...open,
+					status: status === "cancelled" ? "cancelled" : "failed",
+					code: open.code ?? (status === "cancelled" ? "STREAM_CANCELLED" : "STREAM_ERROR")
+				}
+			};
+		}
+		/**
+		* Actions for one job.
+		* @param job - job state.
+		* @param recoveryContract - the host's published recovery facility; none exists yet, so callers pass undefined.
+		* @returns actions with reasons.
+		*/
+		function recoveryActions(job, recoveryContract) {
+			const running = !TERMINAL_JOB_STATUSES.has(job.status);
+			return {
+				stop: {
+					available: running,
+					via: running ? "turn-stop" : void 0
+				},
+				recover: job.status === "interrupted" ? {
+					available: recoveryContract !== void 0,
+					reason: recoveryContract === void 0 ? "contract-pending" : void 0
+				} : {
+					available: false,
+					reason: "not-interrupted"
+				}
+			};
+		}
+		/**
+		* Jobs of one route model, oldest first.
+		* @param jobs - jobs by key.
+		* @param provider - route provider (all when undefined).
+		* @param model - model id (all when undefined).
+		* @returns list.
+		*/
+		function jobsOf(jobs, provider, model) {
+			return Object.values(jobs).filter((j) => (provider === void 0 || j.provider === provider) && (model === void 0 || j.model === model)).sort((a, b) => a.order - b.order);
+		}
+		//#endregion
 		//#region \0dsh-css:packages/third-party/dsh-voice-capture/src/client/audio/audio.module.css.mjs
 		const css = ".hbTdJq_replies{flex-direction:column;gap:8px;margin:4px 0 8px;display:flex}.hbTdJq_reply{border:.5px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);border-radius:12px;flex-direction:column;gap:6px;padding:8px 12px;font-size:13px;line-height:20px;display:flex}.hbTdJq_replyHead,.hbTdJq_row{flex-wrap:wrap;align-items:center;gap:8px;min-height:28px;display:flex}.hbTdJq_nowrap{flex-wrap:nowrap}.hbTdJq_replyTitle,.hbTdJq_title{flex:none;font-weight:500}.hbTdJq_caption{color:var(--dsw-alias-label-secondary);font-size:12px}.hbTdJq_warn{color:var(--dsw-alias-state-warn-label)}.hbTdJq_truncate{text-overflow:ellipsis;white-space:nowrap;flex:auto;min-width:0;overflow:hidden}.hbTdJq_spacer{flex:auto}.hbTdJq_player{width:100%;height:36px;display:block}.hbTdJq_errorText{color:var(--dsw-alias-state-error-primary);font-size:12px}.hbTdJq_bar{box-sizing:border-box;width:calc(100% - var(--dsh-composer-side-clearance,0px) - var(--dsh-composer-side-clearance,0px) - var(--dsh-composer-dock-inset,0px) - var(--dsh-composer-dock-inset,0px) - var(--dsh-composer-dock-inset,0px) - var(--dsh-composer-dock-inset,0px));max-width:calc(var(--dsh-composer-card-max-width,100%) - var(--dsh-composer-dock-inset,0px) - var(--dsh-composer-dock-inset,0px) - var(--dsh-composer-dock-inset,0px) - var(--dsh-composer-dock-inset,0px));border:.5px solid var(--dsw-alias-border-l1);background:var(--dsw-specific-tip);color:var(--dsw-alias-label-primary);border-radius:12px;flex:none;margin:0 auto;padding:8px 12px;font-size:13px;line-height:20px}.hbTdJq_timer{font-variant-numeric:tabular-nums;flex:none;font-weight:500}.hbTdJq_recDot,.hbTdJq_speaking{border-radius:999px;flex:none;width:10px;height:10px;animation:1.2s ease-in-out infinite hbTdJq_blink}.hbTdJq_recDot{background:var(--dsw-alias-state-error-primary)}.hbTdJq_speaking{background:var(--dsw-alias-brand-primary)}.hbTdJq_meter{background:var(--dsw-alias-bg-layer-3);border-radius:999px;flex:0 120px;min-width:60px;height:6px;position:relative;overflow:hidden}.hbTdJq_meterFill{transform-origin:0;border-radius:inherit;background:var(--dsw-alias-state-success-primary);transition:transform 90ms linear;position:absolute;inset:0}.hbTdJq_transcript{background:var(--dsw-alias-bg-layer-1);white-space:pre-wrap;border-radius:8px;max-height:96px;padding:6px 8px;overflow:auto}.hbTdJq_toggle{color:var(--dsw-alias-label-secondary);cursor:pointer;align-items:center;gap:4px;font-size:12px;display:inline-flex}.hbTdJq_liveButton{corner-shape:round;background:var(--dsw-specific-selector);height:28px;color:var(--dsw-alias-label-primary);font:inherit;cursor:pointer;border:none;border-radius:999px;flex:none;align-items:center;gap:6px;padding:0 10px;font-size:13px;display:inline-flex}.hbTdJq_liveButton:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover-solid)}.hbTdJq_liveButton:disabled{opacity:.6;cursor:default}.hbTdJq_liveButton:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}.hbTdJq_liveDot{background:var(--dsw-alias-state-success-primary);border-radius:999px;width:8px;height:8px}.hbTdJq_unverified .hbTdJq_liveDot{background:var(--dsw-alias-state-warn-primary)}.hbTdJq_liveActive .hbTdJq_liveDot{background:var(--dsw-alias-state-error-primary);animation:1.2s ease-in-out infinite hbTdJq_blink}@keyframes hbTdJq_blink{0%,to{opacity:1}50%{opacity:.35}}@media (prefers-reduced-motion:reduce){.hbTdJq_recDot,.hbTdJq_speaking,.hbTdJq_liveActive .hbTdJq_liveDot{animation:none}.hbTdJq_meterFill{transition:none}}.hbTdJq_resultGroup{flex-direction:column;gap:8px;display:flex}.hbTdJq_segments{flex-direction:column;gap:4px;max-height:280px;margin:0;padding:0;list-style:none;display:flex;overflow:auto}.hbTdJq_segment{align-items:baseline;gap:8px;display:flex}.hbTdJq_segmentTime{color:var(--dsw-alias-label-tertiary);font-variant-numeric:tabular-nums;flex:none;font-size:12px}.hbTdJq_speaker{background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-secondary);border-radius:6px;flex:none;padding:0 6px;font-size:12px}.hbTdJq_segmentText,.hbTdJq_transcriptText{white-space:pre-wrap;word-break:break-word}.hbTdJq_taskChip{background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);border-radius:999px;flex:none;padding:2px 8px;font-size:12px;font-weight:500}.hbTdJq_param{align-items:center;gap:6px;min-width:0;display:inline-flex}.hbTdJq_paramWide{flex:220px}.hbTdJq_select,.hbTdJq_numberInput,.hbTdJq_textInput{border:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);height:28px;color:var(--dsw-alias-label-primary);font:inherit;border-radius:8px;padding:0 8px;font-size:12px}.hbTdJq_numberInput{width:72px}.hbTdJq_textInput{flex:auto;min-width:0}.hbTdJq_referenceBox{border:.5px dashed var(--dsw-alias-border-l2);border-radius:10px;flex-direction:column;gap:6px;padding:6px 8px;display:flex}.hbTdJq_iconButton{width:24px;height:24px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:6px;flex:none;place-items:center;display:grid}.hbTdJq_iconButton:hover{background:var(--dsw-alias-interactive-bg-hover)}.hbTdJq_partial{opacity:.65}.hbTdJq_liveChoice{flex-direction:column;gap:2px;min-width:0;max-width:320px;display:flex}.hbTdJq_wordList{flex-wrap:wrap;gap:4px 8px;max-height:120px;margin:0;padding:0;list-style:none;display:flex;overflow:auto}.hbTdJq_word{align-items:baseline;gap:4px;display:inline-flex}.hbTdJq_hiddenParams{color:var(--dsw-alias-text-tertiary);font-size:12px}.hbTdJq_video{background:#000;border-radius:8px;width:100%;max-height:320px}.hbTdJq_thumb{object-fit:contain;border-radius:6px;max-width:128px;max-height:72px}";
 		const tagId = "dsh-voice-capture/audio.module.css";
@@ -3665,14 +3908,16 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 		* Renders nothing for models the audio adapter does not serve, and for plain
 		* chat models without parameters.
 		*/
-		function TaskStrip({ t, useFeatures, useTaskInputs, useReferenceVoice, useGate, useVideoProgress, useInput, inputActions, setValue, pickReference, clearReference, setConsent, setReferenceText, startReference, stopReference, keepReference, discardRecordedReference, generate, cancelGenerate, dismissTaskError, loadValues, openLibrary }) {
+		function TaskStrip({ t, useFeatures, useTaskInputs, useReferenceVoice, useGate, useVideoProgress, useOfflineJobs, useInput, inputActions, setValue, pickReference, clearReference, setConsent, setReferenceText, startReference, stopReference, keepReference, discardRecordedReference, generate, cancelGenerate, dismissTaskError, loadValues, openLibrary }) {
 			const model = useFeatures((features) => features.model);
+			const selection = useFeatures((features) => features.selection);
 			const candidates = useFeatures((features) => features.liveCandidates);
 			const inputs = useTaskInputs((snapshot) => snapshot);
 			const recorder = useReferenceVoice((snapshot) => snapshot);
 			const gate = useGate((snapshot) => snapshot);
 			const draft = useInput((state) => state.draft);
 			const videoJob = useVideoProgress((snapshot) => snapshot);
+			const offlineJobState = useOfflineJobs((snapshot) => snapshot);
 			const fileInput = (0, react.useRef)(null);
 			const latestDraft = (0, react.useRef)(draft);
 			latestDraft.current = draft;
@@ -3815,6 +4060,10 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 							progress: videoJob.progress === void 0 ? "" : ` · ${Math.round(videoJob.progress <= 1 ? videoJob.progress * 100 : videoJob.progress)}%`
 						})
 					}),
+					view.adapterTask === "tts.offline-job" && jobsOf(offlineJobState, selection?.provider, model.id).slice(-1).map((job) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)(OfflineJobLine, {
+						job,
+						t
+					}, job.jobId)),
 					liveOptions.map(({ candidate, params: liveParams, view: liveView }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("details", {
 						className: audio_module_css_default.referenceBox,
 						"data-testid": "dsh-voice-capture-live-options",
@@ -4053,6 +4302,34 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 							}))
 						]
 					})
+				]
+			});
+		}
+		/** One offline generator job: status, progress and measured delivery; never called streaming or Live. */
+		function OfflineJobLine({ job, t }) {
+			const actions = recoveryActions(job);
+			const status = job.status === "unknown" ? t("offlineJob.status.unknown", { status: job.rawStatus ?? "" }) : t(`offlineJob.status.${job.status}`, { attempt: job.reconnectAttempt ?? 1 });
+			const detail = [
+				job.framesGenerated === void 0 ? "" : t("offlineJob.frames", { frames: job.framesGenerated }),
+				job.delivery === void 0 ? "" : t(`offlineJob.delivery.${job.delivery}`),
+				job.finishReason === void 0 ? "" : t("offlineJob.finish", { reason: job.finishReason })
+			].filter(Boolean).join(" · ");
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+				className: cx(audio_module_css_default.caption, (job.status === "failed" || job.status === "interrupted") && audio_module_css_default.warn),
+				role: "status",
+				"data-testid": "dsh-voice-capture-offline-job",
+				"data-job-id": job.jobId,
+				"data-status": job.status,
+				"data-delivery": job.delivery,
+				"data-stop": actions.stop.via,
+				"data-recover": actions.recover.available ? "available" : actions.recover.reason,
+				children: [
+					t("offlineJob.label"),
+					" · ",
+					status,
+					detail === "" ? "" : ` · ${detail}`,
+					actions.stop.available && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [" · ", t("offlineJob.stopHint")] }),
+					job.status === "interrupted" && !actions.recover.available && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [" · ", t("offlineJob.recoverPending")] })
 				]
 			});
 		}
@@ -5636,64 +5913,243 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 			}
 		};
 		//#endregion
-		//#region src/client/audio/player.ts
-		const IDLE = {
-			phase: "idle",
-			streamId: void 0,
-			origin: void 0,
-			task: void 0,
-			hostDelivery: "pending",
-			playedBeforeEnd: false,
-			chunks: 0,
-			droppedChunks: 0,
-			gaps: 0,
-			epochFlushes: 0,
-			sampleRate: 0,
-			receivedSeconds: 0,
-			firstChunkAt: void 0,
-			playbackScheduledAt: void 0,
-			endEventAt: void 0,
-			status: void 0,
-			autoplay: true,
-			error: void 0
-		};
-		/** Output lead time before the first scheduled sample, absorbing decode jitter. */
-		const LEAD_SECONDS = .12;
+		//#region src/client/audio/offline-recover.ts
 		/**
-		* Decode base64 PCM s16le into per-channel Float32 arrays.
-		* @param data - base64 payload.
-		* @param channels - interleaved channel count.
-		* @returns channel arrays.
+		* Explicit recovery of interrupted offline generator jobs (stream `R-MIC_RECOVER_UI_CONTRACT.md`, host
+		* dsh-dgx-audio 0.5.0-rc.1 `offline-job/recover`).
+		*
+		* - Recoverable jobs come from `GET activity` → `offlineJobs.recoverable[]` (listing never contacts a model server) and
+		*   are shown only in the Session whose `sessionId` matches.
+		* - Recovery starts only from the user's Recover button: `POST offline-job/recover {jobId, sessionId, provider, model}`
+		*   exactly as listed. Nothing is recovered on load, Session open or model selection; no job id is built here; no
+		*   generation is ever re-POSTed.
+		* - One recovery per job at a time on this page as well; a second click while one runs does nothing.
+		* - Outcomes are shown as the host states them; `recovered-unverified` and `integrity-mismatch` are never verified.
+		* - Insert into conversation puts the host's `resultLink` line into the composer once per `resultId` (no model call).
 		*/
-		function decodePcm16(data, channels) {
-			const binary = atob(data);
-			const frames = Math.floor(binary.length / 2 / channels);
-			const out = Array.from({ length: channels }, () => new Float32Array(frames));
-			for (let frame = 0; frame < frames; frame++) for (let c = 0; c < channels; c++) {
-				const offset = (frame * channels + c) * 2;
-				let value = binary.charCodeAt(offset) | binary.charCodeAt(offset + 1) << 8;
-				if (value >= 32768) value -= 65536;
-				out[c][frame] = value / 32768;
-			}
-			return out;
+		const RECOVERY_STATUSES = [
+			"not-started",
+			"recovering",
+			"fetching",
+			"reattaching",
+			"recovered",
+			"recovered-unverified",
+			"expired",
+			"failed",
+			"cancelled",
+			"integrity-mismatch",
+			"retryable"
+		];
+		/**
+		* Identity key of a recoverable job: provider, model and the worker's job id (two workers may reuse an id).
+		* @param job - job identity.
+		* @returns key.
+		*/
+		function recoveryKey(job) {
+			return `${job.provider}\u0000${job.model}\u0000${job.jobId}`;
 		}
-		/** Per-Session progressive player. */
-		var ProgressivePlayer = class {
-			createOutput;
-			now;
-			snapshot = IDLE;
-			listeners = /* @__PURE__ */ new Set();
-			stream;
-			output;
-			/**
-			* @param createOutput - lazily creates the output on the first scheduled chunk.
-			* @param now - client monotonic clock in ms.
-			*/
-			constructor(createOutput, now = () => performance.now()) {
-				this.createOutput = createOutput;
-				this.now = now;
+		/** Statuses during which the page polls the status route. */
+		const RECOVERY_RUNNING = new Set([
+			"recovering",
+			"fetching",
+			"reattaching"
+		]);
+		const str = (v) => typeof v === "string" && v !== "" ? v : void 0;
+		/**
+		* Normalise a recovery body (`{recovery: {...}, resultLink?, idempotent?}`), the `recovery` object of a listing, or an
+		* error body (`{ok: false, error: {code, message}}`).
+		* @param body - JSON body.
+		* @param httpStatus - HTTP status, when the body is a reply.
+		* @returns outcome.
+		*/
+		function readRecovery(body, httpStatus) {
+			const b = body ?? {};
+			const error = b.error;
+			if (httpStatus !== void 0 && httpStatus >= 400) return {
+				status: "refused",
+				code: str(error?.code) ?? `HTTP_${httpStatus}`,
+				message: str(error?.message),
+				resultId: void 0,
+				recordingId: void 0,
+				resultLink: void 0,
+				integrity: void 0,
+				contentVerified: void 0,
+				frames: void 0,
+				wasRunning: void 0,
+				idempotent: false
+			};
+			const r = b.recovery !== void 0 && typeof b.recovery === "object" && b.recovery !== null ? b.recovery : b;
+			return {
+				status: typeof r.status === "string" && RECOVERY_STATUSES.includes(r.status) ? r.status : "unknown",
+				code: str(r.code),
+				message: str(r.message),
+				resultId: str(r.resultId),
+				recordingId: str(r.recordingId),
+				resultLink: str(b.resultLink) ?? str(r.resultLink),
+				integrity: str(r.integrity),
+				contentVerified: typeof r.contentVerified === "boolean" || r.contentVerified === null ? r.contentVerified : void 0,
+				frames: typeof r.frames === "number" ? r.frames : void 0,
+				wasRunning: typeof r.wasRunning === "boolean" ? r.wasRunning : void 0,
+				idempotent: b.idempotent === true || r.idempotent === true
+			};
+		}
+		/**
+		* Recoverable jobs of one Session from a `GET activity` body.
+		* @param activity - activity body.
+		* @param sessionId - Session shown.
+		* @returns jobs whose `sessionId` matches exactly; entries missing an identity field are dropped.
+		*/
+		function recoverableJobs(activity, sessionId) {
+			const list = activity?.offlineJobs?.recoverable;
+			if (!Array.isArray(list)) return [];
+			return list.flatMap((item) => {
+				const j = item;
+				const jobId = str(j?.jobId);
+				const sid = str(j?.sessionId);
+				const provider = str(j?.provider);
+				const model = str(j?.model);
+				if (jobId === void 0 || sid === void 0 || provider === void 0 || model === void 0 || sid !== sessionId) return [];
+				if (j.state !== "interrupted" && j.state !== "detached") return [];
+				return [{
+					jobId,
+					sessionId: sid,
+					provider,
+					model,
+					state: j.state,
+					startedAt: str(j.startedAt),
+					recovery: readRecovery(j.recovery ?? { status: "not-started" })
+				}];
+			});
+		}
+		/** Refusals that another click cannot change (contract §3: identity, unknown job, malformed request). */
+		const PERMANENT_REFUSALS = new Set([
+			"JOB_IDENTITY_MISMATCH",
+			"JOB_NOT_RECOVERABLE",
+			"BAD_REQUEST"
+		]);
+		/**
+		* Card state for an outcome.
+		* @param outcome - recovery outcome.
+		* @returns view.
+		*/
+		function recoveryView(outcome) {
+			const none = {
+				spinner: false,
+				recover: void 0,
+				player: false,
+				badge: void 0,
+				insert: void 0
+			};
+			switch (outcome.status) {
+				case "not-started": return {
+					...none,
+					recover: "recover",
+					message: "interrupted"
+				};
+				case "recovering":
+				case "fetching":
+				case "reattaching": return {
+					...none,
+					spinner: true,
+					message: outcome.status
+				};
+				case "recovered":
+					if (outcome.integrity === void 0 && outcome.contentVerified === void 0) return {
+						...none,
+						spinner: true,
+						message: "fetching"
+					};
+					return outcome.integrity === "match" && outcome.contentVerified !== false ? {
+						...none,
+						player: outcome.recordingId !== void 0,
+						badge: "verified",
+						insert: outcome.resultLink === void 0 ? void 0 : "verified",
+						message: "recovered"
+					} : {
+						...none,
+						player: outcome.recordingId !== void 0,
+						badge: "unverified",
+						insert: outcome.resultLink === void 0 ? void 0 : "unverified",
+						message: "recovered-unverified"
+					};
+				case "recovered-unverified": return {
+					...none,
+					player: outcome.recordingId !== void 0,
+					badge: "unverified",
+					insert: outcome.resultLink === void 0 ? void 0 : "unverified",
+					message: "recovered-unverified"
+				};
+				case "expired": return {
+					...none,
+					message: "expired"
+				};
+				case "failed": return {
+					...none,
+					message: "failed"
+				};
+				case "cancelled": return {
+					...none,
+					message: "cancelled"
+				};
+				case "integrity-mismatch": return {
+					...none,
+					message: "integrity-mismatch"
+				};
+				case "retryable": return {
+					...none,
+					recover: "recover-again",
+					message: "retryable"
+				};
+				case "refused": return {
+					...none,
+					recover: PERMANENT_REFUSALS.has(outcome.code ?? "") ? void 0 : "recover-again",
+					message: outcome.code === "MODEL_NOT_READY" ? "refused-model-not-ready" : outcome.code === "JOB_ROUTE_CHANGED" ? "refused-route-changed" : outcome.code === "JOB_IN_FLIGHT" ? "refused-in-flight" : "refused"
+				};
+				default: return {
+					...none,
+					message: "unknown"
+				};
 			}
-			/** Observable source for the reply bar. */
+		}
+		const POLL_MS = 1e3;
+		const POLL_LIMIT_MS = 18e4;
+		/** Per-Session recovery state: listing, explicit Recover, status polling, feed events and one insert per result. */
+		var OfflineRecoveryController = class {
+			sessionId;
+			fetchImpl;
+			sleep;
+			storage;
+			snapshot = {
+				loaded: false,
+				entries: []
+			};
+			listeners = /* @__PURE__ */ new Set();
+			inserted;
+			disposed = false;
+			/**
+			* @param sessionId - the Session this card belongs to.
+			* @param fetchImpl - page fetch.
+			* @param sleep - timer (tests).
+			* @param storage - per-viewer memory of inserted results (survives a reload); unavailable storage only keeps it in memory.
+			*/
+			constructor(sessionId, fetchImpl, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), storage = globalThis.localStorage) {
+				this.sessionId = sessionId;
+				this.fetchImpl = fetchImpl;
+				this.sleep = sleep;
+				this.storage = storage;
+				this.inserted = new Set(this.readInserted());
+			}
+			get storageKey() {
+				return `dsh-voice-capture:recovered-inserted:${this.sessionId}`;
+			}
+			readInserted() {
+				try {
+					const value = JSON.parse(this.storage?.getItem(this.storageKey) ?? "[]");
+					return Array.isArray(value) ? value.filter((v) => typeof v === "string").slice(-200) : [];
+				} catch {
+					return [];
+				}
+			}
 			source = {
 				getSnapshot: () => this.snapshot,
 				subscribe: (listener) => {
@@ -5704,245 +6160,211 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 				}
 			};
 			/**
-			* Apply one feed event.
-			* @param event - validated playback event.
+			* Read the recoverable list (host-local; never starts a recovery).
+			* @returns completion; a host without the list leaves the card empty.
 			*/
-			handle(event) {
-				switch (event.type) {
-					case "audio.start":
-						this.flush();
-						this.stream = {
-							streamId: event.streamId,
-							origin: event.origin,
-							sampleRate: 0,
-							channels: 1,
-							epoch: 0,
-							anchor: void 0,
-							anchorSample: 0,
-							handles: /* @__PURE__ */ new Set(),
-							stopped: false,
-							ended: false
+			async load() {
+				let activity;
+				try {
+					activity = await requestJson(this.fetchImpl, `${ROUTE_PREFIX}/activity`);
+				} catch {
+					activity = void 0;
+				}
+				if (this.disposed) return;
+				const jobs = recoverableJobs(activity, this.sessionId);
+				const previous = new Map(this.snapshot.entries.map((e) => [recoveryKey(e.job), e]));
+				this.set({
+					loaded: true,
+					entries: jobs.map((job) => {
+						const known = previous.get(recoveryKey(job));
+						const outcome = known?.busy === true ? known.outcome : job.recovery;
+						return {
+							job,
+							outcome,
+							busy: known?.busy ?? false,
+							inserted: this.insertedFor(outcome)
 						};
-						this.set({
-							...IDLE,
-							autoplay: this.snapshot.autoplay,
-							phase: "receiving",
-							streamId: event.streamId,
-							origin: event.origin,
-							task: typeof event.task === "string" ? event.task : void 0
-						});
-						return;
-					case "audio.format": {
-						const stream = this.current(event.streamId);
-						if (stream === void 0) return;
-						stream.sampleRate = event.sampleRate;
-						stream.channels = Math.max(1, event.channels);
-						this.set({
-							...this.snapshot,
-							sampleRate: event.sampleRate
-						});
-						return;
+					})
+				});
+				for (const entry of this.snapshot.entries) if ((entry.outcome.status === "recovered" || entry.outcome.status === "recovered-unverified") && entry.outcome.resultLink === void 0 && !entry.busy) this.refreshStatus(recoveryKey(entry.job));
+			}
+			/**
+			* Explicit user Recover (or Recover again after `retryable` or a transient refusal).
+			* @param key - {@link recoveryKey} of a job from the listing.
+			* @returns completion when the recovery reached a non-running status or the poll limit.
+			*/
+			async recover(key) {
+				const entry = this.entry(key);
+				if (entry === void 0 || entry.busy) return;
+				if (recoveryView(entry.outcome).recover === void 0) return;
+				const { sessionId, provider, model, jobId } = entry.job;
+				this.patch(key, {
+					busy: true,
+					outcome: {
+						...entry.outcome,
+						status: "recovering",
+						idempotent: false
 					}
-					case "audio.chunk":
-						this.chunk(event);
-						return;
-					case "audio.epoch": {
-						const stream = this.current(event.streamId);
-						if (stream === void 0 || event.epoch <= stream.epoch) return;
-						stream.epoch = event.epoch;
-						this.stopHandles(stream);
-						stream.anchor = void 0;
-						this.set({
-							...this.snapshot,
-							epochFlushes: this.snapshot.epochFlushes + 1
-						});
-						return;
-					}
-					case "audio.gap": {
-						const stream = this.current(event.streamId);
-						if (stream === void 0) return;
-						if (stream.anchor !== void 0 && this.output !== void 0 && this.output.currentTime > stream.anchor) stream.anchor = void 0;
-						this.set({
-							...this.snapshot,
-							gaps: this.snapshot.gaps + 1
-						});
-						return;
-					}
-					case "audio.end": {
-						const stream = this.current(event.streamId);
-						if (stream === void 0) return;
-						stream.ended = true;
-						const at = this.now();
-						this.set({
-							...this.snapshot,
-							hostDelivery: event.delivery,
-							status: event.status,
-							endEventAt: at,
-							playedBeforeEnd: this.snapshot.playbackScheduledAt !== void 0 && this.snapshot.chunks >= 2,
-							phase: stream.stopped ? "stopped" : event.status === "error" ? "error" : stream.handles.size === 0 ? "ended" : "playing"
-						});
-						return;
-					}
-					default: return;
+				});
+				try {
+					const response = await this.fetchImpl(routeUrl(`${ROUTE_PREFIX}/offline-job/recover`), {
+						method: "POST",
+						credentials: "include",
+						headers: { "content-type": "application/json" },
+						body: JSON.stringify({
+							jobId,
+							sessionId,
+							provider,
+							model
+						})
+					});
+					const outcome = readRecovery(await response.json().catch(() => ({})), response.status);
+					this.patch(key, { outcome });
+					await this.poll(key);
+				} catch (error) {
+					this.patch(key, { outcome: {
+						...entry.outcome,
+						status: "retryable",
+						code: "NETWORK",
+						message: error instanceof Error ? error.message : String(error),
+						idempotent: false
+					} });
+				} finally {
+					this.patch(key, { busy: false });
 				}
 			}
 			/**
-			* Actual played position of the current stream, from the output clock (not from received bytes).
-			* @returns stream id and played milliseconds, or undefined when nothing has been scheduled.
+			* Apply a session feed `offline.job.recovery` event.
+			* @param event - feed event.
 			*/
-			playedPosition() {
-				const stream = this.stream;
-				const output = this.output;
-				if (stream === void 0 || output === void 0 || stream.anchor === void 0 || stream.sampleRate <= 0) return void 0;
-				const elapsed = output.currentTime - stream.anchor + stream.anchorSample / stream.sampleRate;
-				const played = Math.max(0, Math.min(elapsed, this.snapshot.receivedSeconds));
-				return {
-					streamId: stream.streamId,
-					origin: stream.origin,
-					playedMs: Math.round(played * 1e3)
-				};
-			}
-			/** Stop audible playback of the current stream; later chunks of it stay silent. */
-			stop() {
-				const stream = this.stream;
-				if (stream === void 0) return;
-				stream.stopped = true;
-				this.stopHandles(stream);
-				this.set({
-					...this.snapshot,
-					phase: "stopped"
-				});
+			handleEvent(event) {
+				if (event.type !== "offline.job.recovery" || typeof event.jobId !== "string" || typeof event.provider !== "string" || typeof event.model !== "string") return;
+				const entry = this.entry(recoveryKey({
+					provider: event.provider,
+					model: event.model,
+					jobId: event.jobId
+				}));
+				if (entry === void 0) return;
+				const next = readRecovery(event);
+				if (next.status === "unknown") return;
+				this.patch(recoveryKey(entry.job), { outcome: {
+					...entry.outcome,
+					...Object.fromEntries(Object.entries(next).filter(([, v]) => v !== void 0)),
+					idempotent: entry.outcome.idempotent
+				} });
+				if (!RECOVERY_RUNNING.has(next.status)) this.refreshStatus(recoveryKey(entry.job));
 			}
 			/**
-			* Toggle automatic playback of incoming replies.
-			* @param enabled - whether chunks are scheduled audibly.
+			* Insert the result line into the composer once per result.
+			* @param key - {@link recoveryKey} of the job.
+			* @param setDraft - composer writer (appends a line to the current draft).
+			* @returns whether a line was inserted.
 			*/
-			setAutoplay(enabled) {
-				if (!enabled) this.stop();
+			insert(key, setDraft) {
+				const entry = this.entry(key);
+				if (entry === void 0) return false;
+				const view = recoveryView(entry.outcome);
+				const resultId = entry.outcome.resultId;
+				if (view.insert === void 0 || resultId === void 0 || entry.outcome.resultLink === void 0 || this.inserted.has(resultId)) return false;
+				this.inserted.add(resultId);
+				try {
+					this.storage?.setItem(this.storageKey, JSON.stringify([...this.inserted].slice(-200)));
+				} catch {}
+				setDraft(entry.outcome.resultLink);
+				this.patch(key, { inserted: true });
+				return true;
+			}
+			dispose() {
+				this.disposed = true;
+				this.listeners.clear();
+			}
+			insertedFor(outcome) {
+				return outcome.resultId !== void 0 && this.inserted.has(outcome.resultId);
+			}
+			entry(key) {
+				return this.snapshot.entries.find((e) => recoveryKey(e.job) === key);
+			}
+			async poll(key) {
+				const started = Date.now();
+				while (!this.disposed) {
+					const entry = this.entry(key);
+					if (!(entry !== void 0 && (RECOVERY_RUNNING.has(entry.outcome.status) || recoveryView(entry.outcome).message === "fetching"))) return;
+					if (Date.now() - started > POLL_LIMIT_MS) return;
+					await this.sleep(POLL_MS);
+					await this.refreshStatus(key);
+				}
+			}
+			/** GET status: never starts anything and sends no worker request. */
+			async refreshStatus(key) {
+				const entry = this.entry(key);
+				if (entry === void 0) return;
+				const { sessionId, provider, model, jobId } = entry.job;
+				const query = new URLSearchParams({
+					jobId,
+					sessionId,
+					provider,
+					model
+				});
+				try {
+					const response = await this.fetchImpl(routeUrl(`${ROUTE_PREFIX}/offline-job/recover?${query.toString()}`), { credentials: "include" });
+					const outcome = readRecovery(await response.json().catch(() => ({})), response.status);
+					if (outcome.status !== "refused") this.patch(key, { outcome });
+				} catch (error) {
+					if (!(error instanceof AudioRouteError)) return;
+				}
+			}
+			patch(key, patch) {
+				if (this.disposed) return;
+				const entries = this.snapshot.entries.map((e) => recoveryKey(e.job) === key ? {
+					...e,
+					...patch,
+					inserted: patch.inserted ?? this.insertedFor(patch.outcome ?? e.outcome)
+				} : e);
 				this.set({
 					...this.snapshot,
-					autoplay: enabled
+					entries
 				});
-			}
-			/** Release the output (Session composer closed or plugin unload). */
-			async dispose() {
-				this.flush();
-				const output = this.output;
-				this.output = void 0;
-				await output?.close();
-			}
-			chunk(event) {
-				const stream = this.current(event.streamId);
-				if (stream === void 0) return;
-				if (event.epoch < stream.epoch) {
-					this.set({
-						...this.snapshot,
-						droppedChunks: this.snapshot.droppedChunks + 1
-					});
-					return;
-				}
-				const at = this.now();
-				const firstChunkAt = this.snapshot.firstChunkAt ?? at;
-				const received = this.snapshot.receivedSeconds + (stream.sampleRate > 0 ? event.samples / stream.sampleRate : 0);
-				if (stream.stopped || !this.snapshot.autoplay || stream.sampleRate <= 0) {
-					this.set({
-						...this.snapshot,
-						chunks: this.snapshot.chunks + 1,
-						firstChunkAt,
-						receivedSeconds: received
-					});
-					return;
-				}
-				let output = this.output;
-				if (output === void 0) {
-					output = this.createOutput();
-					this.output = output;
-					output.resume();
-				}
-				if (stream.anchor === void 0) {
-					stream.anchor = output.currentTime + LEAD_SECONDS;
-					stream.anchorSample = event.startSample;
-				}
-				const offset = (event.startSample - stream.anchorSample) / stream.sampleRate;
-				let when = stream.anchor + offset;
-				if (when < output.currentTime) {
-					stream.anchor = output.currentTime + LEAD_SECONDS;
-					stream.anchorSample = event.startSample;
-					when = stream.anchor;
-				}
-				const samples = decodePcm16(event.data, stream.channels);
-				const handle = output.schedule(samples, stream.sampleRate, when, () => {
-					stream.handles.delete(handle);
-					if (stream === this.stream && stream.ended && stream.handles.size === 0 && this.snapshot.phase === "playing") this.set({
-						...this.snapshot,
-						phase: "ended"
-					});
-				});
-				stream.handles.add(handle);
-				const scheduledAt = this.snapshot.playbackScheduledAt ?? at + Math.max(0, (when - output.currentTime) * 1e3);
-				this.set({
-					...this.snapshot,
-					phase: stream.ended ? this.snapshot.phase : "playing",
-					chunks: this.snapshot.chunks + 1,
-					firstChunkAt,
-					playbackScheduledAt: scheduledAt,
-					receivedSeconds: received
-				});
-			}
-			current(streamId) {
-				return this.stream?.streamId === streamId ? this.stream : void 0;
-			}
-			stopHandles(stream) {
-				const handles = [...stream.handles];
-				stream.handles.clear();
-				for (const handle of handles) handle.stop();
-			}
-			flush() {
-				if (this.stream !== void 0) this.stopHandles(this.stream);
-				this.stream = void 0;
 			}
 			set(next) {
 				this.snapshot = next;
 				for (const listener of [...this.listeners]) listener();
 			}
 		};
+		//#endregion
+		//#region src/client/audio/download.ts
+		/** Browser-side file saving shared by result cards. */
 		/**
-		* Web Audio output.
-		* @returns an output bound to a new AudioContext.
+		* Save a Blob under a file name through a temporary object URL.
+		* @param blob - content.
+		* @param name - suggested file name.
 		*/
-		function webAudioOutput() {
-			const context = new AudioContext();
-			return {
-				get currentTime() {
-					return context.currentTime;
-				},
-				schedule(samples, sampleRate, when, onEnded) {
-					const buffer = context.createBuffer(samples.length, samples[0]?.length ?? 0, sampleRate);
-					samples.forEach((channel, index) => {
-						buffer.copyToChannel(channel, index);
-					});
-					const node = context.createBufferSource();
-					node.buffer = buffer;
-					node.connect(context.destination);
-					let done = false;
-					const finish = () => {
-						if (done) return;
-						done = true;
-						node.disconnect();
-						onEnded();
-					};
-					node.onended = finish;
-					node.start(Math.max(when, context.currentTime));
-					return { stop() {
-						try {
-							node.stop();
-						} catch {}
-						finish();
-					} };
-				},
-				resume: () => context.resume(),
-				close: () => context.close()
-			};
+		function saveBlob(blob, name) {
+			const url = URL.createObjectURL(blob);
+			const anchor = document.createElement("a");
+			anchor.href = url;
+			anchor.download = name;
+			document.body.appendChild(anchor);
+			anchor.click();
+			anchor.remove();
+			setTimeout(() => {
+				URL.revokeObjectURL(url);
+			}, 1e4);
+		}
+		/**
+		* Fetch an authenticated route and save the response body.
+		* @param url - absolute same-origin URL.
+		* @param name - suggested file name.
+		* @returns whether the download succeeded.
+		*/
+		async function saveRoute(url, name) {
+			try {
+				const response = await fetch(url, { credentials: "include" });
+				if (!response.ok) return false;
+				saveBlob(await response.blob(), name);
+				return true;
+			} catch {
+				return false;
+			}
 		}
 		//#endregion
 		//#region src/client/audio/results.ts
@@ -6113,165 +6535,58 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 			return "audio";
 		}
 		//#endregion
-		//#region src/client/audio/recordings.ts
-		const RESULT_LINK = new RegExp(`\\[([^\\]\\n]{0,200})\\]\\((?:${ROUTE_PREFIX.replace(/\//g, "\\/")}\\/result\\?id=([A-Za-z0-9._~-]{1,200}))\\)`, "g");
+		//#region src/client/audio/TimelineCaption.tsx
 		/**
-		* Extract structured-result links (proposal §E) from assistant text.
-		* @param text - assistant message text.
-		* @param seq - message sequence.
-		* @returns links in text order, de-duplicated by result id.
+		* Actual playback facts of one reply stream (output clock), shown in the reply bar and under the reply player.
+		* The data attributes carry the same facts for evidence readers.
 		*/
-		function resultLinks(text, seq) {
-			const found = /* @__PURE__ */ new Map();
-			for (const match of text.matchAll(RESULT_LINK)) if (!found.has(match[2])) found.set(match[2], {
-				seq,
-				resultId: match[2],
-				label: match[1].trim()
+		function TimelineCaption({ summary, t }) {
+			if (summary === void 0 || summary.chunksReceived === 0) return null;
+			const parts = [];
+			if (summary.verdict === "pending") parts.push(t("timeline.pending", {
+				played: summary.chunksPlayed,
+				received: summary.chunksReceived
+			}));
+			else if (summary.verdict === "progressive") parts.push(t("timeline.progressive", {
+				lead: ((summary.leadMs ?? 0) / 1e3).toFixed(1),
+				played: summary.chunksPlayed,
+				received: summary.chunksReceived
+			}));
+			else if (summary.verdict === "after-generation") parts.push(t("timeline.afterGeneration"));
+			else parts.push(t("timeline.noPlayback"));
+			if (!summary.inOrder) parts.push(t("timeline.outOfOrder"));
+			if (summary.underruns.length > 0) parts.push(t("timeline.underruns", {
+				count: summary.underruns.length,
+				ms: Math.max(...summary.underruns.map((u) => u.gapMs))
+			}));
+			if (summary.stopAt !== void 0) if (summary.soundAfterStop === true) parts.push(t("timeline.soundAfterStop"));
+			else if (summary.stopKind === "cancelled") parts.push(t("timeline.cancelClean"));
+			else parts.push(t("timeline.stopClean", { ms: Math.max(0, (summary.lastSoundAt ?? summary.stopAt) - summary.stopAt) }));
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+				className: audio_module_css_default.caption,
+				role: "status",
+				"data-testid": "dsh-voice-capture-playback-timeline",
+				"data-stream-id": summary.streamId,
+				"data-recording-id": summary.recordingId,
+				"data-verdict": summary.verdict,
+				"data-host-delivery": summary.hostDelivery,
+				"data-first-playback-before-end": summary.firstPlaybackBeforeGenerationEnd === void 0 ? "unknown" : String(summary.firstPlaybackBeforeGenerationEnd),
+				"data-lead-ms": summary.leadMs,
+				"data-chunks-received": summary.chunksReceived,
+				"data-chunks-played": summary.chunksPlayed,
+				"data-in-order": String(summary.inOrder),
+				"data-underruns": summary.underruns.length,
+				"data-stop-kind": summary.stopKind,
+				"data-sound-after-stop": summary.soundAfterStop === void 0 ? void 0 : String(summary.soundAfterStop),
+				"data-clock": summary.clock,
+				children: parts.join(" · ")
 			});
-			return [...found.values()];
-		}
-		const LINK = new RegExp(`\\[([^\\]\\n]{0,200})\\]\\((${ROUTE_PREFIX.replace(/\//g, "\\/")}\\/recording\\?id=([A-Za-z0-9._~-]{1,200}))\\)`, "g");
-		/**
-		* Extract recording links from assistant text.
-		* @param text - assistant message text.
-		* @param seq - message sequence.
-		* @returns links in text order, de-duplicated by recording id.
-		*/
-		function recordingLinks(text, seq) {
-			const found = /* @__PURE__ */ new Map();
-			for (const match of text.matchAll(LINK)) {
-				const recordingId = match[3];
-				if (!found.has(recordingId)) found.set(recordingId, {
-					seq,
-					recordingId,
-					path: match[2],
-					label: match[1].trim()
-				});
-			}
-			return [...found.values()];
-		}
-		function messageText(data) {
-			if (!isRecord(data) || !isRecord(data.message) || !Array.isArray(data.message.content)) return "";
-			return data.message.content.map((part) => isRecord(part) && part.type === "text" && typeof part.text === "string" ? part.text : "").join("\n");
-		}
-		/** Turn-local accumulator; it publishes Turn data and no view Node. */
-		const voiceAudioDefinition = {
-			kind: "voiceAudio",
-			match: (event) => {
-				if (event.type === "turn/start") return {
-					id: String(event.data.turn),
-					role: "start"
-				};
-				if (event.type === "assistant/message") return {
-					id: String(event.data.turn),
-					role: "update"
-				};
-				return null;
-			},
-			start: (_context, match) => {
-				if (match.event.type !== "turn/start") throw new Error("voice-audio start requires turn/start");
-				return {
-					turn: match.event.data.turn,
-					recordings: [],
-					results: [],
-					resultLinks: []
-				};
-			},
-			update: (context, match) => {
-				if (match.event.type !== "assistant/message") return context.state;
-				const text = messageText(match.event.data);
-				const links = recordingLinks(text, match.event.seq);
-				const parsed = parseAudioResults(text, match.event.seq);
-				const linked = resultLinks(text, match.event.seq);
-				if (links.length === 0 && parsed.length === 0 && linked.length === 0) return context.state;
-				const known = new Set(context.state.recordings.map((recording) => recording.recordingId));
-				const added = links.filter((link) => !known.has(link.recordingId));
-				const knownResults = new Set(context.state.results.map((result) => `${result.seq}:${result.index}`));
-				const addedResults = parsed.filter((result) => !knownResults.has(`${result.seq}:${result.index}`));
-				const knownLinks = new Set(context.state.resultLinks.map((link) => link.resultId));
-				const addedLinks = linked.filter((link) => !knownLinks.has(link.resultId));
-				if (added.length === 0 && addedResults.length === 0 && addedLinks.length === 0) return context.state;
-				return {
-					...context.state,
-					resultLinks: addedLinks.length === 0 ? context.state.resultLinks : [...context.state.resultLinks, ...addedLinks],
-					recordings: added.length === 0 ? context.state.recordings : [...context.state.recordings, ...added],
-					results: addedResults.length === 0 ? context.state.results : [...context.state.results, ...addedResults]
-				};
-			},
-			buildLocationData: (context, scope, previous) => {
-				const state = context.state;
-				if (scope !== "turn" || state === void 0 || state.recordings.length === 0 && state.results.length === 0 && state.resultLinks.length === 0) return null;
-				if (previous?.kind === "turn" && previous.turn === state.turn && previous.key === "voiceAudio" && previous.value.recordings === state.recordings && previous.value.results === state.results && previous.value.resultLinks === state.resultLinks) return previous;
-				return {
-					kind: "turn",
-					turn: state.turn,
-					key: "voiceAudio",
-					value: {
-						recordings: state.recordings,
-						results: state.results,
-						resultLinks: state.resultLinks
-					}
-				};
-			}
-		};
-		/**
-		* Chain selector for the completed-Turn tail: results and recordings at or before the closing message.
-		* @param owner - closing Turn and sequence.
-		* @returns matched content, or null so other tail entries may render.
-		*/
-		function selectReplyRecordings(owner) {
-			const data = owner.turn.data.get("voiceAudio");
-			const results = data?.results.filter((result) => result.seq <= owner.seq) ?? [];
-			const links = data?.resultLinks.filter((link) => link.seq <= owner.seq) ?? [];
-			const covered = new Set(results.flatMap((result) => result.outputs.map((output) => output.recordingId)));
-			const linkedSeqs = new Set(links.map((link) => link.seq));
-			const recordings = data?.recordings.filter((recording) => recording.seq <= owner.seq && !covered.has(recording.recordingId) && !linkedSeqs.has(recording.seq)) ?? [];
-			return results.length === 0 && links.length === 0 && recordings.length === 0 ? null : {
-				results,
-				resultLinks: links,
-				recordings
-			};
-		}
-		//#endregion
-		//#region src/client/audio/download.ts
-		/** Browser-side file saving shared by result cards. */
-		/**
-		* Save a Blob under a file name through a temporary object URL.
-		* @param blob - content.
-		* @param name - suggested file name.
-		*/
-		function saveBlob(blob, name) {
-			const url = URL.createObjectURL(blob);
-			const anchor = document.createElement("a");
-			anchor.href = url;
-			anchor.download = name;
-			document.body.appendChild(anchor);
-			anchor.click();
-			anchor.remove();
-			setTimeout(() => {
-				URL.revokeObjectURL(url);
-			}, 1e4);
-		}
-		/**
-		* Fetch an authenticated route and save the response body.
-		* @param url - absolute same-origin URL.
-		* @param name - suggested file name.
-		* @returns whether the download succeeded.
-		*/
-		async function saveRoute(url, name) {
-			try {
-				const response = await fetch(url, { credentials: "include" });
-				if (!response.ok) return false;
-				saveBlob(await response.blob(), name);
-				return true;
-			} catch {
-				return false;
-			}
 		}
 		//#endregion
 		//#region src/client/audio/AudioReplies.tsx
 		/** Completed-Turn audio results: transcripts, generated audio, stems, embeddings and linked recordings (CONTRACT §4, proposal §E). */
-		function AudioReplies({ matched, t, loadResult }) {
+		function AudioReplies({ matched, t, loadResult, playbackTimelineFor, usePlaybackTimelines }) {
+			usePlaybackTimelines((version) => version);
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 				className: audio_module_css_default.replies,
 				"data-testid": "dsh-voice-capture-replies",
@@ -6279,23 +6594,26 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 					matched.resultLinks.map((link) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)(LinkedResult, {
 						link,
 						load: loadResult,
-						t
+						t,
+						timelineFor: playbackTimelineFor
 					}, link.resultId)),
 					matched.results.map((result) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)(ResultCard, {
 						result,
-						t
+						t,
+						timelineFor: playbackTimelineFor
 					}, `${result.seq}:${result.index}`)),
 					matched.recordings.map((recording) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)(RecordingPlayer, {
 						recordingId: recording.recordingId,
 						path: recording.path,
 						title: t("reply.audioOutput"),
 						caption: recording.label.replace(/^▶\s*/, ""),
-						t
+						t,
+						timeline: playbackTimelineFor(recording.recordingId)
 					}, recording.recordingId))
 				]
 			});
 		}
-		function LinkedResult({ link, load, t }) {
+		function LinkedResult({ link, load, t, timelineFor }) {
 			const [state, setState] = (0, react.useState)({ phase: "loading" });
 			(0, react.useEffect)(() => {
 				let current = true;
@@ -6317,7 +6635,8 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 			]);
 			if (state.phase === "ready") return /* @__PURE__ */ (0, react_jsx_runtime.jsx)(ResultCard, {
 				result: state.result,
-				t
+				t,
+				timelineFor
 			});
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 				className: audio_module_css_default.reply,
@@ -6335,7 +6654,7 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 				})
 			});
 		}
-		function ResultCard({ result, t }) {
+		function ResultCard({ result, t, timelineFor }) {
 			const hasTranscript = result.segments.length > 0 || result.text !== void 0 && result.text !== "";
 			const transcriptTitle = result.task === "translation" ? t("result.translation") : result.task === "diarization" ? t("result.speakers") : t("result.transcript");
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
@@ -6356,7 +6675,8 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 						path: `${ROUTE_PREFIX}/recording?id=${encodeURIComponent(output.recordingId)}`,
 						title: titleFor(result.task, output, index, t),
 						caption: outputCaption(output, t),
-						t
+						t,
+						timeline: timelineFor(output.recordingId)
 					}, output.recordingId)),
 					result.wordTimestamps !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(WordTimestampsCard, {
 						words: result.wordTimestamps,
@@ -6634,46 +6954,1030 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 				]
 			});
 		}
-		function RecordingPlayer({ recordingId, path, title, caption, t }) {
+		function RecordingPlayer({ recordingId, path, title, caption, t, timeline }) {
 			const [failed, setFailed] = (0, react.useState)(false);
 			const url = routeUrl(path);
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 				className: audio_module_css_default.reply,
 				"data-recording-id": recordingId,
-				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-					className: audio_module_css_default.replyHead,
-					children: [
-						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-							className: audio_module_css_default.replyTitle,
-							children: title
-						}),
-						caption !== "" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-							className: audio_module_css_default.caption,
-							children: caption
-						}),
-						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: audio_module_css_default.spacer }),
-						!failed && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(DownloadRoute, {
-							url,
-							name: `audio-${recordingId.slice(-16)}.wav`,
-							t
-						})
-					]
-				}), failed ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-					className: audio_module_css_default.errorText,
-					role: "status",
-					children: t("reply.unavailable")
-				}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("audio", {
-					className: audio_module_css_default.player,
-					controls: true,
-					preload: "metadata",
-					src: url,
-					"aria-label": t("reply.player"),
-					onError: () => {
-						setFailed(true);
-					},
-					"data-testid": "dsh-voice-capture-reply-player"
-				})]
+				children: [
+					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+						className: audio_module_css_default.replyHead,
+						children: [
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+								className: audio_module_css_default.replyTitle,
+								children: title
+							}),
+							caption !== "" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+								className: audio_module_css_default.caption,
+								children: caption
+							}),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: audio_module_css_default.spacer }),
+							!failed && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(DownloadRoute, {
+								url,
+								name: `audio-${recordingId.slice(-16)}.wav`,
+								t
+							})
+						]
+					}),
+					failed ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+						className: audio_module_css_default.errorText,
+						role: "status",
+						children: t("reply.unavailable")
+					}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("audio", {
+						className: audio_module_css_default.player,
+						controls: true,
+						preload: "metadata",
+						src: url,
+						"aria-label": t("reply.player"),
+						onError: () => {
+							setFailed(true);
+						},
+						"data-testid": "dsh-voice-capture-reply-player"
+					}),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)(TimelineCaption, {
+						summary: timeline,
+						t
+					})
+				]
 			});
+		}
+		//#endregion
+		//#region src/client/audio/RecoveryCard.tsx
+		/**
+		* Interrupted offline generator jobs of this Session (R-MIC recover contract): explicit Recover, host-stated outcome,
+		* the recovered recording in the existing inline player, and Insert into conversation once per result. Recovered
+		* audio is never labelled streaming, realtime or Live.
+		*/
+		function RecoveryCard({ t, useRecovery, useInput, inputActions, load, recover, insert }) {
+			const snapshot = useRecovery((s) => s);
+			const draft = useInput((state) => state.draft);
+			(0, react.useEffect)(() => {
+				load();
+			}, [load]);
+			if (snapshot.entries.length === 0) return null;
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("section", {
+				className: audio_module_css_default.bar,
+				"aria-label": t("recover.panel"),
+				"data-testid": "dsh-voice-capture-recovery",
+				children: snapshot.entries.map(({ job, outcome, busy, inserted }) => {
+					const view = recoveryView(outcome);
+					const key = recoveryKey(job);
+					const detail = [outcome.code, outcome.message].filter(Boolean).join(" · ");
+					return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+						className: audio_module_css_default.referenceBox,
+						"data-testid": "dsh-voice-capture-recovery-job",
+						"data-job-id": job.jobId,
+						"data-provider": job.provider,
+						"data-model": job.model,
+						"data-status": outcome.status,
+						"data-badge": view.badge,
+						"data-busy": String(busy),
+						"data-inserted": String(inserted),
+						"data-idempotent": String(outcome.idempotent),
+						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+							className: audio_module_css_default.row,
+							children: [
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+									className: audio_module_css_default.title,
+									children: t("recover.title", { model: job.model })
+								}),
+								/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+									className: cx(audio_module_css_default.caption, (view.message === "integrity-mismatch" || view.message.startsWith("refused") || view.message === "failed" || view.badge === "unverified") && audio_module_css_default.warn),
+									role: "status",
+									children: [
+										t(`recover.status.${view.message}`, { code: outcome.code ?? "" }),
+										view.badge === "verified" ? ` · ${t("recover.badge.verified")}` : view.badge === "unverified" ? ` · ${t("recover.badge.unverified")}` : "",
+										detail !== "" && view.message !== "recovered" ? ` · ${detail}` : ""
+									]
+								}),
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: audio_module_css_default.spacer }),
+								view.recover !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+									size: "sm",
+									variant: "primary",
+									disabled: busy,
+									onClick: () => {
+										recover(key);
+									},
+									"data-testid": "dsh-voice-capture-recovery-recover",
+									children: t(view.recover === "recover" ? "recover.action.recover" : "recover.action.again")
+								}),
+								(view.insert !== void 0 || inserted) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+									size: "sm",
+									variant: "outline",
+									disabled: inserted || view.insert === void 0,
+									onClick: () => {
+										insert(key, (line) => {
+											inputActions.setDraft(draft.trim() === "" ? line : `${draft}\n${line}`);
+										});
+									},
+									"data-testid": "dsh-voice-capture-recovery-insert",
+									children: inserted ? t("recover.action.inserted") : t(view.insert === "verified" ? "recover.action.insert" : "recover.action.insertUnverified")
+								})
+							]
+						}), view.player && outcome.recordingId !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(RecordingPlayer, {
+							recordingId: outcome.recordingId,
+							path: `/api/dsh-dgx-audio/v1/recording?id=${encodeURIComponent(outcome.recordingId)}`,
+							title: t(view.badge === "verified" ? "recover.player.verified" : "recover.player.unverified"),
+							caption: outcome.frames === void 0 ? "" : t("recover.frames", { frames: outcome.frames }),
+							t
+						})]
+					}, key);
+				})
+			});
+		}
+		//#endregion
+		//#region src/client/audio/playback-timeline.ts
+		/** A gap between played chunks longer than this is reported as an underrun. */
+		const UNDERRUN_MS = 20;
+		/** Tolerance for a chunk start right at the Stop moment. */
+		const STOP_TOLERANCE_MS = 30;
+		/**
+		* Summarize a timeline.
+		* @param timeline - stream timeline.
+		* @returns derived facts.
+		*/
+		function summarizeTimeline(timeline) {
+			const played = timeline.chunks.filter((c) => c.playStartAt !== void 0).sort((a, b) => a.playStartAt - b.playStartAt);
+			const generationEndAt = timeline.hostEndT ?? timeline.endAt;
+			const firstPlaybackAt = played[0]?.playStartAt;
+			const underruns = [];
+			for (let i = 1; i < played.length; i++) {
+				const previousEnd = played[i - 1].playEndAt;
+				if (previousEnd === void 0) continue;
+				const gap = played[i].playStartAt - previousEnd;
+				if (gap > UNDERRUN_MS) underruns.push({
+					afterSeq: played[i - 1].seq,
+					gapMs: Math.round(gap)
+				});
+			}
+			const stopAt = timeline.stopAt ?? timeline.cancelSilencedAt;
+			const ends = played.map((c) => c.playEndAt ?? c.playStartAt);
+			const firstBeforeEnd = firstPlaybackAt !== void 0 && generationEndAt !== void 0 ? firstPlaybackAt < generationEndAt : void 0;
+			const verdict = timeline.endAt === void 0 ? "pending" : played.length === 0 ? "no-playback" : firstBeforeEnd === true && timeline.chunks.length >= 2 ? "progressive" : "after-generation";
+			return {
+				streamId: timeline.streamId,
+				recordingId: timeline.recordingId,
+				task: timeline.task,
+				verdict,
+				hostDelivery: timeline.hostDelivery,
+				sampleRate: timeline.sampleRate,
+				chunksReceived: timeline.chunks.length,
+				chunksScheduled: timeline.chunks.filter((c) => c.when !== void 0).length,
+				chunksPlayed: played.length,
+				chunksPlayedBeforeGenerationEnd: generationEndAt === void 0 ? void 0 : played.filter((c) => c.playStartAt < generationEndAt).length,
+				firstChunkReceivedAt: timeline.chunks[0]?.receivedAt,
+				firstPlaybackAt,
+				generationEndAt,
+				firstPlaybackBeforeGenerationEnd: firstBeforeEnd,
+				leadMs: firstPlaybackAt !== void 0 && generationEndAt !== void 0 ? Math.round(generationEndAt - firstPlaybackAt) : void 0,
+				inOrder: played.every((c, i) => i === 0 || c.startSample >= played[i - 1].startSample),
+				underruns,
+				lastSoundAt: ends.length === 0 ? void 0 : Math.max(...ends),
+				stopAt,
+				stopKind: timeline.stopAt !== void 0 ? "reply-stop" : timeline.cancelSilencedAt !== void 0 ? "cancelled" : void 0,
+				soundAfterStop: stopAt === void 0 ? void 0 : played.some((c) => c.playStartAt > stopAt + STOP_TOLERANCE_MS),
+				playedSeconds: Math.round(played.reduce((sum, c) => sum + Math.max(0, ((c.playEndAt ?? c.playStartAt) - c.playStartAt) / 1e3), 0) * 1e3) / 1e3,
+				clock: timeline.clock
+			};
+		}
+		const STORAGE_KEY = "dsh-voice-capture:playback-timelines";
+		/** Finished timelines of this page, persisted in this browser, looked up by Session or recording. */
+		var PlaybackTimelineStore = class {
+			storage;
+			entries;
+			listeners = /* @__PURE__ */ new Set();
+			version = 0;
+			/** @param storage - browser storage; undefined keeps entries in memory only. */
+			constructor(storage = safeLocalStorage()) {
+				this.storage = storage;
+				this.entries = this.read();
+			}
+			/** Observable source (snapshot changes on every add). */
+			source = {
+				getSnapshot: () => this.version,
+				subscribe: (listener) => {
+					this.listeners.add(listener);
+					return () => {
+						this.listeners.delete(listener);
+					};
+				}
+			};
+			/**
+			* Add a finished timeline.
+			* @param sessionId - owning Session.
+			* @param timeline - finished timeline.
+			*/
+			add(sessionId, timeline) {
+				const entry = {
+					sessionId,
+					timeline: structuredCloneSafe(timeline),
+					summary: summarizeTimeline(timeline)
+				};
+				this.entries = [...this.entries.filter((e) => e.timeline.streamId !== timeline.streamId), entry].slice(-30);
+				try {
+					this.storage?.setItem(STORAGE_KEY, JSON.stringify(this.entries));
+				} catch {}
+				this.version++;
+				for (const listener of [...this.listeners]) listener();
+			}
+			/**
+			* @param sessionId - Session filter (all when undefined).
+			* @returns entries, oldest first.
+			*/
+			list(sessionId) {
+				return sessionId === void 0 ? this.entries : this.entries.filter((e) => e.sessionId === sessionId);
+			}
+			/**
+			* @param recordingId - host recording id from `audio.end.recording`.
+			* @returns the newest entry for that recording.
+			*/
+			byRecording(recordingId) {
+				for (let i = this.entries.length - 1; i >= 0; i--) if (this.entries[i].timeline.recordingId === recordingId) return this.entries[i];
+			}
+			read() {
+				try {
+					const raw = this.storage?.getItem(STORAGE_KEY);
+					if (raw === null || raw === void 0) return [];
+					const parsed = JSON.parse(raw);
+					return Array.isArray(parsed) ? parsed.filter((e) => typeof e === "object" && e !== null && typeof e.sessionId === "string" && typeof e.timeline?.streamId === "string").map((e) => ({
+						...e,
+						summary: summarizeTimeline(e.timeline)
+					})) : [];
+				} catch {
+					return [];
+				}
+			}
+		};
+		function safeLocalStorage() {
+			try {
+				return globalThis.localStorage ?? void 0;
+			} catch {
+				return;
+			}
+		}
+		function structuredCloneSafe(value) {
+			return JSON.parse(JSON.stringify(value));
+		}
+		//#endregion
+		//#region src/client/audio/player.ts
+		/**
+		* Progressive reply playback for the audio event feed (CONTRACT §3). Chunks
+		* are PCM s16le placed on one output timeline by `startSample / sampleRate`
+		* from the stream anchor, so missing samples play as silence and reordering
+		* cannot change placement. `audio.epoch` flushes queued audio from older
+		* epochs; `audio.gap` re-anchors when the output has overtaken the stream.
+		* A stream the host ends as `cancelled` (turn Stop, barge-in) is silenced at once.
+		* Every stream keeps an actual playback timeline from the output clock ({@link PlaybackTimeline}) and emits §K.15 playback
+		* report events (`scheduled`, `started`, `position`, `underrun`, `stopped`, `ended`) with epoch ms from the output clock
+		* mapping `performance.timeOrigin + outputTimestamp.performanceTime`.
+		* Rendering-only: nothing here is written to the Session log.
+		*/
+		const IDLE = {
+			phase: "idle",
+			streamId: void 0,
+			origin: void 0,
+			task: void 0,
+			hostDelivery: "pending",
+			playedBeforeEnd: false,
+			chunks: 0,
+			droppedChunks: 0,
+			gaps: 0,
+			epochFlushes: 0,
+			sampleRate: 0,
+			receivedSeconds: 0,
+			firstChunkAt: void 0,
+			playbackScheduledAt: void 0,
+			endEventAt: void 0,
+			status: void 0,
+			autoplay: true,
+			error: void 0,
+			timeline: void 0
+		};
+		/** Output lead time before the first scheduled sample, absorbing decode jitter. */
+		const LEAD_SECONDS = .12;
+		/** Output clock sampling period while a stream has audio scheduled. */
+		const SAMPLE_MS = 25;
+		/** Report a played position at this period while audio is sounding (contract: every 200–250 ms). */
+		const POSITION_MS = 200;
+		const defaultSampling = (tick) => {
+			const id = setInterval(tick, SAMPLE_MS);
+			id.unref?.();
+			return () => {
+				clearInterval(id);
+			};
+		};
+		/**
+		* Decode base64 PCM s16le into per-channel Float32 arrays.
+		* @param data - base64 payload.
+		* @param channels - interleaved channel count.
+		* @returns channel arrays.
+		*/
+		function decodePcm16(data, channels) {
+			const binary = atob(data);
+			const frames = Math.floor(binary.length / 2 / channels);
+			const out = Array.from({ length: channels }, () => new Float32Array(frames));
+			for (let frame = 0; frame < frames; frame++) for (let c = 0; c < channels; c++) {
+				const offset = (frame * channels + c) * 2;
+				let value = binary.charCodeAt(offset) | binary.charCodeAt(offset + 1) << 8;
+				if (value >= 32768) value -= 65536;
+				out[c][frame] = value / 32768;
+			}
+			return out;
+		}
+		const num = (value) => typeof value === "number" && Number.isFinite(value) ? value : void 0;
+		/** Per-Session progressive player. */
+		var ProgressivePlayer = class {
+			createOutput;
+			now;
+			snapshot = IDLE;
+			listeners = /* @__PURE__ */ new Set();
+			stream;
+			output;
+			stopSampling;
+			wallNow;
+			startSampling;
+			onTimeline;
+			timeOrigin;
+			onReport;
+			onReportEnd;
+			reportOrigins;
+			/**
+			* @param createOutput - lazily creates the output on the first scheduled chunk.
+			* @param now - client monotonic clock in ms.
+			* @param options - wall clock, sampling and timeline sink.
+			*/
+			constructor(createOutput, now = () => performance.now(), options = {}) {
+				this.createOutput = createOutput;
+				this.now = now;
+				this.wallNow = options.wallNow ?? (() => Date.now());
+				this.startSampling = options.startSampling ?? defaultSampling;
+				this.onTimeline = options.onTimeline;
+				this.timeOrigin = options.timeOrigin ?? performance.timeOrigin;
+				this.onReport = options.onReport;
+				this.onReportEnd = options.onReportEnd;
+				this.reportOrigins = options.reportOrigins;
+			}
+			/** Observable source for the reply bar. */
+			source = {
+				getSnapshot: () => this.snapshot,
+				subscribe: (listener) => {
+					this.listeners.add(listener);
+					return () => {
+						this.listeners.delete(listener);
+					};
+				}
+			};
+			/**
+			* Apply one feed event.
+			* @param event - validated playback event.
+			*/
+			handle(event) {
+				switch (event.type) {
+					case "audio.start":
+						this.flush();
+						this.stream = {
+							streamId: event.streamId,
+							origin: event.origin,
+							sampleRate: 0,
+							channels: 1,
+							epoch: 0,
+							anchor: void 0,
+							anchorSample: 0,
+							handles: /* @__PURE__ */ new Set(),
+							stopped: false,
+							ended: false,
+							scheduledEnd: 0,
+							lastPlayed: 0,
+							reportStarted: false,
+							lastPositionAt: void 0,
+							reportClosed: false,
+							unreported: [],
+							timeline: {
+								version: 1,
+								streamId: event.streamId,
+								origin: event.origin,
+								task: typeof event.task === "string" ? event.task : void 0,
+								provider: typeof event.provider === "string" ? event.provider : void 0,
+								model: typeof event.model === "string" ? event.model : void 0,
+								startAt: this.wallNow(),
+								hostStartT: num(event.t),
+								sampleRate: 0,
+								channels: 1,
+								chunks: [],
+								endAt: void 0,
+								hostEndT: void 0,
+								endStatus: void 0,
+								hostDelivery: void 0,
+								recordingId: void 0,
+								stopAt: void 0,
+								cancelSilencedAt: void 0,
+								clock: void 0,
+								finalizedAt: void 0
+							}
+						};
+						this.set({
+							...IDLE,
+							autoplay: this.snapshot.autoplay,
+							phase: "receiving",
+							streamId: event.streamId,
+							origin: event.origin,
+							task: typeof event.task === "string" ? event.task : void 0
+						});
+						return;
+					case "audio.format": {
+						const stream = this.current(event.streamId);
+						if (stream === void 0) return;
+						stream.sampleRate = event.sampleRate;
+						stream.channels = Math.max(1, event.channels);
+						stream.timeline.sampleRate = event.sampleRate;
+						stream.timeline.channels = stream.channels;
+						this.set({
+							...this.snapshot,
+							sampleRate: event.sampleRate
+						});
+						return;
+					}
+					case "audio.chunk":
+						this.chunk(event);
+						return;
+					case "audio.epoch": {
+						const stream = this.current(event.streamId);
+						if (stream === void 0 || event.epoch <= stream.epoch) return;
+						stream.epoch = event.epoch;
+						this.silence(stream, "flushed", "epoch");
+						stream.anchor = void 0;
+						this.set({
+							...this.snapshot,
+							epochFlushes: this.snapshot.epochFlushes + 1
+						});
+						return;
+					}
+					case "audio.gap": {
+						const stream = this.current(event.streamId);
+						if (stream === void 0) return;
+						if (stream.anchor !== void 0 && this.output !== void 0 && this.output.currentTime > stream.anchor) stream.anchor = void 0;
+						this.set({
+							...this.snapshot,
+							gaps: this.snapshot.gaps + 1
+						});
+						return;
+					}
+					case "audio.end": {
+						const stream = this.current(event.streamId);
+						if (stream === void 0) return;
+						this.sampleStream(stream);
+						stream.ended = true;
+						const at = this.now();
+						const timeline = stream.timeline;
+						timeline.endAt = this.wallNow();
+						timeline.hostEndT = num(event.t);
+						timeline.endStatus = event.status;
+						timeline.hostDelivery = event.delivery;
+						timeline.recordingId = typeof event.recording?.recordingId === "string" ? event.recording.recordingId : void 0;
+						if (event.status === "cancelled" && !stream.stopped) {
+							this.silence(stream, "cancelled", "cancelled");
+							stream.stopped = true;
+							timeline.cancelSilencedAt = timeline.endAt;
+						}
+						this.set({
+							...this.snapshot,
+							hostDelivery: event.delivery,
+							status: event.status,
+							endEventAt: at,
+							playedBeforeEnd: this.snapshot.chunks >= 2 && timeline.chunks.some((c) => c.playStartAt !== void 0 && c.playStartAt < (timeline.hostEndT ?? timeline.endAt)),
+							phase: stream.stopped ? "stopped" : event.status === "error" ? "error" : stream.handles.size === 0 ? "ended" : "playing",
+							timeline: summarizeTimeline(timeline)
+						});
+						this.maybeFinalize(stream);
+						return;
+					}
+					default: return;
+				}
+			}
+			/**
+			* Actual played position of the current stream, from the output clock (not from received bytes).
+			* @returns stream id and played milliseconds, or undefined when nothing has been scheduled.
+			*/
+			playedPosition() {
+				const stream = this.stream;
+				const output = this.output;
+				if (stream === void 0 || output === void 0 || stream.anchor === void 0 || stream.sampleRate <= 0) return void 0;
+				const elapsed = output.currentTime - stream.anchor + stream.anchorSample / stream.sampleRate;
+				const played = Math.max(0, Math.min(elapsed, this.snapshot.receivedSeconds));
+				return {
+					streamId: stream.streamId,
+					origin: stream.origin,
+					playedMs: Math.round(played * 1e3)
+				};
+			}
+			/** Output facts for playback reports (undefined values before the first scheduled chunk). */
+			outputFacts() {
+				const info = this.output?.info?.();
+				const ms = (seconds) => seconds === void 0 || !Number.isFinite(seconds) ? void 0 : Math.round(seconds * 1e4) / 10;
+				const source = this.output === void 0 ? void 0 : this.clock(this.output).source;
+				return {
+					contextSampleRate: info?.sampleRate,
+					baseLatencyMs: ms(info?.baseLatency),
+					outputLatencyMs: ms(info?.outputLatency),
+					clockSource: source === "output-timestamp" ? "AudioContext.getOutputTimestamp" : source === "current-time" ? "AudioContext.currentTime" : void 0
+				};
+			}
+			/** Timeline of the stream in progress (a copy), for evidence readers. */
+			currentTimeline() {
+				return this.stream === void 0 ? void 0 : JSON.parse(JSON.stringify(this.stream.timeline));
+			}
+			/** Stop audible playback of the current stream; later chunks of it stay silent. */
+			stop() {
+				const stream = this.stream;
+				if (stream === void 0) return;
+				if (!stream.stopped) {
+					stream.timeline.stopAt = this.wallNow();
+					this.silence(stream, "stopped", "user");
+				}
+				stream.stopped = true;
+				this.set({
+					...this.snapshot,
+					phase: "stopped",
+					timeline: summarizeTimeline(stream.timeline)
+				});
+				this.maybeFinalize(stream);
+			}
+			/**
+			* Toggle automatic playback of incoming replies.
+			* @param enabled - whether chunks are scheduled audibly.
+			*/
+			setAutoplay(enabled) {
+				if (!enabled) this.stop();
+				this.set({
+					...this.snapshot,
+					autoplay: enabled
+				});
+			}
+			/** Release the output (Session composer closed or plugin unload). */
+			async dispose() {
+				this.flush();
+				const output = this.output;
+				this.output = void 0;
+				await output?.close();
+			}
+			/**
+			* Read the output clock once and mark chunks that started or finished sounding.
+			* Runs periodically while audio is scheduled; exposed for tests.
+			*/
+			sample() {
+				const stream = this.stream;
+				if (stream !== void 0) this.sampleStream(stream);
+			}
+			sampleStream(stream) {
+				const output = this.output;
+				if (output === void 0) return;
+				this.flushScheduled(stream, false);
+				const pending = stream.timeline.chunks.filter((c) => c.when !== void 0 && c.skipped === void 0 && c.playEndAt === void 0);
+				if (pending.length === 0) return;
+				const clock = this.clock(output);
+				const audible = output.running !== false;
+				let changed = false;
+				for (const chunk of pending) {
+					const rate = stream.timeline.sampleRate > 0 ? stream.timeline.sampleRate : 1;
+					if (chunk.playStartAt === void 0 && audible && clock.contextTime >= chunk.when) {
+						chunk.playStartAt = this.epochOf(clock, chunk.when);
+						stream.timeline.clock ??= clock.source;
+						changed = true;
+					}
+					const naturalEnd = chunk.when + chunk.samples / rate;
+					if (chunk.playStartAt !== void 0 && clock.contextTime >= naturalEnd) {
+						chunk.playEndAt = Math.max(chunk.playStartAt, this.epochOf(clock, naturalEnd));
+						changed = true;
+					}
+				}
+				if (!stream.stopped && audible && stream.anchor !== void 0) {
+					const at = this.epochOf(clock, clock.contextTime);
+					if (!stream.reportStarted && clock.contextTime >= stream.anchor) {
+						stream.reportStarted = true;
+						this.report(stream, {
+							type: "started",
+							at: this.epochOf(clock, stream.anchor)
+						});
+						this.reportPosition(stream, clock, at);
+					} else if (stream.reportStarted && (stream.lastPositionAt === void 0 || at - stream.lastPositionAt >= POSITION_MS)) this.reportPosition(stream, clock, at);
+				}
+				if (changed) {
+					if (stream === this.stream) this.set({
+						...this.snapshot,
+						timeline: summarizeTimeline(stream.timeline)
+					});
+					this.maybeFinalize(stream);
+				}
+			}
+			/**
+			* Report scheduled chunks once the output clock maps output time to wall time reliably (running, and the output
+			* timestamp available when the output has one). `force` reports with the best clock at hand (stop/end).
+			*/
+			flushScheduled(stream, force) {
+				const output = this.output;
+				if (output === void 0 || stream.unreported.length === 0) return;
+				const clock = this.clock(output);
+				if (!(output.running !== false && (clock.source === "output-timestamp" || output.outputTimestamp === void 0)) && !force) return;
+				const at = this.epochOf(clock, clock.contextTime);
+				for (const chunk of stream.unreported) this.report(stream, {
+					type: "scheduled",
+					at,
+					seq: chunk.seq,
+					startSample: chunk.startSample,
+					samples: chunk.samples,
+					whenAt: this.epochOf(clock, chunk.when)
+				});
+				stream.unreported = [];
+			}
+			clock(output) {
+				const stamp = output.outputTimestamp?.();
+				return stamp !== void 0 && stamp.performanceTime > 0 ? {
+					contextTime: stamp.contextTime,
+					perf: stamp.performanceTime,
+					source: "output-timestamp"
+				} : {
+					contextTime: output.currentTime,
+					perf: this.now(),
+					source: "current-time"
+				};
+			}
+			/** Epoch ms at which an output time is (or was) audible. */
+			epochOf(clock, outputTime) {
+				return Math.round(this.timeOrigin + clock.perf + (outputTime - clock.contextTime) * 1e3);
+			}
+			playedSamples(stream, contextTime) {
+				if (stream.anchor === void 0 || stream.sampleRate <= 0) return stream.lastPlayed;
+				const played = Math.min(stream.scheduledEnd, Math.round(stream.anchorSample + Math.max(0, contextTime - stream.anchor) * stream.sampleRate));
+				stream.lastPlayed = Math.max(stream.lastPlayed, played);
+				return stream.lastPlayed;
+			}
+			reportPosition(stream, clock, at) {
+				stream.lastPositionAt = at;
+				this.report(stream, {
+					type: "position",
+					at,
+					playedSamples: this.playedSamples(stream, clock.contextTime)
+				});
+			}
+			report(stream, event) {
+				if (stream.reportClosed || !this.reports(stream)) return;
+				this.onReport?.(stream.streamId, event);
+			}
+			closeReport(stream) {
+				if (stream.reportClosed) return;
+				stream.reportClosed = true;
+				if (stream.scheduledEnd > 0 && this.reports(stream)) this.onReportEnd?.(stream.streamId);
+			}
+			reports(stream) {
+				return this.reportOrigins === void 0 || stream.origin !== void 0 && this.reportOrigins.has(stream.origin);
+			}
+			/** Stop every scheduled buffer of a stream and record which chunks were cut or never sounded. */
+			silence(stream, skip, reason) {
+				this.sampleStream(stream);
+				this.flushScheduled(stream, true);
+				const at = this.wallNow();
+				const output = this.output;
+				if (output !== void 0 && stream.scheduledEnd > 0 && !stream.reportClosed) {
+					const clock = this.clock(output);
+					this.report(stream, {
+						type: "stopped",
+						at: this.epochOf(clock, clock.contextTime),
+						playedSamples: this.playedSamples(stream, clock.contextTime),
+						reason
+					});
+				}
+				for (const chunk of stream.timeline.chunks) {
+					if (chunk.when === void 0 || chunk.skipped !== void 0 || chunk.playEndAt !== void 0) continue;
+					if (chunk.playStartAt === void 0) chunk.skipped = skip;
+					else chunk.playEndAt = Math.max(chunk.playStartAt, at);
+				}
+				this.stopHandles(stream);
+				if (reason !== "epoch") this.closeReport(stream);
+				else stream.anchor = void 0;
+			}
+			chunk(event) {
+				const stream = this.current(event.streamId);
+				if (stream === void 0) return;
+				const entry = {
+					seq: event.seq,
+					startSample: event.startSample,
+					samples: event.samples,
+					hostT: num(event.t),
+					receivedAt: this.wallNow(),
+					when: void 0,
+					playStartAt: void 0,
+					playEndAt: void 0,
+					skipped: void 0,
+					reanchored: false
+				};
+				stream.timeline.chunks.push(entry);
+				if (event.epoch < stream.epoch) {
+					entry.skipped = "old-epoch";
+					this.set({
+						...this.snapshot,
+						droppedChunks: this.snapshot.droppedChunks + 1
+					});
+					return;
+				}
+				const at = this.now();
+				const firstChunkAt = this.snapshot.firstChunkAt ?? at;
+				const received = this.snapshot.receivedSeconds + (stream.sampleRate > 0 ? event.samples / stream.sampleRate : 0);
+				if (stream.stopped || !this.snapshot.autoplay || stream.sampleRate <= 0) {
+					entry.skipped = stream.stopped ? stream.timeline.cancelSilencedAt !== void 0 ? "cancelled" : "stopped" : !this.snapshot.autoplay ? "autoplay-off" : "no-format";
+					this.set({
+						...this.snapshot,
+						chunks: this.snapshot.chunks + 1,
+						firstChunkAt,
+						receivedSeconds: received,
+						timeline: summarizeTimeline(stream.timeline)
+					});
+					return;
+				}
+				let output = this.output;
+				if (output === void 0) {
+					output = this.createOutput();
+					this.output = output;
+					output.resume();
+				}
+				if (stream.anchor === void 0) {
+					stream.anchor = output.currentTime + LEAD_SECONDS;
+					stream.anchorSample = event.startSample;
+				}
+				const offset = (event.startSample - stream.anchorSample) / stream.sampleRate;
+				let when = stream.anchor + offset;
+				if (when < output.currentTime) {
+					stream.anchor = output.currentTime + LEAD_SECONDS;
+					stream.anchorSample = event.startSample;
+					when = stream.anchor;
+					entry.reanchored = true;
+					if (stream.reportStarted) this.report(stream, {
+						type: "underrun",
+						at: this.epochOf(this.clock(output), output.currentTime),
+						seq: event.seq
+					});
+				}
+				const samples = decodePcm16(event.data, stream.channels);
+				entry.when = when;
+				stream.scheduledEnd = Math.max(stream.scheduledEnd, event.startSample + event.samples);
+				stream.unreported.push({
+					seq: event.seq,
+					startSample: event.startSample,
+					samples: event.samples,
+					when
+				});
+				this.flushScheduled(stream, false);
+				const handle = output.schedule(samples, stream.sampleRate, when, () => {
+					stream.handles.delete(handle);
+					this.sampleStream(stream);
+					if (stream === this.stream && stream.ended && stream.handles.size === 0 && this.snapshot.phase === "playing") this.set({
+						...this.snapshot,
+						phase: "ended"
+					});
+				});
+				stream.handles.add(handle);
+				this.stopSampling ??= this.startSampling(() => {
+					this.sample();
+				});
+				const scheduledAt = this.snapshot.playbackScheduledAt ?? at + Math.max(0, (when - output.currentTime) * 1e3);
+				this.set({
+					...this.snapshot,
+					phase: stream.ended ? this.snapshot.phase : "playing",
+					chunks: this.snapshot.chunks + 1,
+					firstChunkAt,
+					playbackScheduledAt: scheduledAt,
+					receivedSeconds: received,
+					timeline: summarizeTimeline(stream.timeline)
+				});
+			}
+			/** Publish the timeline once the stream ended and no chunk is still waiting to sound. */
+			maybeFinalize(stream) {
+				const timeline = stream.timeline;
+				if (timeline.finalizedAt !== void 0 || timeline.endAt === void 0) return;
+				if (timeline.chunks.some((c) => c.when !== void 0 && c.skipped === void 0 && c.playEndAt === void 0)) return;
+				if (!stream.stopped && !stream.reportClosed && stream.scheduledEnd > 0 && this.output !== void 0) {
+					this.flushScheduled(stream, true);
+					const clock = this.clock(this.output);
+					const at = this.epochOf(clock, clock.contextTime);
+					if (stream.lastPositionAt === void 0 || at > stream.lastPositionAt) this.reportPosition(stream, clock, at);
+					else this.playedSamples(stream, clock.contextTime);
+					this.report(stream, {
+						type: "ended",
+						at,
+						playedSamples: stream.lastPlayed
+					});
+				}
+				this.closeReport(stream);
+				this.finalize(stream);
+			}
+			finalize(stream) {
+				const timeline = stream.timeline;
+				if (timeline.finalizedAt !== void 0) return;
+				timeline.finalizedAt = this.wallNow();
+				if (stream === this.stream && this.stopSampling !== void 0) {
+					this.stopSampling();
+					this.stopSampling = void 0;
+				}
+				this.onTimeline?.(JSON.parse(JSON.stringify(timeline)));
+			}
+			current(streamId) {
+				return this.stream?.streamId === streamId ? this.stream : void 0;
+			}
+			stopHandles(stream) {
+				const handles = [...stream.handles];
+				stream.handles.clear();
+				for (const handle of handles) handle.stop();
+			}
+			flush() {
+				const stream = this.stream;
+				if (stream !== void 0) {
+					this.silence(stream, "flushed", "new-stream");
+					stream.timeline.endAt ??= this.wallNow();
+					this.finalize(stream);
+				}
+				if (this.stopSampling !== void 0) {
+					this.stopSampling();
+					this.stopSampling = void 0;
+				}
+				this.stream = void 0;
+			}
+			set(next) {
+				this.snapshot = next;
+				for (const listener of [...this.listeners]) listener();
+			}
+		};
+		/**
+		* Web Audio output.
+		* @returns an output bound to a new AudioContext.
+		*/
+		function webAudioOutput() {
+			const context = new AudioContext();
+			return {
+				get currentTime() {
+					return context.currentTime;
+				},
+				get running() {
+					return context.state === "running";
+				},
+				info: () => ({
+					sampleRate: context.sampleRate,
+					baseLatency: context.baseLatency,
+					outputLatency: context.outputLatency
+				}),
+				outputTimestamp() {
+					const stamp = typeof context.getOutputTimestamp === "function" ? context.getOutputTimestamp() : void 0;
+					return stamp?.contextTime !== void 0 && stamp.performanceTime !== void 0 && stamp.performanceTime > 0 ? {
+						contextTime: stamp.contextTime,
+						performanceTime: stamp.performanceTime
+					} : void 0;
+				},
+				schedule(samples, sampleRate, when, onEnded) {
+					const buffer = context.createBuffer(samples.length, samples[0]?.length ?? 0, sampleRate);
+					samples.forEach((channel, index) => {
+						buffer.copyToChannel(channel, index);
+					});
+					const node = context.createBufferSource();
+					node.buffer = buffer;
+					node.connect(context.destination);
+					let done = false;
+					const finish = () => {
+						if (done) return;
+						done = true;
+						node.disconnect();
+						onEnded();
+					};
+					node.onended = finish;
+					node.start(Math.max(when, context.currentTime));
+					return { stop() {
+						try {
+							node.stop();
+						} catch {}
+						finish();
+					} };
+				},
+				resume: () => context.resume(),
+				close: () => context.close()
+			};
+		}
+		//#endregion
+		//#region src/client/audio/recordings.ts
+		const RESULT_LINK = new RegExp(`\\[([^\\]\\n]{0,200})\\]\\((?:${ROUTE_PREFIX.replace(/\//g, "\\/")}\\/result\\?id=([A-Za-z0-9._~-]{1,200}))\\)`, "g");
+		/**
+		* Extract structured-result links (proposal §E) from assistant text.
+		* @param text - assistant message text.
+		* @param seq - message sequence.
+		* @returns links in text order, de-duplicated by result id.
+		*/
+		function resultLinks(text, seq) {
+			const found = /* @__PURE__ */ new Map();
+			for (const match of text.matchAll(RESULT_LINK)) if (!found.has(match[2])) found.set(match[2], {
+				seq,
+				resultId: match[2],
+				label: match[1].trim()
+			});
+			return [...found.values()];
+		}
+		const LINK = new RegExp(`\\[([^\\]\\n]{0,200})\\]\\((${ROUTE_PREFIX.replace(/\//g, "\\/")}\\/recording\\?id=([A-Za-z0-9._~-]{1,200}))\\)`, "g");
+		/**
+		* Extract recording links from assistant text.
+		* @param text - assistant message text.
+		* @param seq - message sequence.
+		* @returns links in text order, de-duplicated by recording id.
+		*/
+		function recordingLinks(text, seq) {
+			const found = /* @__PURE__ */ new Map();
+			for (const match of text.matchAll(LINK)) {
+				const recordingId = match[3];
+				if (!found.has(recordingId)) found.set(recordingId, {
+					seq,
+					recordingId,
+					path: match[2],
+					label: match[1].trim()
+				});
+			}
+			return [...found.values()];
+		}
+		function messageText(data) {
+			if (!isRecord(data) || !isRecord(data.message) || !Array.isArray(data.message.content)) return "";
+			return data.message.content.map((part) => isRecord(part) && part.type === "text" && typeof part.text === "string" ? part.text : "").join("\n");
+		}
+		/** Turn-local accumulator; it publishes Turn data and no view Node. */
+		const voiceAudioDefinition = {
+			kind: "voiceAudio",
+			match: (event) => {
+				if (event.type === "turn/start") return {
+					id: String(event.data.turn),
+					role: "start"
+				};
+				if (event.type === "assistant/message") return {
+					id: String(event.data.turn),
+					role: "update"
+				};
+				return null;
+			},
+			start: (_context, match) => {
+				if (match.event.type !== "turn/start") throw new Error("voice-audio start requires turn/start");
+				return {
+					turn: match.event.data.turn,
+					recordings: [],
+					results: [],
+					resultLinks: []
+				};
+			},
+			update: (context, match) => {
+				if (match.event.type !== "assistant/message") return context.state;
+				const text = messageText(match.event.data);
+				const links = recordingLinks(text, match.event.seq);
+				const parsed = parseAudioResults(text, match.event.seq);
+				const linked = resultLinks(text, match.event.seq);
+				if (links.length === 0 && parsed.length === 0 && linked.length === 0) return context.state;
+				const known = new Set(context.state.recordings.map((recording) => recording.recordingId));
+				const added = links.filter((link) => !known.has(link.recordingId));
+				const knownResults = new Set(context.state.results.map((result) => `${result.seq}:${result.index}`));
+				const addedResults = parsed.filter((result) => !knownResults.has(`${result.seq}:${result.index}`));
+				const knownLinks = new Set(context.state.resultLinks.map((link) => link.resultId));
+				const addedLinks = linked.filter((link) => !knownLinks.has(link.resultId));
+				if (added.length === 0 && addedResults.length === 0 && addedLinks.length === 0) return context.state;
+				return {
+					...context.state,
+					resultLinks: addedLinks.length === 0 ? context.state.resultLinks : [...context.state.resultLinks, ...addedLinks],
+					recordings: added.length === 0 ? context.state.recordings : [...context.state.recordings, ...added],
+					results: addedResults.length === 0 ? context.state.results : [...context.state.results, ...addedResults]
+				};
+			},
+			buildLocationData: (context, scope, previous) => {
+				const state = context.state;
+				if (scope !== "turn" || state === void 0 || state.recordings.length === 0 && state.results.length === 0 && state.resultLinks.length === 0) return null;
+				if (previous?.kind === "turn" && previous.turn === state.turn && previous.key === "voiceAudio" && previous.value.recordings === state.recordings && previous.value.results === state.results && previous.value.resultLinks === state.resultLinks) return previous;
+				return {
+					kind: "turn",
+					turn: state.turn,
+					key: "voiceAudio",
+					value: {
+						recordings: state.recordings,
+						results: state.results,
+						resultLinks: state.resultLinks
+					}
+				};
+			}
+		};
+		/**
+		* Chain selector for the completed-Turn tail: results and recordings at or before the closing message.
+		* @param owner - closing Turn and sequence.
+		* @returns matched content, or null so other tail entries may render.
+		*/
+		function selectReplyRecordings(owner) {
+			const data = owner.turn.data.get("voiceAudio");
+			const results = data?.results.filter((result) => result.seq <= owner.seq) ?? [];
+			const links = data?.resultLinks.filter((link) => link.seq <= owner.seq) ?? [];
+			const covered = new Set(results.flatMap((result) => result.outputs.map((output) => output.recordingId)));
+			const linkedSeqs = new Set(links.map((link) => link.seq));
+			const recordings = data?.recordings.filter((recording) => recording.seq <= owner.seq && !covered.has(recording.recordingId) && !linkedSeqs.has(recording.seq)) ?? [];
+			return results.length === 0 && links.length === 0 && recordings.length === 0 ? null : {
+				results,
+				resultLinks: links,
+				recordings
+			};
 		}
 		//#endregion
 		//#region src/client/audio/LiveButton.tsx
@@ -7167,14 +8471,18 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 		const GENERATED_AUDIO_TASKS = new Set([
 			"tts.speech",
 			"audio.generate",
-			"tts.stream-input"
+			"tts.stream-input",
+			"tts.offline-job"
 		]);
+		/** Offline generator jobs: labelled as a job with the measured delivery, never as streaming or Live. */
+		const OFFLINE_JOB_TASK = "tts.offline-job";
 		/** How long a finished reply status stays visible. */
 		const ENDED_VISIBLE_MS = 6e3;
 		/**
 		* Progressive reply playback status above the composer (CONTRACT §3). The
-		* streaming label appears only when audio was scheduled before the reply
-		* ended; a host `final-only` delivery is labelled as a complete audio reply.
+		* streaming label appears only when audio was audible on the output clock
+		* before the reply ended (not merely scheduled); a host `final-only` delivery
+		* is labelled as a complete audio reply. Stop also stops a still-generating turn.
 		*/
 		function ReplyBar({ t, usePlayback, useLive, stopPlayback, setAutoplay, attachFeed }) {
 			const playback = usePlayback((snapshot) => snapshot);
@@ -7194,19 +8502,20 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 				};
 			}, [playback.phase, playback.streamId]);
 			if (playback.phase === "idle" || (playback.phase === "ended" || playback.phase === "stopped") && !endedVisible) return null;
-			const streamingObserved = playback.playedBeforeEnd || playback.hostDelivery === "pending" && playback.chunks >= 2 && playback.playbackScheduledAt !== void 0;
+			const streamingObserved = playback.playedBeforeEnd || playback.hostDelivery === "pending" && playback.chunks >= 2 && (playback.timeline?.chunksPlayed ?? 0) > 0;
 			const generated = playback.task !== void 0 && GENERATED_AUDIO_TASKS.has(playback.task) || playback.origin === "live" && liveKind === "text-input";
-			const title = playback.phase === "receiving" ? t(generated ? "reply.generated.receiving" : "reply.receiving") : playback.phase === "playing" ? streamingObserved && playback.hostDelivery !== "final-only" ? t(generated ? "reply.generated.playingStreaming" : "reply.speakingStreaming") : t(generated ? "reply.generated.playing" : "reply.speakingFinal") : playback.phase === "stopped" ? t("reply.stopped") : t(generated ? "reply.generated.ended" : "reply.ended");
-			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("section", {
+			const offline = playback.task === OFFLINE_JOB_TASK;
+			const title = playback.origin === "recover" ? playback.phase === "receiving" ? t("recover.reply.receiving") : playback.phase === "playing" ? t("recover.reply.playing") : playback.phase === "stopped" ? t("reply.stopped") : t("recover.reply.ended") : offline ? playback.phase === "receiving" ? t("offlineJob.reply.receiving") : playback.phase === "playing" ? t("offlineJob.reply.playing") : playback.phase === "stopped" ? t("reply.stopped") : t("offlineJob.reply.ended") : playback.phase === "receiving" ? t(generated ? "reply.generated.receiving" : "reply.receiving") : playback.phase === "playing" ? streamingObserved && playback.hostDelivery !== "final-only" ? t(generated ? "reply.generated.playingStreaming" : "reply.speakingStreaming") : t(generated ? "reply.generated.playing" : "reply.speakingFinal") : playback.phase === "stopped" ? t("reply.stopped") : t(generated ? "reply.generated.ended" : "reply.ended");
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("section", {
 				className: audio_module_css_default.bar,
-				"aria-label": t(generated ? "reply.generated.label" : "reply.label"),
+				"aria-label": t(offline ? "offlineJob.reply.label" : generated ? "reply.generated.label" : "reply.label"),
 				"data-testid": "dsh-voice-capture-reply-bar",
 				"data-kind": generated ? "generated" : "spoken",
 				"data-task": playback.task,
 				"data-phase": playback.phase,
 				"data-delivery": playback.hostDelivery,
 				"data-played-before-end": String(playback.playedBeforeEnd),
-				children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 					className: audio_module_css_default.row,
 					children: [
 						playback.phase === "playing" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
@@ -7220,7 +8529,7 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 						}),
 						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 							className: audio_module_css_default.caption,
-							children: playback.hostDelivery === "final-only" ? t(generated ? "reply.generated.finalOnly" : "reply.finalOnly") : playback.playedBeforeEnd ? t("reply.progressive", { chunks: playback.chunks }) : ""
+							children: offline ? playback.hostDelivery === "final-only" ? t("offlineJob.delivery.final-only") : playback.hostDelivery === "progressive" ? t("offlineJob.delivery.progressive") : "" : playback.hostDelivery === "final-only" ? t(generated ? "reply.generated.finalOnly" : "reply.finalOnly") : playback.playedBeforeEnd ? t("reply.progressive", { chunks: playback.chunks }) : ""
 						}),
 						playback.gaps > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 							className: audio_module_css_default.caption,
@@ -7245,8 +8554,184 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 							children: t("reply.stop")
 						})
 					]
-				})
+				}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)(TimelineCaption, {
+					summary: playback.timeline,
+					t
+				})]
 			});
+		}
+		//#endregion
+		//#region src/client/audio/playback-report.ts
+		/**
+		* Playback reports for host evidence (TASK_CONTRACT §K.15, host dsh-dgx-audio ≥ 0.4.9; stream request R-MIC-PLAYBACK):
+		* `POST /api/dsh-dgx-audio/v1/audio/playback {v: 1, sessionId, streamId, client, events}`.
+		* The events come from the player's output clock. This module only batches and posts them. Evidence only: posting
+		* never changes playback, and a failed post never blocks it.
+		*/
+		/** Post the first part this long after the first played position, so evidence survives a crash. */
+		const FIRST_PART_MS = 1e3;
+		/** Then post again at this period while the stream plays. */
+		const PART_PERIOD_MS = 5e3;
+		/** Events per part (host limit 4096 events and 512 KiB). */
+		const MAX_EVENTS_PER_PART = 2e3;
+		/** Batches and posts playback reports for one Session. */
+		var PlaybackReporter = class {
+			fetchImpl;
+			sessionId;
+			client;
+			timers;
+			wallNow;
+			streams = /* @__PURE__ */ new Map();
+			/**
+			* @param fetchImpl - page fetch.
+			* @param sessionId - feed Session of the streams.
+			* @param client - output facts, read at each post.
+			* @param timers - timer functions.
+			* @param wallNow - client epoch ms, for `client.sentAt`.
+			*/
+			constructor(fetchImpl, sessionId, client, timers = {
+				setTimeout: (callback, ms) => setTimeout(callback, ms),
+				clearTimeout: (handle) => {
+					clearTimeout(handle);
+				}
+			}, wallNow = () => Date.now()) {
+				this.fetchImpl = fetchImpl;
+				this.sessionId = sessionId;
+				this.client = client;
+				this.timers = timers;
+				this.wallNow = wallNow;
+			}
+			/**
+			* Record one event of a stream.
+			* @param streamId - `audio.start.streamId`.
+			* @param event - report event.
+			*/
+			event(streamId, event) {
+				let stream = this.streams.get(streamId);
+				if (stream === void 0) {
+					stream = {
+						streamId,
+						pending: [],
+						parts: 0,
+						eventsPosted: 0,
+						closed: false,
+						unknown: false,
+						lastError: void 0,
+						timer: void 0,
+						posting: void 0,
+						playedSeen: false
+					};
+					this.streams.set(streamId, stream);
+					for (const [id, old] of this.streams) {
+						if (this.streams.size <= 32) break;
+						if (old.closed) this.streams.delete(id);
+					}
+				}
+				if (stream.closed || stream.unknown) return;
+				stream.pending.push(event);
+				if (!stream.playedSeen && event.type === "position" && event.playedSamples > 0) {
+					stream.playedSeen = true;
+					this.schedule(stream, FIRST_PART_MS);
+				}
+				if (stream.pending.length >= MAX_EVENTS_PER_PART) this.post(stream);
+			}
+			/**
+			* The stream's playback is over (ended, stopped or error): post everything not yet posted.
+			* @param streamId - stream id.
+			* @returns settles when the final part was posted or refused.
+			*/
+			close(streamId) {
+				const stream = this.streams.get(streamId);
+				if (stream === void 0 || stream.closed) return Promise.resolve();
+				stream.closed = true;
+				if (stream.timer !== void 0) this.timers.clearTimeout(stream.timer);
+				stream.timer = void 0;
+				return this.post(stream);
+			}
+			/** @returns posting state per stream. */
+			state() {
+				return [...this.streams.values()].map((s) => ({
+					streamId: s.streamId,
+					parts: s.parts,
+					eventsPosted: s.eventsPosted,
+					pending: s.pending.length,
+					closed: s.closed,
+					unknown: s.unknown,
+					lastError: s.lastError
+				}));
+			}
+			/** Stop timers (Session composer gone); pending events are dropped. */
+			dispose() {
+				for (const stream of this.streams.values()) {
+					if (stream.timer !== void 0) this.timers.clearTimeout(stream.timer);
+					stream.timer = void 0;
+				}
+			}
+			schedule(stream, ms) {
+				if (stream.timer !== void 0 || stream.closed) return;
+				stream.timer = this.timers.setTimeout(() => {
+					stream.timer = void 0;
+					this.post(stream).then(() => {
+						if (!stream.closed && !stream.unknown) this.schedule(stream, PART_PERIOD_MS);
+					});
+				}, ms);
+			}
+			post(stream) {
+				const run = async () => {
+					while (stream.pending.length > 0 && !stream.unknown) {
+						const events = stream.pending.slice(0, MAX_EVENTS_PER_PART);
+						const client = this.client();
+						const body = {
+							v: 1,
+							sessionId: this.sessionId,
+							streamId: stream.streamId,
+							client: {
+								...client,
+								sentAt: this.wallNow()
+							},
+							events
+						};
+						let response;
+						try {
+							response = await this.fetchImpl(routeUrl(`${ROUTE_PREFIX}/audio/playback`), {
+								method: "POST",
+								credentials: "include",
+								headers: { "content-type": "application/json" },
+								body: JSON.stringify(body)
+							});
+						} catch (error) {
+							stream.lastError = error instanceof Error ? error.message : String(error);
+							return;
+						}
+						if (response.status === 404) {
+							stream.unknown = true;
+							stream.lastError = `HTTP 404 ${await errorCode(response)}`;
+							stream.pending = [];
+							return;
+						}
+						if (!response.ok) {
+							stream.lastError = `HTTP ${response.status} ${await errorCode(response)}`;
+							if (response.status >= 400 && response.status < 500) stream.pending.splice(0, events.length);
+							return;
+						}
+						stream.pending.splice(0, events.length);
+						stream.parts++;
+						stream.eventsPosted += events.length;
+						stream.lastError = void 0;
+					}
+				};
+				const next = (stream.posting ?? Promise.resolve()).then(run);
+				stream.posting = next;
+				return next;
+			}
+		};
+		async function errorCode(response) {
+			try {
+				const code = (await response.json())?.error?.code;
+				return typeof code === "string" ? code : "";
+			} catch {
+				return "";
+			}
 		}
 		//#endregion
 		//#region src/client/index.ts
@@ -7258,6 +8743,8 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 			"sessions",
 			"uiConversation"
 		];
+		/** Plugin version named in playback reports (keep equal to package.json). */
+		const PLUGIN_VERSION = "0.3.5";
 		/** Longest reference voice recording. */
 		const REFERENCE_MAX_MS = 3e4;
 		/** Interval of playback acknowledgements sent from the real player position during Live mode. */
@@ -7355,12 +8842,96 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 					}
 				};
 			};
+			const offlineJobs = /* @__PURE__ */ new Map();
+			const offlineStreams = /* @__PURE__ */ new Map();
+			const offlineJobsFor = (sessionId) => {
+				let entry = offlineJobs.get(sessionId);
+				if (entry === void 0) {
+					entry = {
+						value: {},
+						listeners: /* @__PURE__ */ new Set()
+					};
+					offlineJobs.set(sessionId, entry);
+				}
+				const current = entry;
+				return {
+					getSnapshot: () => current.value,
+					subscribe: (listener) => {
+						current.listeners.add(listener);
+						return () => {
+							current.listeners.delete(listener);
+						};
+					},
+					apply: (event) => {
+						const next = applyOfflineJobEvent(current.value, event);
+						if (next === current.value) return;
+						current.value = next;
+						for (const listener of [...current.listeners]) listener();
+					},
+					endStream: (provider, model, status) => {
+						const next = applyOfflineStreamEnd(current.value, provider, model, status);
+						if (next === current.value) return;
+						current.value = next;
+						for (const listener of [...current.listeners]) listener();
+					}
+				};
+			};
+			const recoveries = /* @__PURE__ */ new Map();
+			/** Offline job recovery per Session: listing on demand, explicit Recover only (R-MIC recover contract). */
+			const recoveryFor = (sessionId) => {
+				let controller = recoveries.get(sessionId);
+				if (controller === void 0) {
+					controller = new OfflineRecoveryController(sessionId, fetchImpl);
+					recoveries.set(sessionId, controller);
+				}
+				return controller;
+			};
 			const features = /* @__PURE__ */ new Map();
 			const feeds = /* @__PURE__ */ new Map();
+			/** Finished actual-playback timelines (this browser), for reply cards and evidence readers. */
+			const playbackTimelines = new PlaybackTimelineStore();
+			const reporters = /* @__PURE__ */ new Map();
+			globalThis.__dshVoiceCapture = {
+				version: "dsh-voice-capture-playback@1",
+				playbackTimelines: (sessionId) => ({
+					finished: playbackTimelines.list(sessionId).map((entry) => ({
+						sessionId: entry.sessionId,
+						summary: summarizeTimeline(entry.timeline),
+						timeline: entry.timeline
+					})),
+					inProgress: [...players.entries()].filter(([id]) => sessionId === void 0 || id === sessionId).map(([id, player]) => ({
+						sessionId: id,
+						timeline: player.currentTimeline()
+					})).filter((entry) => entry.timeline !== void 0 && entry.timeline.finalizedAt === void 0).map((entry) => ({
+						...entry,
+						summary: summarizeTimeline(entry.timeline)
+					})),
+					reports: [...reporters.entries()].filter(([id]) => sessionId === void 0 || id === sessionId).map(([id, reporter]) => ({
+						sessionId: id,
+						streams: reporter.state()
+					}))
+				})
+			};
 			const playerFor = (sessionId) => {
 				let player = players.get(sessionId);
 				if (player === void 0) {
-					player = new ProgressivePlayer(webAudioOutput);
+					const reporter = new PlaybackReporter(fetchImpl, sessionId, () => ({
+						plugin: `dsh-voice-capture@${PLUGIN_VERSION}`,
+						...players.get(sessionId).outputFacts()
+					}));
+					reporters.set(sessionId, reporter);
+					player = new ProgressivePlayer(webAudioOutput, void 0, {
+						onTimeline: (timeline) => {
+							playbackTimelines.add(sessionId, timeline);
+						},
+						onReport: (streamId, event) => {
+							reporter.event(streamId, event);
+						},
+						onReportEnd: (streamId) => {
+							reporter.close(streamId);
+						},
+						reportOrigins: new Set(["chat"])
+					});
 					players.set(sessionId, player);
 				}
 				return player;
@@ -7502,6 +9073,17 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 							if (event.type.startsWith("audio.")) player.handle(event);
 							if (event.type.startsWith("live.") || event.type === "text.delta") live?.handleEvent(event);
 							if (event.type === "model.state" && board.handleModelState(event)) reloadAfterModelState();
+							if (event.type === "offline.job") offlineJobsFor(sessionId).apply(event);
+							if (event.type === "audio.start" && event.task === "tts.offline-job" && event.origin !== "recover" && typeof event.streamId === "string") offlineStreams.set(event.streamId, {
+								provider: typeof event.provider === "string" ? event.provider : void 0,
+								model: typeof event.model === "string" ? event.model : void 0
+							});
+							if (event.type === "audio.end" && typeof event.streamId === "string" && offlineStreams.has(event.streamId)) {
+								const stream = offlineStreams.get(event.streamId);
+								offlineStreams.delete(event.streamId);
+								offlineJobsFor(sessionId).endStream(stream.provider, stream.model, event.status);
+							}
+							if (event.type === "offline.job.recovery") recoveryFor(sessionId).handleEvent(event);
 							if (event.type === "video.progress" && typeof event.jobId === "string") videoProgressFor(sessionId).set({
 								model: typeof event.model === "string" ? event.model : void 0,
 								jobId: event.jobId,
@@ -7583,10 +9165,23 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 					gate: gateFor(sessionId)
 				}
 			});
+			const recoveryFace = (sessionId) => ({
+				load: () => {
+					recoveryFor(sessionId).load();
+				},
+				recover: (key) => {
+					recoveryFor(sessionId).recover(key);
+				},
+				insert: (key, setDraft) => recoveryFor(sessionId).insert(key, setDraft),
+				hooks: { recovery: recoveryFor(sessionId).source }
+			});
 			const audioFace = (sessionId) => ({
 				attachFeed: () => attachFeed(sessionId),
 				stopPlayback: () => {
-					playerFor(sessionId).stop();
+					const player = playerFor(sessionId);
+					const before = player.source.getSnapshot();
+					player.stop();
+					if (before.origin === "chat" && before.status === void 0 && (before.phase === "receiving" || before.phase === "playing")) ctx.sessions.binding(sessionId)?.session.cancel().catch(() => {});
 				},
 				setAutoplay: (enabled) => {
 					playerFor(sessionId).setAutoplay(enabled);
@@ -7684,7 +9279,8 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 					taskInputs: taskInputs.source(sessionId),
 					referenceVoice: referenceRecorder.source(sessionId),
 					gate: gateFor(sessionId),
-					videoProgress: videoProgressFor(sessionId)
+					videoProgress: videoProgressFor(sessionId),
+					offlineJobs: offlineJobsFor(sessionId)
 				}
 			});
 			ctx.slots.inject("conversation.input.left", () => ctx.slots.register({
@@ -7715,6 +9311,13 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 				locale: NS,
 				inject: audioFace
 			}, LiveDock));
+			ctx.slots.inject("conversation.input.dock", () => ctx.slots.register({
+				name: "conversation.input.dock",
+				id: "dsh-voice-capture-recovery",
+				order: 87,
+				locale: NS,
+				inject: recoveryFace
+			}, RecoveryCard));
 			ctx.slots.inject("conversation.input.dock", () => ctx.slots.register({
 				name: "conversation.input.dock",
 				id: "dsh-voice-capture-reply-bar",
@@ -7762,7 +9365,11 @@ registerProcessor(${JSON.stringify(WORKLET_NAME)}, Tap)
 				select: selectReplyRecordings,
 				priority: 1,
 				locale: NS,
-				inject: () => ({ loadResult })
+				inject: () => ({
+					loadResult,
+					playbackTimelineFor: (recordingId) => playbackTimelines.byRecording(recordingId)?.summary,
+					hooks: { playbackTimelines: playbackTimelines.source }
+				})
 			}, AudioReplies));
 		}
 		//#endregion

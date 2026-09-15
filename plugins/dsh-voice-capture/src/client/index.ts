@@ -23,7 +23,7 @@ import { DEFAULT_SPEC, VoiceCaptureController } from './controller.ts'
 import { NS, en, zh } from './locale.ts'
 import { MicButton } from './MicButton.tsx'
 import { VoiceDock } from './VoiceDock.tsx'
-import type { AudioInjected, GateState, TaskInjected, VideoProgress, VoiceInjected } from './slots.ts'
+import type { AudioInjected, GateState, RecoveryInjected, TaskInjected, VideoProgress, VoiceInjected } from './slots.ts'
 import { ActivationBoard, gateBlocks, gateKey } from './audio/gate.ts'
 import type { AudioModelLibraryFace } from './audio/gate.ts'
 import { TaskInputsController } from './audio/task-controller.ts'
@@ -34,6 +34,10 @@ import { CapabilityDirectory } from './audio/capabilities.ts'
 import type { AudioFeatures } from './audio/capabilities.ts'
 import { subscribeAudioEvents } from './audio/events.ts'
 import { LiveController, liveInputName } from './audio/live.ts'
+import { applyOfflineJobEvent, applyOfflineStreamEnd } from './audio/offline-jobs.ts'
+import { OfflineRecoveryController } from './audio/offline-recover.ts'
+import { RecoveryCard } from './audio/RecoveryCard.tsx'
+import type { OfflineJobState } from './audio/offline-jobs.ts'
 import type { LogLiveExchange } from './audio/live.ts'
 import { ProgressivePlayer, webAudioOutput } from './audio/player.ts'
 import type { PlaybackEvent } from './audio/player.ts'
@@ -46,9 +50,14 @@ import { AudioReplies } from './audio/AudioReplies.tsx'
 import { LiveButton } from './audio/LiveButton.tsx'
 import { LiveDock } from './audio/LiveDock.tsx'
 import { ReplyBar } from './audio/ReplyBar.tsx'
+import { PlaybackTimelineStore, summarizeTimeline } from './audio/playback-timeline.ts'
+import { PlaybackReporter } from './audio/playback-report.ts'
 
 /** Services this plugin waits for. */
 export const inject = ['slots', 'locale', 'fileUpload', 'sessions', 'uiConversation']
+
+/** Plugin version named in playback reports (keep equal to package.json). */
+const PLUGIN_VERSION = '0.3.5'
 
 /** Longest reference voice recording. */
 const REFERENCE_MAX_MS = 30_000
@@ -118,12 +127,73 @@ export function apply(ctx: Context): void {
       set: (value: VideoProgress) => { current.value = value; for (const listener of [...current.listeners]) listener() },
     }
   }
+  const offlineJobs = new Map<SessionId, { value: Readonly<Record<string, OfflineJobState>>; listeners: Set<() => void> }>()
+  const offlineStreams = new Map<string, { provider: string | undefined; model: string | undefined }>()
+  const offlineJobsFor = (sessionId: SessionId) => {
+    let entry = offlineJobs.get(sessionId)
+    if (entry === undefined) {
+      entry = { value: {}, listeners: new Set() }
+      offlineJobs.set(sessionId, entry)
+    }
+    const current = entry
+    return {
+      getSnapshot: () => current.value,
+      subscribe: (listener: () => void) => { current.listeners.add(listener); return () => { current.listeners.delete(listener) } },
+      apply: (event: Readonly<Record<string, unknown>>) => {
+        const next = applyOfflineJobEvent(current.value, event)
+        if (next === current.value) return
+        current.value = next
+        for (const listener of [...current.listeners]) listener()
+      },
+      endStream: (provider: string | undefined, model: string | undefined, status: unknown) => {
+        const next = applyOfflineStreamEnd(current.value, provider, model, status)
+        if (next === current.value) return
+        current.value = next
+        for (const listener of [...current.listeners]) listener()
+      },
+    }
+  }
+  const recoveries = new Map<SessionId, OfflineRecoveryController>()
+  /** Offline job recovery per Session: listing on demand, explicit Recover only (R-MIC recover contract). */
+  const recoveryFor = (sessionId: SessionId): OfflineRecoveryController => {
+    let controller = recoveries.get(sessionId)
+    if (controller === undefined) {
+      controller = new OfflineRecoveryController(sessionId, fetchImpl)
+      recoveries.set(sessionId, controller)
+    }
+    return controller
+  }
   const features = new Map<SessionId, { getSnapshot(): AudioFeatures; subscribe(listener: () => void): () => void }>()
   const feeds = new Map<SessionId, { refs: number; dispose: () => void }>()
+  /** Finished actual-playback timelines (this browser), for reply cards and evidence readers. */
+  const playbackTimelines = new PlaybackTimelineStore()
+  const reporters = new Map<SessionId, PlaybackReporter>()
+  // Read-only evidence surface for acceptance tooling (CDP): finished timelines plus the streams in progress.
+  ;(globalThis as { __dshVoiceCapture?: unknown }).__dshVoiceCapture = {
+    version: 'dsh-voice-capture-playback@1',
+    playbackTimelines: (sessionId?: string) => ({
+      finished: playbackTimelines.list(sessionId).map(entry => ({ sessionId: entry.sessionId, summary: summarizeTimeline(entry.timeline), timeline: entry.timeline })),
+      inProgress: [...players.entries()]
+        .filter(([id]) => sessionId === undefined || id === sessionId)
+        .map(([id, player]) => ({ sessionId: id, timeline: player.currentTimeline() }))
+        .filter(entry => entry.timeline !== undefined && entry.timeline.finalizedAt === undefined)
+        .map(entry => ({ ...entry, summary: summarizeTimeline(entry.timeline!) })),
+      reports: [...reporters.entries()].filter(([id]) => sessionId === undefined || id === sessionId).map(([id, reporter]) => ({ sessionId: id, streams: reporter.state() })),
+    }),
+  }
   const playerFor = (sessionId: SessionId): ProgressivePlayer => {
     let player = players.get(sessionId)
     if (player === undefined) {
-      player = new ProgressivePlayer(webAudioOutput)
+      const reporter = new PlaybackReporter(fetchImpl, sessionId, () => ({ plugin: `dsh-voice-capture@${PLUGIN_VERSION}`, ...players.get(sessionId)!.outputFacts() }))
+      reporters.set(sessionId, reporter)
+      player = new ProgressivePlayer(webAudioOutput, undefined, {
+        onTimeline: timeline => { playbackTimelines.add(sessionId, timeline) },
+        // §K.15 playback reports (host ≥ 0.4.9); older hosts answer 404 once per stream and nothing is retried.
+        onReport: (streamId, event) => { reporter.event(streamId, event) },
+        onReportEnd: (streamId) => { void reporter.close(streamId) },
+        // Turn replies only (R-MIC-PLAYBACK: live optional); the Live duplex path stays as in 0.3.4.
+        reportOrigins: new Set(['chat']),
+      })
       players.set(sessionId, player)
     }
     return player
@@ -250,6 +320,17 @@ export function apply(ctx: Context): void {
           if (event.type.startsWith('audio.')) player.handle(event as unknown as PlaybackEvent)
           if (event.type.startsWith('live.') || event.type === 'text.delta') live?.handleEvent(event)
           if (event.type === 'model.state' && board.handleModelState(event)) reloadAfterModelState()
+          if (event.type === 'offline.job') offlineJobsFor(sessionId).apply(event)
+          // The audio stream of an offline job tells when a Stop, failure or deadline ended it (no job event for that).
+          if (event.type === 'audio.start' && event.task === 'tts.offline-job' && event.origin !== 'recover' && typeof event.streamId === 'string') {
+            offlineStreams.set(event.streamId, { provider: typeof event.provider === 'string' ? event.provider : undefined, model: typeof event.model === 'string' ? event.model : undefined })
+          }
+          if (event.type === 'audio.end' && typeof event.streamId === 'string' && offlineStreams.has(event.streamId)) {
+            const stream = offlineStreams.get(event.streamId)!
+            offlineStreams.delete(event.streamId)
+            offlineJobsFor(sessionId).endStream(stream.provider, stream.model, event.status)
+          }
+          if (event.type === 'offline.job.recovery') recoveryFor(sessionId).handleEvent(event)
           if (event.type === 'video.progress' && typeof event.jobId === 'string') {
             videoProgressFor(sessionId).set({
               model: typeof event.model === 'string' ? event.model : undefined,
@@ -315,9 +396,26 @@ export function apply(ctx: Context): void {
     openLibrary: () => board.openLibrary(sessionId),
     hooks: { voice: controller.source(sessionId), gate: gateFor(sessionId) },
   })
+  const recoveryFace = (sessionId: SessionId): RecoveryInjected => ({
+    load: () => { void recoveryFor(sessionId).load() },
+    recover: (key) => { void recoveryFor(sessionId).recover(key) },
+    insert: (key, setDraft) => recoveryFor(sessionId).insert(key, setDraft),
+    hooks: { recovery: recoveryFor(sessionId).source },
+  })
   const audioFace = (sessionId: SessionId): AudioInjected => ({
     attachFeed: () => attachFeed(sessionId),
-    stopPlayback: () => { playerFor(sessionId).stop() },
+    stopPlayback: () => {
+      const player = playerFor(sessionId)
+      const before = player.source.getSnapshot()
+      player.stop()
+      // A turn reply still generating (no audio.end yet) is also stopped like the conversation Stop, so the host aborts the
+      // upstream request (R-MIC-PLAYBACK stop semantics). Live replies keep their own controls.
+      if (before.origin === 'chat' && before.status === undefined && (before.phase === 'receiving' || before.phase === 'playing')) {
+        void ctx.sessions.binding(sessionId)?.session.cancel().catch(() => {
+          // A refused cancel is shown by the conversation (promptError); local playback is already silent.
+        })
+      }
+    },
     setAutoplay: (enabled) => { playerFor(sessionId).setAutoplay(enabled) },
     startLive: (modelId) => {
       const current = featuresFor(sessionId).getSnapshot()
@@ -372,7 +470,7 @@ export function apply(ctx: Context): void {
     openLibrary: () => board.openLibrary(sessionId),
     cancelGenerate: () => { taskInputs.cancel(sessionId) },
     dismissTaskError: () => { taskInputs.dismissError(sessionId) },
-    hooks: { features: featuresFor(sessionId), taskInputs: taskInputs.source(sessionId), referenceVoice: referenceRecorder!.source(sessionId), gate: gateFor(sessionId), videoProgress: videoProgressFor(sessionId) },
+    hooks: { features: featuresFor(sessionId), taskInputs: taskInputs.source(sessionId), referenceVoice: referenceRecorder!.source(sessionId), gate: gateFor(sessionId), videoProgress: videoProgressFor(sessionId), offlineJobs: offlineJobsFor(sessionId) },
   })
 
   ctx.slots.inject('conversation.input.left', () => ctx.slots.register({
@@ -387,6 +485,9 @@ export function apply(ctx: Context): void {
   ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
     name: 'conversation.input.dock', id: 'dsh-voice-capture-live-panel', order: 86, locale: NS, inject: audioFace,
   }, LiveDock))
+  ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
+    name: 'conversation.input.dock', id: 'dsh-voice-capture-recovery', order: 87, locale: NS, inject: recoveryFace,
+  }, RecoveryCard))
   ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
     name: 'conversation.input.dock', id: 'dsh-voice-capture-reply-bar', order: 88, locale: NS, inject: audioFace,
   }, ReplyBar))
@@ -419,6 +520,10 @@ export function apply(ctx: Context): void {
   }
   ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({
     name: 'conversation.chat.turnTail', select: selectReplyRecordings, priority: 1, locale: NS,
-    inject: () => ({ loadResult }),
+    inject: () => ({
+      loadResult,
+      playbackTimelineFor: (recordingId: string) => playbackTimelines.byRecording(recordingId)?.summary,
+      hooks: { playbackTimelines: playbackTimelines.source },
+    }),
   }, AudioReplies))
 }

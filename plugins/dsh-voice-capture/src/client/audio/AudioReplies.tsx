@@ -7,16 +7,20 @@ import { saveBlob, saveRoute } from './download.ts'
 import type { ReplyRecording, ResultLink } from './recordings.ts'
 import { outputLabel, toPlainText, toSrt, toVtt } from './results.ts'
 import type { AudioResult, ResultAudio, WordTimestamps } from './results.ts'
+import type { TimelineSummary } from './playback-timeline.ts'
+import { TimelineCaption } from './TimelineCaption.tsx'
 import css from './audio.module.css'
 
 type T = AudioRepliesProps['t']
 
 /** Completed-Turn audio results: transcripts, generated audio, stems, embeddings and linked recordings (CONTRACT §4, proposal §E). */
-export function AudioReplies({ matched, t, loadResult }: AudioRepliesProps) {
+export function AudioReplies({ matched, t, loadResult, playbackTimelineFor, usePlaybackTimelines }: AudioRepliesProps) {
+  // Re-render when a stream timeline is finalized (the store version changes).
+  usePlaybackTimelines(version => version)
   return (
     <div className={css.replies} data-testid="dsh-voice-capture-replies">
-      {matched.resultLinks.map(link => <LinkedResult key={link.resultId} link={link} load={loadResult} t={t} />)}
-      {matched.results.map(result => <ResultCard key={`${result.seq}:${result.index}`} result={result} t={t} />)}
+      {matched.resultLinks.map(link => <LinkedResult key={link.resultId} link={link} load={loadResult} t={t} timelineFor={playbackTimelineFor} />)}
+      {matched.results.map(result => <ResultCard key={`${result.seq}:${result.index}`} result={result} t={t} timelineFor={playbackTimelineFor} />)}
       {matched.recordings.map(recording => (
         <RecordingPlayer
           key={recording.recordingId}
@@ -25,13 +29,17 @@ export function AudioReplies({ matched, t, loadResult }: AudioRepliesProps) {
           title={t('reply.audioOutput')}
           caption={recording.label.replace(/^▶\s*/, '')}
           t={t}
+          timeline={playbackTimelineFor(recording.recordingId)}
         />
       ))}
     </div>
   )
 }
 
-function LinkedResult({ link, load, t }: { link: ResultLink; load: AudioRepliesProps['loadResult']; t: T }) {
+/** Actual playback facts by recording id (this browser). */
+type TimelineFor = AudioRepliesProps['playbackTimelineFor']
+
+function LinkedResult({ link, load, t, timelineFor }: { link: ResultLink; load: AudioRepliesProps['loadResult']; t: T; timelineFor: TimelineFor }) {
   const [state, setState] = useState<{ phase: 'loading' } | { phase: 'ready'; result: AudioResult } | { phase: 'failed' }>({ phase: 'loading' })
   useEffect(() => {
     let current = true
@@ -41,7 +49,7 @@ function LinkedResult({ link, load, t }: { link: ResultLink; load: AudioRepliesP
     )
     return () => { current = false }
   }, [link.resultId, link.seq, load])
-  if (state.phase === 'ready') return <ResultCard result={state.result} t={t} />
+  if (state.phase === 'ready') return <ResultCard result={state.result} t={t} timelineFor={timelineFor} />
   return (
     <div className={css.reply} data-testid="dsh-voice-capture-result-link" data-phase={state.phase}>
       <div className={css.replyHead}>
@@ -52,7 +60,7 @@ function LinkedResult({ link, load, t }: { link: ResultLink; load: AudioRepliesP
   )
 }
 
-function ResultCard({ result, t }: { result: AudioResult; t: T }) {
+function ResultCard({ result, t, timelineFor }: { result: AudioResult; t: T; timelineFor: TimelineFor }) {
   const hasTranscript = result.segments.length > 0 || (result.text !== undefined && result.text !== '')
   const transcriptTitle = result.task === 'translation' ? t('result.translation') : result.task === 'diarization' ? t('result.speakers') : t('result.transcript')
   return (
@@ -67,6 +75,7 @@ function ResultCard({ result, t }: { result: AudioResult; t: T }) {
           title={titleFor(result.task, output, index, t)}
           caption={outputCaption(output, t)}
           t={t}
+          timeline={timelineFor(output.recordingId)}
         />
       ))}
       {result.wordTimestamps !== undefined && <WordTimestampsCard words={result.wordTimestamps} base={`words-${result.seq}-${result.index}`} t={t} />}
@@ -225,12 +234,14 @@ function VideoPlayer({ output, t }: { output: ResultAudio; t: T }) {
   )
 }
 
-function RecordingPlayer({ recordingId, path, title, caption, t }: {
+export function RecordingPlayer({ recordingId, path, title, caption, t, timeline }: {
   recordingId: string
   path: string
   title: string
   caption: string
   t: T
+  /** Actual playback facts of the stream that produced this recording, when this browser played it. */
+  timeline?: TimelineSummary
 }) {
   const [failed, setFailed] = useState(false)
   const url = routeUrl(path)
@@ -255,6 +266,7 @@ function RecordingPlayer({ recordingId, path, title, caption, t }: {
             data-testid="dsh-voice-capture-reply-player"
           />
         )}
+      <TimelineCaption summary={timeline} t={t} />
     </div>
   )
 }

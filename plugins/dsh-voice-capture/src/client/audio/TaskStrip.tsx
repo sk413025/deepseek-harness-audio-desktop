@@ -8,6 +8,8 @@ import type { ReferenceSlot, TaskParam, TaskValue, TaskView } from './tasks.ts'
 import { rendersControl } from './options.ts'
 import type { OfferState, OptionFact } from './options.ts'
 import { gateBlocks } from './gate.ts'
+import { jobsOf, recoveryActions } from './offline-jobs.ts'
+import type { OfflineJobState } from './offline-jobs.ts'
 import css from './audio.module.css'
 
 /** Tasks whose request text comes from the composer and is sent by this strip's action. */
@@ -63,17 +65,19 @@ const REFERENCE_PARAMS: ReadonlySet<string> = new Set(['refText'])
  * chat models without parameters.
  */
 export function TaskStrip({
-  t, useFeatures, useTaskInputs, useReferenceVoice, useGate, useVideoProgress, useInput, inputActions,
+  t, useFeatures, useTaskInputs, useReferenceVoice, useGate, useVideoProgress, useOfflineJobs, useInput, inputActions,
   setValue, pickReference, clearReference, setConsent, setReferenceText, startReference, stopReference,
   keepReference, discardRecordedReference, generate, cancelGenerate, dismissTaskError, loadValues, openLibrary,
 }: TaskStripProps) {
   const model = useFeatures(features => features.model)
+  const selection = useFeatures(features => features.selection)
   const candidates = useFeatures(features => features.liveCandidates)
   const inputs = useTaskInputs(snapshot => snapshot)
   const recorder = useReferenceVoice(snapshot => snapshot)
   const gate = useGate(snapshot => snapshot)
   const draft = useInput(state => state.draft)
   const videoJob = useVideoProgress(snapshot => snapshot)
+  const offlineJobState = useOfflineJobs(snapshot => snapshot)
   const fileInput = useRef<HTMLInputElement | null>(null)
   const latestDraft = useRef(draft)
   latestDraft.current = draft
@@ -176,6 +180,9 @@ export function TaskStrip({
           {t('task.videoProgress', { status: videoJob.status, progress: videoJob.progress === undefined ? '' : ` · ${Math.round(videoJob.progress <= 1 ? videoJob.progress * 100 : videoJob.progress)}%` })}
         </div>
       )}
+      {view.adapterTask === 'tts.offline-job' && jobsOf(offlineJobState, selection?.provider, model.id).slice(-1).map(job => (
+        <OfflineJobLine key={job.jobId} job={job} t={t} />
+      ))}
       {liveOptions.map(({ candidate, params: liveParams, view: liveView }) => (
         <details key={candidate.model.model} className={css.referenceBox} data-testid="dsh-voice-capture-live-options" data-model={candidate.model.model}>
           <summary className={css.caption}>{t('task.liveOptions', { model: candidate.model.model })}</summary>
@@ -315,6 +322,33 @@ export function TaskStrip({
           ))}
       </div>
     </section>
+  )
+}
+
+/** One offline generator job: status, progress and measured delivery; never called streaming or Live. */
+function OfflineJobLine({ job, t }: { job: OfflineJobState; t: TaskStripProps['t'] }) {
+  const actions = recoveryActions(job)
+  const status = job.status === 'unknown' ? t('offlineJob.status.unknown', { status: job.rawStatus ?? '' }) : t(`offlineJob.status.${job.status}`, { attempt: job.reconnectAttempt ?? 1 })
+  const detail = [
+    job.framesGenerated === undefined ? '' : t('offlineJob.frames', { frames: job.framesGenerated }),
+    job.delivery === undefined ? '' : t(`offlineJob.delivery.${job.delivery}`),
+    job.finishReason === undefined ? '' : t('offlineJob.finish', { reason: job.finishReason }),
+  ].filter(Boolean).join(' · ')
+  return (
+    <div
+      className={cx(css.caption, (job.status === 'failed' || job.status === 'interrupted') && css.warn)}
+      role="status"
+      data-testid="dsh-voice-capture-offline-job"
+      data-job-id={job.jobId}
+      data-status={job.status}
+      data-delivery={job.delivery}
+      data-stop={actions.stop.via}
+      data-recover={actions.recover.available ? 'available' : actions.recover.reason}
+    >
+      {t('offlineJob.label')} · {status}{detail === '' ? '' : ` · ${detail}`}
+      {actions.stop.available && <> · {t('offlineJob.stopHint')}</>}
+      {job.status === 'interrupted' && !actions.recover.available && <> · {t('offlineJob.recoverPending')}</>}
+    </div>
   )
 }
 
