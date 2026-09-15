@@ -9,6 +9,11 @@
 //   --phase ci-env     like lifecycle, but the app environment contains CI=true: Install from File + Remove of a local
 //                      package. The expected outcome per build comes from ci/expected.json knownDefects (bound to the
 //                      tag's MANIFEST.txt patch hash), so a known defect stays visible without hiding a regression.
+//   --phase bundled    mandatory bundled plugins (FOCUSED_AUDIO_DEMO_PLAN "Mandatory bundled plugins"): the app from the
+//                      DMG, a clean profile with pre-existing user settings and NO endpoint, nothing sideloaded by the CI →
+//                      the four plugins installed and enabled at runtime, embedded packages == Release tgz (version/sha),
+//                      Audio models UI and the microphone control, then a relaunch that changes nothing and keeps the
+//                      user's settings. Offline seed presence alone is only a structural check elsewhere.
 //   --phase lifecycle  Playwright (experimental Electron support) drives the real Plugins window:
 //                      list, Install from File (only the native OS open-panel is stubbed in the main process),
 //                      rejected bad packages, Remove, bundled Disable/Enable, main window boot graph follows.
@@ -21,6 +26,7 @@ import { appendFileSync, createWriteStream, existsSync, mkdirSync, readdirSync, 
 import { tmpdir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import { attachPage, freePort, sleep, targets, waitUntil } from '../lib/cdp.mjs'
+import { chooseWorkspace, createFolderChooserShim, dismissFirstRunDialogs } from '../lib/desktop-ui.mjs'
 import { EVIDENCE, parseArgs, readTarball, Report, required, run, sha256 } from '../lib/report.mjs'
 
 const args = parseArgs()
@@ -53,6 +59,7 @@ try {
   if (args.phase === 'launch') await launchPhase()
   else if (args.phase === 'lifecycle') await lifecyclePhase()
   else if (args.phase === 'ci-env') await ciEnvPhase()
+  else if (args.phase === 'bundled') await bundledPhase()
   else throw new Error(`unknown phase ${args.phase}`)
 } catch (error) {
   report.add(`${args.phase}.aborted`, 'fail', args.phase === 'launch' ? L : U, String(error?.message ?? error).slice(0, 1500), { last: error?.last, stack: String(error?.stack ?? '').slice(0, 2000) })
@@ -455,6 +462,99 @@ async function ciEnvPhase() {
   } else {
     report.expect(defect.check, removed, U, removed ? `Remove of a local plugin works with CI=true (patch 0003 ${patchSha?.slice(0, 12)}…)` : `Remove failed with CI=true on a build that should carry the fix (patch 0003 ${patchSha?.slice(0, 12) ?? 'unknown'}…)`, detail)
   }
+  await Promise.race([app.close(), sleep(60_000)])
+}
+
+async function bundledPhase() {
+  const { _electron } = await import('playwright-core')
+  const instance = newInstance('bundled')
+  const workspace = join(workDir, 'workspace')
+  mkdirSync(workspace, { recursive: true })
+  const shim = createFolderChooserShim({ workDir, workspace, logFile: join(outDir, 'os-dialog-shim.log') })
+  instance.env.PATH = `${shim.dir}:${instance.env.PATH}`
+  const settingsFile = join(instance.home, 'settings.yaml')
+  // A recipient's own settings exist before the first launch; no audio endpoint is configured (installation ≠ endpoint setup).
+  writeFileSync(settingsFile, 'ui-onboarding:\n  welcomeNoticeVersion: 2026-08-13.1\ndsh-dgx-audio:\n  requestTimeoutMs: 654321\n')
+  const userSetting = () => /requestTimeoutMs:\s*654321\b/.test(readFileSync(settingsFile, 'utf8')) && /welcomeNoticeVersion:\s*['"]?2026-08-13\.1/.test(readFileSync(settingsFile, 'utf8'))
+  const projectDir = join(instance.home, 'profiles', profile)
+  report.expect('bundled.clean-profile', !existsSync(join(instance.home, 'profiles')), U, 'clean home before the first launch: no profile, no plugin files; this phase runs no pnpm, no Install from File and no repository packages')
+
+  const launch = async (label) => {
+    const app = await _electron.launch({ executablePath: executable, args: [`--user-data-dir=${instance.userData}`], env: instance.env, timeout: 420_000 })
+    cleanups.push(async () => { try { app.process().kill('SIGKILL') } catch { /* gone */ } })
+    app.process().stdout?.pipe(createWriteStream(join(outDir, `${label}-stdout.log`)))
+    app.process().stderr?.pipe(createWriteStream(join(outDir, `${label}-stderr.log`)))
+    const page = (await waitUntil(`${label} booted main window`, async () => {
+      const w = app.windows().find(x => !x.isClosed() && x.url().startsWith('dsh-app://app/'))
+      return w && (await w.evaluate(() => Array.isArray(window.__DSH_BOOT__?.entries) && window.__DSH_BOOT__.entries.length > 0).catch(() => false)) ? w : undefined
+    }, { timeoutMs: 420_000, intervalMs: 1000 })).value
+    return { app, page }
+  }
+  const pluginList = async (app) => {
+    await app.evaluate(({ Menu }) => { for (const top of Menu.getApplicationMenu()?.items ?? []) for (const item of top.submenu?.items ?? []) if (item.accelerator === 'CmdOrCtrl+,') { item.click(); return } })
+    const pm = (await waitUntil('plugin manager window', async () => app.windows().find(w => w.url().includes('plugin-manager.html')), { timeoutMs: 30_000, intervalMs: 500 })).value
+    await pm.waitForFunction(() => document.querySelectorAll('#plugins li').length > 0 && !document.querySelector('#install-file')?.disabled, null, { timeout: 120_000 })
+    const list = await pm.evaluate(() => window.dshDesktop.plugins.list())
+    await pm.screenshot({ path: join(outDir, `plugins-window-${Date.now()}.png`) }).catch(() => undefined)
+    await pm.close().catch(() => undefined)
+    return list
+  }
+  const snapshotFiles = () => Object.fromEntries([['profile/package.json', join(projectDir, 'package.json')], ...plugins.map(p => [`node_modules/${p.name}/package.json`, join(projectDir, 'node_modules', p.name, 'package.json')])].map(([k, f]) => [k, existsSync(f) ? sha256(readFileSync(f)) : null]))
+
+  // First launch.
+  let { app, page } = await launch('bundled-first')
+  await dismissFirstRunDialogs(page, note)
+  const seedRecords = JSON.parse(readFileSync(join(args.app, 'Contents', 'Resources', 'seed', 'desktop-bundled-plugins.json'), 'utf8')).plugins
+  const manifest = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf8'))
+  const list1 = await pluginList(app)
+  const ids1 = await page.evaluate(() => window.__DSH_BOOT__.entries.map(e => e.id))
+  const releaseAssetSha = name => { const p = plugins.find(x => x.name === name); return p && existsSync(join(args.assets, p.file)) ? sha256(readFileSync(join(args.assets, p.file))) : null }
+  for (const plugin of plugins) {
+    const seed = seedRecords.find(r => r.name === plugin.name)
+    const seedFileSha = seed ? sha256(readFileSync(join(args.app, 'Contents', 'Resources', 'seed', 'desktop-local-packages', seed.file))) : null
+    const installedPkg = existsSync(join(projectDir, 'node_modules', plugin.name, 'package.json')) ? JSON.parse(readFileSync(join(projectDir, 'node_modules', plugin.name, 'package.json'), 'utf8')) : null
+    const mismatched = [...tarballs.get(plugin.name).files].filter(([path, bytes]) => !existsSync(join(projectDir, 'node_modules', plugin.name, path)) || sha256(readFileSync(join(projectDir, 'node_modules', plugin.name, path))) !== sha256(bytes)).map(([path]) => path)
+    report.expect(`bundled.embedded-equals-release.${plugin.name}`, seed?.version === plugin.version && seed?.sha256 === plugin.sha256 && seedFileSha === plugin.sha256 && releaseAssetSha(plugin.name) === plugin.sha256 && installedPkg?.version === plugin.version && mismatched.length === 0, U,
+      `${plugin.name}: embedded ${seed?.version}/${seed?.sha256?.slice(0, 12)}… (file ${seedFileSha?.slice(0, 12)}…) == Release tgz ${plugin.version}/${releaseAssetSha(plugin.name)?.slice(0, 12)}…; installed ${installedPkg?.version} with all package files equal`, { seed, seedFileSha, releaseAssetSha: releaseAssetSha(plugin.name), installedVersion: installedPkg?.version, mismatched })
+    const spec = manifest.dependencies?.[plugin.name]
+    const item = list1.find(p => p.name === plugin.name)
+    report.expect(`bundled.enabled.${plugin.name}`, typeof spec === 'string' && spec.includes('desktop-local-packages/') && spec.includes(plugin.sha256.slice(0, 12)) && (manifest.dsh?.profile?.bundles ?? []).includes(plugin.name) && item?.source === 'bundled' && item?.state !== 'disabled' && item?.version === plugin.version, U,
+      `${plugin.name} installed and enabled on first launch without any install action: profile spec ${spec}, bundled=${(manifest.dsh?.profile?.bundles ?? []).includes(plugin.name)}, Plugins window source=${item?.source} state=${item?.state ?? 'enabled'} version=${item?.version}`)
+  }
+  report.expect('bundled.exactly-four', list1.length === plugins.length && plugins.length === 4, U, `Plugins window lists ${list1.length} plugins; release declares ${plugins.length}`, { list: list1 })
+  report.expect('bundled.client-plugins-loaded', expected.hostedSmoke.clientPlugins.every(id => ids1.includes(id)), U, `boot graph loads ${expected.hostedSmoke.clientPlugins.join(', ')}`, { ids: ids1 })
+  const caps = await page.evaluate(async () => { const r = await fetch('/api/dsh-dgx-audio/v1/capabilities'); return { status: r.status, body: await r.json().catch(() => null) } })
+  const lib = await page.evaluate(async () => { const r = await fetch('/api/dsh-audio-model-library/v1/library'); return { status: r.status, body: await r.json().catch(() => null) } })
+  const host = plugins.find(p => p.name === 'dsh-dgx-audio')
+  report.expect('bundled.host-plugins-running', caps.status === 200 && caps.body?.plugin?.version === host?.version && caps.body?.configured === false && lib.status === 200 && lib.body?.ok === true, U, `dsh-dgx-audio ${caps.body?.plugin?.version} answers with configured=${caps.body?.configured} (no endpoint set) and the library host route answers ok=${lib.body?.ok}`)
+
+  // UI: Audio models view reports its host plugin and the adapter present; the microphone control is in the composer.
+  await page.getByText(/^Audio models$/).first().click({ timeout: 15_000 })
+  const libraryView = await waitUntil('Audio model library view', async () => page.evaluate(() => {
+    const text = document.body.innerText
+    return /Audio model library/.test(text) ? { hostMissing: /host plugin is not running/i.test(text), adapterMissing: /dsh-dgx-audio is not installed/i.test(text), noServer: /No server yet/i.test(text) } : null
+  }), { timeoutMs: 20_000, intervalMs: 300 }).then(r => r.value).catch(() => null)
+  await page.screenshot({ path: join(outDir, 'bundled-audio-models.png') }).catch(() => undefined)
+  report.expect('bundled.ui-audio-models', libraryView !== null && !libraryView.hostMissing && !libraryView.adapterMissing, U, `sidebar "Audio models" opens the library view: host plugin running=${libraryView ? !libraryView.hostMissing : '?'}, adapter present=${libraryView ? !libraryView.adapterMissing : '?'} (no server configured yet: ${libraryView?.noServer ?? '?'})`, libraryView ?? {})
+  const workspaceChoice = await chooseWorkspace(page, shim.log)
+  const mic = await waitUntil('microphone control in the composer', async () => page.evaluate(() => { const el = document.querySelector('[data-testid=dsh-voice-capture-mic]'); return el ? { phase: el.dataset.phase ?? null, label: el.getAttribute('aria-label') } : null }), { timeoutMs: 20_000, intervalMs: 300 }).then(r => r.value).catch(() => null)
+  await page.screenshot({ path: join(outDir, 'bundled-composer-mic.png') }).catch(() => undefined)
+  report.expect('bundled.ui-microphone-control', workspaceChoice.ready !== null && mic !== null, U, `composer after choosing a workspace (OS chooser shimmed ${workspaceChoice.shimCalls}×) shows the microphone control: ${mic ? `"${mic.label}" phase ${mic.phase}` : 'absent'}`)
+  const filesAfterFirst = snapshotFiles()
+  await Promise.race([app.close(), sleep(60_000)])
+  report.expect('bundled.user-settings-kept-first-launch', userSetting(), U, 'user settings written before the first launch are still present after it (requestTimeoutMs 654321, onboarding version)', { settings: readFileSync(settingsFile, 'utf8').slice(0, 800) })
+
+  // Relaunch on the same home: nothing re-installed or changed, still enabled, settings kept.
+  ;({ app, page } = await launch('bundled-relaunch'))
+  const list2 = await pluginList(app)
+  const ids2 = await page.evaluate(() => window.__DSH_BOOT__.entries.map(e => e.id))
+  const filesAfterRelaunch = snapshotFiles()
+  const pluginState = join(instance.home, profile, 'plugin-state.json')
+  const disabled = existsSync(pluginState) ? (JSON.parse(readFileSync(pluginState, 'utf8')).disabledBundled ?? JSON.parse(readFileSync(pluginState, 'utf8')).disabled ?? []) : []
+  const sameList = JSON.stringify(list1.map(p => [p.name, p.version, p.source, p.state ?? 'enabled']).sort()) === JSON.stringify(list2.map(p => [p.name, p.version, p.source, p.state ?? 'enabled']).sort())
+  report.expect('bundled.relaunch-idempotent', JSON.stringify(filesAfterFirst) === JSON.stringify(filesAfterRelaunch) && sameList && JSON.stringify([...ids1].sort()) === JSON.stringify([...ids2].sort()) && (Array.isArray(disabled) ? disabled.length === 0 : true), U,
+    `relaunch: profile and plugin package.json bytes unchanged=${JSON.stringify(filesAfterFirst) === JSON.stringify(filesAfterRelaunch)}, plugin list unchanged=${sameList}, boot graph unchanged=${JSON.stringify([...ids1].sort()) === JSON.stringify([...ids2].sort())}`, { filesAfterFirst, filesAfterRelaunch, list2, disabled })
+  report.expect('bundled.user-settings-kept-relaunch', userSetting(), U, 'user settings still present after the relaunch')
   await Promise.race([app.close(), sleep(60_000)])
 }
 

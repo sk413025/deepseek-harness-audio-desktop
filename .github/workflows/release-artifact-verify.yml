@@ -27,9 +27,9 @@ on:
         type: boolean
         default: true
       desktop_phases:
-        description: macOS phases to run (comma list of launch, lifecycle, ci-env, availability, fixture-capture)
+        description: macOS phases to run (comma list of launch, bundled, lifecycle, ci-env, availability, fixture-capture)
         required: false
-        default: 'launch,lifecycle,ci-env,availability,fixture-capture'
+        default: 'launch,bundled,lifecycle,ci-env,availability,fixture-capture'
   pull_request:
     types: [opened, synchronize, reopened, labeled]
     paths:
@@ -54,7 +54,7 @@ defaults:
 
 env:
   NODE_VERSION: '24'
-  DESKTOP_PHASES: ${{ format(',{0},', inputs.desktop_phases || 'launch,lifecycle,ci-env,availability,fixture-capture') }}
+  DESKTOP_PHASES: ${{ format(',{0},', inputs.desktop_phases || 'launch,bundled,lifecycle,ci-env,availability,fixture-capture') }}
 
 jobs:
   target:
@@ -266,6 +266,10 @@ jobs:
         if: always() && steps.artifact.outcome == 'success' && contains(env.DESKTOP_PHASES, ',launch,')
         timeout-minutes: 20
         run: node ci-src/ci/scripts/desktop-smoke.mjs --phase launch --app "$RUNNER_TEMP/app/DeepSeek Harness Audio (Local Build).app" --tag "$TAG" --tag-src tag-src --assets assets --out-dir reports/smoke
+      - name: Mandatory bundled plugins (DMG app, clean profile, no sideload; enabled, embedded == Release tgz, UI, relaunch, settings kept)
+        if: always() && steps.artifact.outcome == 'success' && contains(env.DESKTOP_PHASES, ',bundled,')
+        timeout-minutes: 20
+        run: node ci-src/ci/scripts/desktop-smoke.mjs --phase bundled --app "$RUNNER_TEMP/app/DeepSeek Harness Audio (Local Build).app" --tag "$TAG" --tag-src tag-src --assets assets --out-dir reports/smoke
       - name: Plugins window lifecycle (Install from File / Remove / Disable / Enable)
         if: always() && steps.artifact.outcome == 'success' && (github.event_name != 'workflow_dispatch' || inputs.lifecycle) && contains(env.DESKTOP_PHASES, ',lifecycle,')
         timeout-minutes: 20
@@ -330,6 +334,7 @@ jobs:
           else
             REQUIRED="$REQUIRED_SOURCES,verify-desktop-artifact,negative-controls-artifact"
             case "$DESKTOP_PHASES" in *,launch,*) REQUIRED="$REQUIRED,desktop-smoke-launch" ;; esac
+            case "$DESKTOP_PHASES" in *,bundled,*) REQUIRED="$REQUIRED,desktop-smoke-bundled" ;; esac
             if [ "$LIFECYCLE" = true ]; then
               case "$DESKTOP_PHASES" in *,lifecycle,*) REQUIRED="$REQUIRED,desktop-smoke-lifecycle" ;; esac
               case "$DESKTOP_PHASES" in *,ci-env,*) REQUIRED="$REQUIRED,desktop-smoke-ci-env" ;; esac

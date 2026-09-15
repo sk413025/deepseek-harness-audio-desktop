@@ -21,6 +21,7 @@ import { tmpdir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import { createFaultProxy } from '../availability/fakes/fault-proxy.mjs'
 import { freePort, sleep, waitUntil } from '../lib/cdp.mjs'
+import { chooseWorkspace, createFolderChooserShim, dismissFirstRunDialogs } from '../lib/desktop-ui.mjs'
 import { parseArgs, Report, required, run, sha256 } from '../lib/report.mjs'
 
 const args = parseArgs()
@@ -51,14 +52,7 @@ const report = new Report('desktop-availability', {
 // Observation only (no substitution): request log and output audio source timing, installed before app scripts run.
 const OBSERVER = `(() => {
   if (window.__CI_OBS__) return
-  const obs = window.__CI_OBS__ = { fetches: [], sources: [], failures: [] }
-  // Turn failures as they are rendered (the conversation list is virtualised, so text scans alone can miss them).
-  new MutationObserver((records) => {
-    for (const record of records) for (const node of record.addedNodes) {
-      const text = node.nodeType === 1 ? node.innerText ?? node.textContent ?? '' : ''
-      if (/This turn failed/.test(text) && obs.failures.length < 200) obs.failures.push({ at: Date.now(), text: text.slice(0, 300) })
-    }
-  }).observe(document.documentElement, { childList: true, subtree: true })
+  const obs = window.__CI_OBS__ = { fetches: [], sources: [] }
   const originalFetch = window.fetch.bind(window)
   window.fetch = async (input, init) => {
     const url = String(input instanceof Request ? input.url : input)
@@ -141,10 +135,7 @@ async function main() {
   ].join('\n'))
   // The macOS workspace chooser is `osascript choose folder` run by the Desktop host; a PATH shim answers only that
   // OS dialog with the test workspace and passes every other osascript call through. Everything after it is real.
-  const shimDir = join(workDir, 'os-dialog-shim')
-  mkdirSync(shimDir, { recursive: true })
-  const shimLog = join(outDir, 'os-dialog-shim.log')
-  writeFileSync(join(shimDir, 'osascript'), `#!/bin/sh\ncase "$*" in *"choose folder"*) echo "$(date +%s) choose-folder $*" >> "${shimLog}"; printf '%s/\\n' "${workspace}"; exit 0 ;; esac\nexec /usr/bin/osascript "$@"\n`, { mode: 0o755 })
+  const { dir: shimDir, log: shimLog } = createFolderChooserShim({ workDir, workspace, logFile: join(outDir, 'os-dialog-shim.log') })
   const env = {}
   for (const key of ['HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', '__CF_USER_TEXT_ENCODING']) if (process.env[key] !== undefined) env[key] = process.env[key]
   Object.assign(env, { PATH: `${shimDir}:/usr/bin:/bin:/usr/sbin:/sbin`, LANG: 'en_US.UTF-8', DSH_HOME: home, DSH_TELEMETRY_DISABLED: '1', DSH_DESKTOP_DIAGNOSTIC_FILE: join(outDir, 'startup-diagnostic.txt') })
@@ -177,24 +168,14 @@ async function main() {
   const observerInstalled = await page.evaluate(() => window.__CI_OBS__ !== undefined)
   report.expect('availability.observer', observerInstalled, U, 'page observer installed (observation only: fetch log, output source start/stop/ended times)')
   const shot = name => page.screenshot({ path: join(outDir, `${name}.png`) }).catch(() => undefined)
-  await dismissFirstRunDialogs(page)
+  await dismissFirstRunDialogs(page, note)
   await shot('00-booted')
 
   // Workspace through the real hero UI: "Choose workspace" → host → OS folder chooser (shimmed) → composer enabled.
-  const choose = page.getByRole('button', { name: /Choose workspace/i }).or(page.getByText(/^Choose workspace$/)).first()
-  await choose.click({ timeout: 30_000 })
-  const addWorkspace = page.getByText(/Add workspace/i).first()
-  if (await addWorkspace.waitFor({ state: 'visible', timeout: 3_000 }).then(() => true).catch(() => false)) await addWorkspace.click()
-  else await page.locator('[role=textbox]').last().click().catch(() => undefined) // the hero textbox also opens the chooser
-  const workspaceReady = await waitUntil('hero composer enabled for the chosen workspace', async () => page.evaluate(() => {
-    const box = [...document.querySelectorAll('[role=textbox]')].at(-1)
-    return box !== undefined && !/Choose a workspace/i.test(box.getAttribute('aria-label') ?? '') ? (box.getAttribute('aria-label') ?? 'ready') : null
-  }), { timeoutMs: 30_000, intervalMs: 300 }).catch(() => null)
-  const shimCalls = existsSync(shimLog) ? readFileSync(shimLog, 'utf8').trim().split('\n').filter(Boolean).length : 0
+  const { ready: workspaceReady, shimCalls } = await chooseWorkspace(page, shimLog)
   await shot('01-workspace-chosen')
-  report.expect('availability.workspace', workspaceReady !== null && shimCalls >= 1, U, `workspace chosen through the UI (OS folder chooser answered by the PATH shim ${shimCalls}×); composer: ${workspaceReady?.value ?? 'not ready'}`)
+  report.expect('availability.workspace', workspaceReady !== null && shimCalls >= 1, U, `workspace chosen through the UI (OS folder chooser answered by the PATH shim ${shimCalls}×); composer: ${workspaceReady ?? 'not ready'}`)
   if (workspaceReady === null) throw new Error(`workspace not accepted: ${JSON.stringify(await page.evaluate(() => document.body.innerText.slice(0, 800)))}`)
-  await page.keyboard.press('Escape').catch(() => undefined)
   // Agent preset: the audio models refuse tool calling (run 34935000130: UNSUPPORTED_OPTION), so pick the release-kit preset.
   await page.getByText(/^Standard mode$/).first().click({ timeout: 10_000 }).catch(() => undefined)
   const presetOption = page.getByText(/DGX audio/i).first()
@@ -295,9 +276,16 @@ async function main() {
     const sendAt = Date.now()
     await page.locator('[data-testid=dsh-voice-capture-send]').first().click().catch(() => undefined)
     // An explicit failure rendered for this send: a "This turn failed … cannot reach" node added after the click.
-    const explicitNode = await waitUntil('explicit failure rendered after Send', async () => page.evaluate((since) => window.__CI_OBS__.failures.find(f => f.at >= since && /cannot reach/.test(f.text)) ?? null, sendAt), { timeoutMs: 45_000, intervalMs: 300 }).then(r => r.value).catch(() => null)
+    // Run 34940568001 showed <main> innerText empty at this point (a hidden main); read the whole document, in order:
+    // an explicit "cannot reach" failure must follow the recording message (the first "recording-" in the page).
+    const explicitNode = await waitUntil('explicit failure after the recording message', async () => page.evaluate(() => {
+      const text = document.body.innerText
+      const message = text.indexOf('recording-')
+      const failure = message >= 0 ? text.indexOf('cannot reach', message) : -1
+      return failure > message ? text.slice(failure - 40, failure + 80) : null
+    }), { timeoutMs: 45_000, intervalMs: 300 }).then(r => r.value).catch(() => null)
     const explicit = explicitNode !== null
-    const domTail = await page.evaluate(() => (document.querySelector('main')?.innerText ?? '').slice(-700))
+    const domTail = await page.evaluate(() => document.body.innerText.slice(-900))
     void errorsBefore
     await shot('08-a2-send-while-down')
     const failed = invocations().slice(invBeforeA2).find(record => record.ok === false)
@@ -328,18 +316,6 @@ async function main() {
   report.add('probe.permission-path', 'info', U, `hosted runner real permission path (no adapter): systemPreferences microphone=${permission.microphone ?? permission.error}; getUserMedia → ${gum.outcome}${gum.name ? ` ${gum.name}` : ''}${gum.label ? ` (${gum.label})` : ''}`, { permission, gum })
   await shot('06-final')
   await Promise.race([app.close(), sleep(60_000)])
-}
-
-async function dismissFirstRunDialogs(page) {
-  for (const [text, button] of [['Internal Testing Notice', /^Continue$/], ['Add an API key to get started', /^Configure later$/]]) {
-    const dialog = page.getByText(text)
-    await dialog.waitFor({ state: 'visible', timeout: 4_000 }).catch(() => undefined)
-    if (await dialog.count() > 0) {
-      await page.getByRole('button', { name: button }).click({ timeout: 10_000 }).catch(() => undefined)
-      await dialog.waitFor({ state: 'hidden', timeout: 10_000 }).catch(() => undefined)
-      note(`dismissed first-run dialog: ${text}`)
-    }
-  }
 }
 
 async function waitIdle(page) {
