@@ -1,0 +1,34 @@
+{
+  "name": "dsh-dgx-audio",
+  "version": "0.4.7",
+  "description": "DeepSeek Harness plugin: capability-aware audio adapter for OpenAI-compatible vLLM / vLLM-Omni servers (complete-clip audio, SSE text streaming, progressive audio feed, host-mediated realtime duplex); dependency-free",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test --test-timeout=30000 test/*.test.js"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.2",
+    "@deepseek-ai/dsh-llm": "0.1.5-rc.1",
+    "@deepseek-ai/schemastery": "3.18.2"
+  }
+}

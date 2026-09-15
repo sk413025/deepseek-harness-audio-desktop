@@ -1,0 +1,6 @@
+# dsh-dgx-audio bundle layer: one row with no server configured.
+# Configure servers/models in Harness user settings (namespace `dsh-dgx-audio`) or override
+# this row by id `dgx-audio` in a profile patch. Nothing contacts a server until configured.
+- insert:
+    - id: dgx-audio
+      name: dsh-dgx-audio
