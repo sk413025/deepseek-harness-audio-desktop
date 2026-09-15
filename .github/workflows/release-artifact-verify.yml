@@ -27,9 +27,9 @@ on:
         type: boolean
         default: true
       desktop_phases:
-        description: macOS phases to run (comma list of launch, lifecycle, ci-env, availability)
+        description: macOS phases to run (comma list of launch, lifecycle, ci-env, availability, fixture-capture)
         required: false
-        default: 'launch,lifecycle,ci-env,availability'
+        default: 'launch,lifecycle,ci-env,availability,fixture-capture'
   pull_request:
     types: [opened, synchronize, reopened, labeled]
     paths:
@@ -54,7 +54,7 @@ defaults:
 
 env:
   NODE_VERSION: '24'
-  DESKTOP_PHASES: ${{ format(',{0},', inputs.desktop_phases || 'launch,lifecycle,ci-env,availability') }}
+  DESKTOP_PHASES: ${{ format(',{0},', inputs.desktop_phases || 'launch,lifecycle,ci-env,availability,fixture-capture') }}
 
 jobs:
   target:
@@ -236,6 +236,13 @@ jobs:
           test "$(git -C tag-src rev-parse HEAD)" = "$TAG_COMMIT"
       - name: Install CI tooling (pinned lockfile)
         run: npm ci --ignore-scripts --prefix ci-src/ci
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: contains(env.DESKTOP_PHASES, ',fixture-capture,')
+        with:
+          python-version: '3.12'
+      - name: Python analysis dependencies for the fixture-capture harness (pinned)
+        if: contains(env.DESKTOP_PHASES, ',fixture-capture,')
+        run: python -m pip install --disable-pip-version-check -r ci-src/ci/fixture-capture/requirements.txt
       - name: Download all release assets from GitHub
         run: |
           set -euo pipefail
@@ -267,10 +274,24 @@ jobs:
         if: always() && steps.artifact.outcome == 'success' && (github.event_name != 'workflow_dispatch' || inputs.lifecycle) && contains(env.DESKTOP_PHASES, ',ci-env,')
         timeout-minutes: 15
         run: node ci-src/ci/scripts/desktop-smoke.mjs --phase ci-env --app "$RUNNER_TEMP/app/DeepSeek Harness Audio (Local Build).app" --tag "$TAG" --tag-src tag-src --assets assets --out-dir reports/smoke
-      - name: Service availability in the packaged app (mock backend + fault switch; capture cases wait for the mic owner fixture adapter)
+      - name: Service availability in the packaged app (mock backend + fault switch; A2 with the mic owner fixture capture)
         if: always() && steps.artifact.outcome == 'success' && contains(env.DESKTOP_PHASES, ',availability,')
         timeout-minutes: 20
-        run: node ci-src/ci/scripts/desktop-availability.mjs --app "$RUNNER_TEMP/app/DeepSeek Harness Audio (Local Build).app" --tag "$TAG" --tag-src tag-src --out-dir reports/smoke
+        env:
+          HARNESS: ci-src/ci/fixture-capture/harness-1.0.0/parallel-work/microphone-ui
+        run: node ci-src/ci/scripts/desktop-availability.mjs --app "$RUNNER_TEMP/app/DeepSeek Harness Audio (Local Build).app" --tag "$TAG" --tag-src tag-src --out-dir reports/smoke --capture-adapter "$HARNESS/e2e/fixture-capture-source.page.js" --fixtures "$HARNESS/fixtures/ci-jfk"
+      - name: Fixture-capture desktop cases (mic owner harness 1.0.0 on the release app; capture=fixture, backend=mock)
+        if: always() && steps.artifact.outcome == 'success' && contains(env.DESKTOP_PHASES, ',fixture-capture,')
+        timeout-minutes: 25
+        run: |
+          set -uo pipefail
+          OUT="$RUNNER_TEMP/fixture-capture"
+          PYTHON="$(command -v python)" zsh ci-src/ci/fixture-capture/run-release-app.sh --app "$RUNNER_TEMP/app/DeepSeek Harness Audio (Local Build).app" --out "$OUT" --fixtures ci-jfk 2>&1 | tee "$RUNNER_TEMP/fixture-capture.log"
+          echo "harness runner exit: ${PIPESTATUS[0]}"
+          mkdir -p reports/fixture-capture/run
+          cp "$RUNNER_TEMP/fixture-capture.log" reports/fixture-capture/ || true
+          rsync -a --exclude 'home 家/profiles' --exclude 'home 家/desktop-audio' --exclude 'userdata 使用者' --exclude '*.tgz' "$OUT/" reports/fixture-capture/run/ || true
+          node ci-src/ci/fixture-capture/report.mjs --out "$OUT" --report reports/fixture-capture/report.json --tag "$TAG"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
@@ -314,6 +335,7 @@ jobs:
               case "$DESKTOP_PHASES" in *,ci-env,*) REQUIRED="$REQUIRED,desktop-smoke-ci-env" ;; esac
             fi
             case "$DESKTOP_PHASES" in *,availability,*) REQUIRED="$REQUIRED,desktop-availability" ;; esac
+            case "$DESKTOP_PHASES" in *,fixture-capture,*) REQUIRED="$REQUIRED,desktop-fixture-capture" ;; esac
             SCOPE=full
           fi
           node ci-src/ci/scripts/summarize.mjs --reports all-reports --target all-reports/reports-target/target.json --required "$REQUIRED" --scope "$SCOPE" --out evidence.json --summary "$GITHUB_STEP_SUMMARY"

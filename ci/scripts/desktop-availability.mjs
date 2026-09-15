@@ -13,7 +13,8 @@
 //   capture.*                   NOT RUN until the microphone owner's fixture + capture adapter are provided (--capture-adapter)
 //   probe.permission-path       info: what the hosted runner's real permission path does (no adapter)
 //
-// Usage: desktop-availability.mjs --app <.app> --tag <tag> --tag-src <dir> --out-dir <dir> [--capture-adapter <dir>]
+// Usage: desktop-availability.mjs --app <.app> --tag <tag> --tag-src <dir> --out-dir <dir>
+//          [--capture-adapter <owner fixture-capture-source.page.js> --fixtures <owner fixture set dir>]  (enables capture.a2-*)
 import { spawn } from 'node:child_process'
 import { appendFileSync, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -41,7 +42,8 @@ const note = (text) => { const line = `${new Date().toISOString()} ${text}`; con
 const report = new Report('desktop-availability', {
   tag: args.tag, bundleIdentifier: info.CFBundleIdentifier, shortVersion: info.CFBundleShortVersionString,
   plugins: plugins.map(p => ({ name: p.name, version: p.version, sha256: p.sha256 })),
-  labels: { backend: 'mock (loopback mock-backend.mjs behind a TCP fault switch)', capture: args['capture-adapter'] ? 'fixture (microphone owner adapter)' : 'none' },
+  labels: { backend: 'mock (loopback mock-backend.mjs behind a TCP fault switch)', capture: args['capture-adapter'] ? 'fixture (microphone owner adapter, test-only MediaStream at getUserMedia) for capture.* checks; none for the others' : 'none' },
+  captureAdapter: args['capture-adapter'] ? { file: args['capture-adapter'], sha256: sha256(readFileSync(args['capture-adapter'])) } : null,
   mockBackend: { file: 'ci/availability/fakes/mock-backend.mjs', sha256: sha256(readFileSync(new URL('../availability/fakes/mock-backend.mjs', import.meta.url))) },
   runner: { imageOS: process.env.ImageOS, imageVersion: process.env.ImageVersion, macOS: run('sw_vers', ['-productVersion']).stdout.trim() },
   notCovered: ['real DGX model servers', 'physical USB microphone / macOS TCC prompt', 'speaker output and audio quality'],
@@ -146,6 +148,17 @@ async function main() {
   app.process().stdout?.pipe(createWriteStream(join(outDir, 'app-stdout.log')))
   app.process().stderr?.pipe(createWriteStream(join(outDir, 'app-stderr.log')))
   await app.context().addInitScript({ content: OBSERVER })
+  let fixtureTurn = null
+  if (args['capture-adapter']) {
+    const manifest = JSON.parse(readFileSync(join(args.fixtures, 'manifest.json'), 'utf8'))
+    const name = manifest.roles.turn
+    const bytes = readFileSync(join(args.fixtures, name))
+    const entry = manifest.files.find(f => f.file === name)
+    if (entry?.sha256 !== sha256(bytes)) throw new Error(`fixture ${name} sha256 mismatch`)
+    fixtureTurn = { file: name, sha256: entry.sha256, durationSec: entry.durationSec, manifestSha256: sha256(readFileSync(join(args.fixtures, 'manifest.json'))), license: manifest.license?.status }
+    report.meta.fixture = fixtureTurn
+    await app.context().addInitScript({ content: `window.__dshFixtureCaptureConfig = ${JSON.stringify({ mode: 'timeline', clips: { T: bytes.toString('base64') } })};\n${readFileSync(args['capture-adapter'], 'utf8')}` })
+  }
   const findMain = () => app.windows().find(w => !w.isClosed() && w.url().startsWith('dsh-app://app/'))
   const booted = async () => (await waitUntil('booted main window', async () => {
     const page = findMain()
@@ -251,15 +264,50 @@ async function main() {
   await shot('05-recovered')
   report.expect('a9.recovery-no-replay', recoveredReply !== null && recoveredTurn.length === 1 && !replayed, U, `${label('none')} after recovery: the new turn reached the endpoint ${recoveredTurn.length}×, the failed turn was replayed=${replayed}, reply rendered=${recoveredReply !== null}`, { requests: after })
 
-  // Capture-dependent cases: the microphone owner's fixture + adapter, never a CI-made microphone.
-  for (const id of ['capture.a2-record-while-server-down', 'capture.a6-permission-delay-cancel', 'capture.mimo-record-stop-send-progressive', 'capture.duplex-abc-overlap-interrupt-cleanup']) {
-    if (!args['capture-adapter']) report.add(id, 'skip', U, `NOT RUN (blocked, owner delivery): the microphone owner's capture adapter (e2e/fixture-capture-source.page.js + scenario-fixture-duplex.mjs) is not frozen yet, and the current TTS fixture set is marked "INTERNAL TEST FIXTURE ONLY — do not commit to a shared repo" (macOS say output), so it cannot be placed in this repository; CI does not substitute its own microphone or fixtures`, { needs: ['redistributable fixture set with manifest (e.g. espeak-ng / Apache-2.0 TTS), same file names and sha256 manifest', 'frozen capture adapter + scenario from the microphone owner'], observedRunnerPermissionPath: 'see probe.permission-path' })
+  // capture.a2-record-while-server-down: record with the owner's fixture capture while the upstream is absent.
+  if (fixtureTurn) {
+    await waitIdle(page)
+    await proxy.setMode('absent')
+    const beforeA2 = mockRequests().length
+    const invBeforeA2 = invocations().length
+    const errorsBefore = await page.evaluate(() => ((document.querySelector('main')?.innerText ?? '').match(/cannot reach/gi) ?? []).length)
+    const phase = () => page.evaluate(() => document.querySelector('[data-testid=dsh-voice-capture-panel]')?.dataset.phase ?? document.querySelector('[data-testid=dsh-voice-capture-mic]')?.dataset.phase ?? null)
+    await page.locator('[data-testid=dsh-voice-capture-mic]').first().click()
+    const recording = await waitUntil('recording phase', async () => (await phase()) === 'recording', { timeoutMs: 20_000, intervalMs: 100 }).then(() => true).catch(() => false)
+    await sleep(4000)
+    const upstreamDuringRecording = mockRequests().length - beforeA2
+    await page.locator('[data-testid=dsh-voice-capture-stop]').first().click().catch(() => undefined)
+    const preview = await waitUntil('preview with the recorded clip', async () => page.evaluate(() => {
+      const audio = document.querySelector('[data-testid=dsh-voice-capture-preview]')
+      const phase = document.querySelector('[data-testid=dsh-voice-capture-panel]')?.dataset.phase
+      return phase === 'preview' && audio ? { duration: Number.isFinite(audio.duration) ? audio.duration : null, details: document.querySelector('[data-testid=dsh-voice-capture-details]')?.innerText ?? null } : null
+    }), { timeoutMs: 20_000, intervalMs: 200 }).then(r => r.value).catch(() => null)
+    const capture = await page.evaluate(() => (window.__dshFixtureCapture?.streams ?? []).map(x => ({ requestedAt: x.requested?.epoch ?? null, resolvedAt: x.resolved?.epoch ?? null, clips: (x.clips ?? []).length, source: x.source })))
+    await shot('07-a2-preview-while-down')
+    const upstreamBeforeSend = mockRequests().length - beforeA2
+    await page.locator('[data-testid=dsh-voice-capture-send]').first().click().catch(() => undefined)
+    const explicit = await waitUntil('explicit failure for the recording turn', async () => page.evaluate((before) => ((document.querySelector('main')?.innerText ?? '').match(/cannot reach/gi) ?? []).length > before, errorsBefore), { timeoutMs: 45_000, intervalMs: 300 }).then(() => true).catch(() => false)
+    await shot('08-a2-send-while-down')
+    const failed = invocations().slice(invBeforeA2).find(record => record.ok === false)
+    const audio = failed?.inputAudio?.[0] ?? null
+    const attachmentKept = audio?.sha256 ? existsSync(join(home, 'attachments', 'v1', 'file-objects', audio.sha256.slice(0, 2), audio.sha256)) : false
+    const ok = recording && upstreamDuringRecording === 0 && preview !== null && upstreamBeforeSend === 0 && explicit && failed?.code === 'TRANSPORT' && audio !== null && attachmentKept
+    report.add('capture.a2-record-while-server-down', ok ? 'pass' : 'fail', U,
+      `[capture=fixture (${fixtureTurn.file} ${fixtureTurn.sha256.slice(0, 12)}…), backend=mock] upstream absent: recording started=${recording}, 0 upstream requests while recording=${upstreamDuringRecording === 0} and in preview=${upstreamBeforeSend === 0}, preview ${preview ? `${preview.duration ?? '?'} s` : 'missing'}; Send → explicit error=${explicit}, host record ${failed?.code ?? 'missing'} with the recording (${audio?.bytes ?? 0} B) kept as an attachment=${attachmentKept}`,
+      { recording, upstreamDuringRecording, upstreamBeforeSend, preview, capture, failedRecord: failed ? { code: failed.code, inputAudio: failed.inputAudio } : null, attachmentKept })
+    await proxy.setMode('up')
+    await waitIdle(page)
+  } else {
+    report.add('capture.a2-record-while-server-down', 'skip', U, 'NOT RUN: no --capture-adapter/--fixtures given to this phase')
   }
+  // Other capture rows run in the fixture-capture step (report desktop-fixture-capture): duplex, MiMo turn, A6.
+  report.add('capture.see-desktop-fixture-capture', 'info', U, 'duplex A/B/C overlap + Interrupt + cleanup, MiMo record-stop-send progressive output + Stop, and A6 late permission + Dismiss are judged in report desktop-fixture-capture (microphone owner harness 1.0.0 on this release app)')
 
   // a12.no-lab-paths: installed plugin files, seed records and the used home.
   report.add('a12.no-lab-paths', ...labPathScan(home))
 
   // probe.permission-path (info only, last): what the real permission path does on this runner without any adapter.
+  if (fixtureTurn) { report.add('probe.permission-path', 'info', U, 'skipped: the fixture capture adapter replaces getUserMedia in this instance (see earlier runs 34935000130+ for the plain probe)'); await shot('06-final'); await Promise.race([app.close(), sleep(60_000)]); return }
   const permission = await app.evaluate(({ systemPreferences }) => ({ microphone: systemPreferences.getMediaAccessStatus('microphone') })).catch(error => ({ error: String(error) }))
   const gum = await page.evaluate(() => Promise.race([
     navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => { const label = stream.getAudioTracks()[0]?.label ?? ''; for (const track of stream.getTracks()) track.stop(); return { outcome: 'resolved', label } }, error => ({ outcome: 'rejected', name: error.name, message: String(error.message).slice(0, 200) })),
