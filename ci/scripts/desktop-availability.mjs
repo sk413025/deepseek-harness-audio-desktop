@@ -290,7 +290,7 @@ async function main() {
     // failure must follow the recording message itself.
     const explicit = await waitUntil('explicit failure after the recording message', async () => page.evaluate(() => {
       const text = document.querySelector('main')?.innerText ?? ''
-      const message = text.lastIndexOf('recording-')
+      const message = text.indexOf('recording-') // the only recording in this session; the dock's "sent" status repeats the name below
       return message >= 0 && text.indexOf('cannot reach', message) > message
     }), { timeoutMs: 45_000, intervalMs: 300 }).then(() => true).catch(() => false)
     void errorsBefore

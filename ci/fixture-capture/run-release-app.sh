@@ -114,7 +114,7 @@ shasum -a 256 "$OUT/owner-summary.py" >> "$OUT/installed-sha256.txt"
 
 # 9. A6 in the packaged app: first getUserMedia answered 17 s after the Live click (simulated permission wait at the
 # getUserMedia boundary — not the macOS TCC prompt), Live panel Dismiss attempted at 16 s (owner's DEMO3 sequence).
-(cd "$E2E" && node scenario-live-drain.mjs "$CDP" dsh-app://app/index.html "Mock reply" "$OUT/live-late-permission-dismiss" "$R/parallel-work/microphone-ui/fixtures/$SET/$("$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1]))["roles"]["A"])' "$FXD/manifest.json")" mock-duplex '{"gumDelayMs":17000,"dismissAtMs":16000,"sampleMs":22000,"selectProvider":"mock-live-resume","selectModel":"mock-s2s"}') > "$OUT/live-late-permission-dismiss.log" 2>&1 || true
+(cd "$E2E" && node scenario-live-drain.mjs "$CDP" dsh-app://app/index.html "Mock reply" "$OUT/live-late-permission-dismiss" "$R/parallel-work/microphone-ui/fixtures/$SET/$("$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1]))["roles"]["A"])' "$FXD/manifest.json")" mock-duplex '{"gumDelayMs":17000,"dismissAtMs":16000,"sampleMs":36000,"stopOnEnd":false,"selectProvider":"mock-live-resume","selectModel":"mock-s2s"}') > "$OUT/live-late-permission-dismiss.log" 2>&1 || true
 
 kill "$APP_PID" 2>/dev/null || true
 for _ in {1..30}; do kill -0 "$APP_PID" 2>/dev/null || break; sleep 1; done

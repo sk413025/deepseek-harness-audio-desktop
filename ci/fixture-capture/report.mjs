@@ -59,11 +59,21 @@ if (!drain) {
   const appendsOk = (drain.requests ?? []).filter(r => r.route === 'live/append' && r.status === 200).length
   const opens = (drain.requests ?? []).filter(r => r.route === 'live/open')
   const defectSignature = texts.some(t => /CLIENT_BACKLOG|streamed input not supported|LIVE_CLOSED/.test(t))
-  const clean = !defectSignature && (drain.exceptions ?? []).length === 0 && (appendsOk >= 10 || ['idle', 'closed', null].includes(drain.final?.phase ?? null))
-  const facts = { micPackageSha256: micSeed, finalPhase: drain.final?.phase, finalText: drain.final?.text, appendsOk, opens: opens.map(o => o.t), gum: drain.final?.gum, dismiss: drain.dismiss, exceptions: (drain.exceptions ?? []).slice(0, 3) }
+  // Preconditions of the DEMO3 sequence: Live was opened from the UI, Dismiss was attempted, the held permission was
+  // granted, and the run kept observing >= 15 s after the grant (a backlog needs 75 frames = 15 s to surface).
+  const grantedAt = drain.final?.gum?.[0]?.resolvedAt ?? null
+  const observedAfterGrantMs = grantedAt === null ? null : (drain.final?.t ?? 0) - grantedAt
+  const reached = opens.length > 0 && drain.dismiss !== undefined && grantedAt !== null && observedAfterGrantMs >= 15_000
+  const phasesAfterGrant = [...new Set((drain.samples ?? []).filter(s => grantedAt !== null && s.t >= grantedAt).map(s => s.phase))]
+  const opensAfterGrant = opens.filter(o => grantedAt !== null && o.t >= grantedAt).length
+  const revived = phasesAfterGrant.includes('live') && opensAfterGrant === 0
+  const clean = reached && !defectSignature && !revived && (drain.exceptions ?? []).length === 0 && (appendsOk >= 10 || !phasesAfterGrant.includes('live'))
+  const facts = { micPackageSha256: micSeed, reached, grantedAtFromClickMs: grantedAt === null ? null : grantedAt - drain.clickAt, observedAfterGrantMs, phasesAfterGrant, opensAfterGrant, revived, finalPhase: drain.final?.phase, finalText: drain.final?.text, appendsOk, opens: opens.map(o => o.t - drain.clickAt), dismiss: drain.dismiss, exceptions: (drain.exceptions ?? []).slice(0, 3) }
   const label = '[capture=fixture, backend=mock, permission=simulated 17 s getUserMedia hold (not the macOS TCC prompt)]'
-  if (affected.includes(micSeed)) {
-    if (defectSignature) report.add('a6.late-permission-dismiss', 'known-fail', E, `${label} KNOWN DEFECT live-late-capture-revives-session reproduced on installed mic ${micSeed?.slice(0, 12)}…: "${texts.find(t => /CLIENT_BACKLOG|LIVE_CLOSED|streamed input/.test(t))?.slice(0, 160)}" (fixed by dsh-voice-capture 0.3.6)`, facts)
+  if (!reached) {
+    report.add('a6.late-permission-dismiss', 'fail', E, `${label} scenario did not reach the late-grant window (open=${opens.length}, dismiss=${drain.dismiss !== undefined}, granted=${grantedAt !== null}, observed after grant=${observedAfterGrantMs ?? '-'} ms) — no verdict possible`, facts)
+  } else if (affected.includes(micSeed)) {
+    if (defectSignature || revived) report.add('a6.late-permission-dismiss', 'known-fail', E, `${label} KNOWN DEFECT live-late-capture-revives-session reproduced on installed mic ${micSeed?.slice(0, 12)}…: "${texts.find(t => /CLIENT_BACKLOG|LIVE_CLOSED|streamed input/.test(t))?.slice(0, 160)}" (fixed by dsh-voice-capture 0.3.6)`, facts)
     else report.add('a6.late-permission-dismiss', clean ? 'warn' : 'fail', E, `${label} affected mic ${micSeed?.slice(0, 12)}… but the defect signature did not appear (${clean ? 'clean run — check the registry' : 'failed differently'})`, facts)
   } else {
     report.expect('a6.late-permission-dismiss', clean, E, `${label} late permission + Dismiss on mic ${micSeed?.slice(0, 12) ?? 'unknown'}…: ${clean ? `no revived session/backlog; ${appendsOk} frames acknowledged` : 'revived session, backlog or error'}`, facts)
