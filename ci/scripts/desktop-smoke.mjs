@@ -536,6 +536,7 @@ async function bundledPhase() {
   }), { timeoutMs: 20_000, intervalMs: 300 }).then(r => r.value).catch(() => null)
   await page.screenshot({ path: join(outDir, 'bundled-audio-models.png') }).catch(() => undefined)
   report.expect('bundled.ui-audio-models', libraryView !== null && !libraryView.hostMissing && !libraryView.adapterMissing, U, `sidebar "Audio models" opens the library view: host plugin running=${libraryView ? !libraryView.hostMissing : '?'}, adapter present=${libraryView ? !libraryView.adapterMissing : '?'} (no server configured yet: ${libraryView?.noServer ?? '?'})`, libraryView ?? {})
+  await page.getByText(/^New Session$/).first().click({ timeout: 15_000 }) // back to the hero composer from the library view
   const workspaceChoice = await chooseWorkspace(page, shim.log)
   const mic = await waitUntil('microphone control in the composer', async () => page.evaluate(() => { const el = document.querySelector('[data-testid=dsh-voice-capture-mic]'); return el ? { phase: el.dataset.phase ?? null, label: el.getAttribute('aria-label') } : null }), { timeoutMs: 20_000, intervalMs: 300 }).then(r => r.value).catch(() => null)
   await page.screenshot({ path: join(outDir, 'bundled-composer-mic.png') }).catch(() => undefined)
