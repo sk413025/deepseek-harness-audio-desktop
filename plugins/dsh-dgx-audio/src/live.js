@@ -22,6 +22,53 @@ import { modelProvenance, refusalRecord } from './records.js'
 const BARGE_IN_REASONS = new Set(['barge_in', 'client_force_barge_in', 'client_overlap_action', 'turn_detected'])
 /** Resume attempts after an unexpected socket loss; all well inside the server's 30 s disconnect grace. */
 export const RESUME_RETRY_DELAYS_MS = Object.freeze([0, 500, 1500])
+/**
+ * §K.18: the effective turn detection and overlap policy of an omni-duplex Live session, and the pairing rule of the
+ * vLLM-Omni duplex server (nightly 58adeec, DUPLEX-SILENCE-REPRO V4 + I2 02:21):
+ *   overlap_policy barge_in_on_speech  requires turn_detection server_vad
+ *   overlap_policy listen_only         is rejected together with turn_detection server_vad
+ * Precedence per key: live/open top level > live/open params > session-params store > model entry realtime.session.
+ * With server_vad and no explicit policy the host pairs barge_in_on_speech (unchanged since 0.4.0).
+ * Throws LiveError 400 INVALID_PARAM_COMBINATION before any server connection.
+ * @returns {{ turnDetection: 'server_vad'|'none', turnDetectionSource: string, overlapPolicy: string|undefined, overlapPolicySource: string }}
+ */
+export function resolveTurnSettings({ wire, request = {}, stored = {}, sessionConfig = {} }) {
+  const from = key => (request[key] !== undefined ? [request[key], 'request'] : request.params?.[key] !== undefined ? [request.params[key], 'request-params'] : stored[key] !== undefined ? [stored[key], 'session-params'] : [undefined, undefined])
+  const [turnRaw, turnFrom] = from('turnDetection')
+  const configTurn = sessionConfig.turn_detection?.type === 'server_vad' ? 'server_vad' : 'none'
+  const turnDetection = turnRaw === undefined ? configTurn : turnRaw === 'server_vad' ? 'server_vad' : 'none'
+  const turnDetectionSource = turnRaw === undefined ? 'model-config' : turnFrom
+  const [policyRaw, policyFrom] = from('overlapPolicy')
+  let overlapPolicy
+  let overlapPolicySource
+  if (policyRaw !== undefined) { overlapPolicy = policyRaw; overlapPolicySource = policyFrom }
+  else if (turnDetection === 'server_vad' && wire === 'omni-duplex') { overlapPolicy = 'barge_in_on_speech'; overlapPolicySource = 'auto-paired' }
+  else { overlapPolicy = sessionConfig.overlap_policy; overlapPolicySource = 'model-config' }
+  if (wire === 'omni-duplex') {
+    const refuse = (message) => {
+      throw Object.assign(new LiveError('INVALID_PARAM_COMBINATION', message, 400), { key: 'overlapPolicy', details: { overlapPolicy, overlapPolicySource, turnDetection, turnDetectionSource } })
+    }
+    if (overlapPolicy === 'barge_in_on_speech' && turnDetection !== 'server_vad') refuse(`overlapPolicy barge_in_on_speech (interrupt by speaking) needs turnDetection server_vad; got turnDetection ${turnDetection} (${turnDetectionSource}). Choose server VAD mode, or leave both unset for native duplex (the model decides when to speak).`)
+    if (overlapPolicy === 'listen_only' && turnDetection === 'server_vad') refuse(`turnDetection server_vad cannot be combined with overlapPolicy listen_only (${overlapPolicySource}); send turnDetection server_vad alone (the host pairs barge_in_on_speech) or neither for native duplex.`)
+  }
+  return { turnDetection, turnDetectionSource, overlapPolicy, overlapPolicySource }
+}
+
+/** Whether a model entry asks the server for model-native duplex (query or session.extra_body), as start() sends it. */
+export function nativeDuplexRequestedOf(realtime) {
+  const on = value => value === true || value === 1 || value === '1' || value === 'true'
+  const extra = realtime?.session?.extra_body ?? {}
+  if ('native_duplex' in extra || 'minicpmo45_native_duplex' in extra) return on(extra.native_duplex) || on(extra.minicpmo45_native_duplex)
+  return on(realtime?.query?.native_duplex) || on(realtime?.query?.minicpmo45_native_duplex)
+}
+
+/** §K.18 label of what a session actually sent: server VAD turn-taking vs no turn detection (native duplex if requested). */
+export function turnModeOf(turnDetection, nativeRequested) {
+  return turnDetection === 'server_vad' ? 'server-vad' : nativeRequested ? 'native-duplex' : 'no-turn-detection'
+}
+
+/** A gap between model events at least this long while input frames flow is recorded (§K.17). */
+export const MODEL_SILENCE_WINDOW_MS = 3000
 /** Window in which a server outcome (response.done, error, echo) is attributed to a sent control. */
 export const CONTROL_OUTCOME_MS = 3000
 
@@ -92,6 +139,14 @@ export class LiveSessionManager {
     const refuse = async (error, details) => {
       await this.deps.recordRefusal?.(refusalRecord({ origin: 'live.open', code: error.code, message: error.message, httpStatus: error.status, route, model, sessionId: request.sessionId, activation, details }))
       return error
+    }
+    if (model.mode === 'realtime' && (model.realtime.wire ?? 'omni-duplex') === 'omni-duplex') {
+      try {
+        resolveTurnSettings({ wire: 'omni-duplex', request, stored: this.deps.sessionParams?.get(request.sessionId, route.provider, model.id) ?? {}, sessionConfig: model.realtime.session })
+      } catch (error) {
+        if (error instanceof LiveError) throw Object.assign(await refuse(error, error.details), { key: error.key, details: error.details })
+        throw error
+      }
     }
     if (activation !== undefined && activation.state !== 'ready') throw await refuse(new LiveError('MODEL_NOT_READY', `${route.provider}/${model.id} is ${activation.state}; activate the model first`, 409))
     const active = [...this.sessions.values()].filter(s => s.state !== 'closed')
@@ -189,13 +244,12 @@ class LiveSession {
     const upstream = this.model.upstreamModel ?? this.model.id
     const params = this.deps.sessionParams?.get(this.sessionId, this.route.provider, this.model.id) ?? {}
     const session = { model: upstream, ...realtime.session }
-    const overlapPolicy = this.request.overlapPolicy ?? params.overlapPolicy
-    const turnDetection = this.request.turnDetection ?? (params.turnDetection === 'none' ? null : params.turnDetection)
-    if (overlapPolicy !== undefined) session.overlap_policy = overlapPolicy
-    // Nightly vLLM-Omni rejects listen_only together with server_vad (I2 02:21): default to barge_in_on_speech.
-    else if (turnDetection === 'server_vad' && this.wire === 'omni-duplex') session.overlap_policy = 'barge_in_on_speech'
-    if (turnDetection !== undefined) {
-      session.turn_detection = turnDetection === 'server_vad' ? { type: 'server_vad', interrupt_response: true } : null
+    // §K.18: one resolver for validation (manager.open, session-params) and for what is sent; refuses unpaired combinations.
+    const turn = resolveTurnSettings({ wire: this.wire, request: this.request, stored: params, sessionConfig: realtime.session })
+    this.turnSettings = turn
+    if (turn.overlapPolicySource !== 'model-config') session.overlap_policy = turn.overlapPolicy
+    if (turn.turnDetectionSource !== 'model-config') {
+      session.turn_detection = turn.turnDetection === 'server_vad' ? { type: 'server_vad', interrupt_response: true } : null
     }
     if (this.request.voice ?? params.voice) session.voice = this.request.voice ?? params.voice
     if (this.request.instructions ?? params.instructions) session.instructions = this.request.instructions ?? params.instructions
@@ -236,6 +290,7 @@ class LiveSession {
       session.extra_body = extra
       this.nativeRequested = extra.native_duplex === true || extra.minicpmo45_native_duplex === true
       this.autoResponds = extra.auto_response === true || extra.full_duplex === true
+      this.turnMode = turnModeOf(session.turn_detection?.type === 'server_vad' ? 'server_vad' : 'none', this.nativeRequested)
     }
     this.sessionConfig = session
     this.publish({ type: 'live.state', state: 'connecting', provider: this.route.provider, model: this.model.id })
@@ -250,6 +305,7 @@ class LiveSession {
     })
     // Backend events are applied strictly in arrival order (audio pushes await disk writes).
     this.client.on('event', (event) => {
+      this.noteServerEvent(event)
       this.pendingEvents += 1
       this.eventChain = this.eventChain.then(() => this.onBackendEvent(event)).finally(() => { this.pendingEvents -= 1 })
     })
@@ -264,6 +320,7 @@ class LiveSession {
     this.turnOpen = false
     this.inputWriter = await RecordingWriter.open(config.outputDir, `${safeSegment(this.sessionId, 'no-session')}/${new Date().toISOString().replace(/[:.]/g, '-')}-${safeSegment(this.model.id)}-live-input.wav`)
     this.state = 'ready'
+    this.readyAt ??= Date.now()
     this.touch()
     this.warnings = []
     this.faultPlan = this.manager.claimTransportDrop(this.model)
@@ -272,7 +329,7 @@ class LiveSession {
     if (this.nativeRequested && typeof level === 'string' && level !== 'model_native_duplex') {
       this.warnings.push({ code: 'NATIVE_DUPLEX_NOT_ENABLED', message: `native duplex was requested but the server runs ${level}; replies may need End input, and resume/overlap behave differently` })
     }
-    this.publish({ type: 'live.state', state: 'ready', capabilities: this.deps.capabilities.describe(this.route, this.model), capabilitiesScope: 'deployment-history', serverSessionId: server.sessionId ?? null, ...(typeof level === 'string' ? { implementationLevel: level } : {}), autoResponse: this.autoResponds ?? null, warnings: this.warnings })
+    this.publish({ type: 'live.state', state: 'ready', capabilities: this.deps.capabilities.describe(this.route, this.model), capabilitiesScope: 'deployment-history', serverSessionId: server.sessionId ?? null, ...(typeof level === 'string' ? { implementationLevel: level } : {}), autoResponse: this.autoResponds ?? null, turn: this.turnSummary(), warnings: this.warnings })
     for (const warning of this.warnings) {
       this.deps.log(`dsh-dgx-audio: ${this.route.provider}/${this.model.id}: ${warning.message}`)
       this.publish({ type: 'live.warning', ...warning })
@@ -767,6 +824,85 @@ class LiveSession {
     response.audioChunks += 1
   }
 
+  /** §K.18: the turn-taking mode this session actually sent (null on wires without a duplex turn policy). */
+  turnSummary() {
+    if (this.wire !== 'omni-duplex' || this.sessionConfig === undefined) return null
+    return {
+      mode: this.turnMode ?? null,
+      turnDetection: this.sessionConfig.turn_detection?.type === 'server_vad' ? 'server_vad' : 'none',
+      turnDetectionSource: this.turnSettings?.turnDetectionSource ?? null,
+      overlapPolicy: this.sessionConfig.overlap_policy ?? null,
+      overlapPolicySource: this.turnSettings?.overlapPolicySource ?? null,
+      nativeDuplexRequested: this.nativeRequested === true,
+      implementationLevel: this.implementationLevel ?? null,
+    }
+  }
+
+  /**
+   * §K.17: arrival accounting of every server event, and the model's own decisions (response.listen / response.speak /
+   * overlap.decision). "Model events" are response.*, overlap.decision, input_audio_buffer.speech_* and transcription.*;
+   * acks, heartbeats and session events are transport, not model activity. A gap of ≥ MODEL_SILENCE_WINDOW_MS between
+   * model events while input frames were forwarded is recorded: it separates "the model kept deciding to listen" from
+   * "no model activity at all".
+   */
+  noteServerEvent(event) {
+    const now = Date.now()
+    const type = typeof event?.type === 'string' ? event.type : 'unknown'
+    const s = (this.serverEvents ??= { counts: {}, lastAt: {}, lastModelEventAt: undefined, framesAtLastModelEvent: 0, windows: [], listen: 0, speak: 0, overlap: 0, listenReasons: {}, overlapActions: {}, recent: [] })
+    s.counts[type] = (s.counts[type] ?? 0) + 1
+    s.lastAt[type] = now
+    const model = type.startsWith('response.') || type === 'overlap.decision' || type.startsWith('input_audio_buffer.speech_') || type.startsWith('transcription.')
+    if (model) {
+      const from = s.lastModelEventAt ?? this.readyAt ?? now
+      const frames = this.frames - s.framesAtLastModelEvent
+      if (now - from >= MODEL_SILENCE_WINDOW_MS && frames > 0 && s.windows.length < 64) s.windows.push({ from: new Date(from).toISOString(), to: new Date(now).toISOString(), gapMs: now - from, framesForwarded: frames, endedBy: type })
+      s.lastModelEventAt = now
+      s.framesAtLastModelEvent = this.frames
+    }
+    let decision
+    // 0.4.12: vLLM-Omni's realtime handler nests the native decision under response.metadata (58adeec, DUPLEX-SILENCE-REPRO).
+    const meta = event?.response?.metadata ?? event?.metadata ?? {}
+    const field = key => (event?.[key] !== undefined ? event[key] : meta[key])
+    if (type === 'response.listen') {
+      s.listen += 1
+      const why = typeof field('reason') === 'string' ? field('reason') : 'unspecified'
+      s.listenReasons[why] = (s.listenReasons[why] ?? 0) + 1
+      const turnId = meta.vllm_omni?.model_turn_id
+      decision = { decision: 'listen', reason: why, modelListen: typeof field('model_listen') === 'boolean' ? field('model_listen') : null, buffering: field('buffering') === true, responseId: event.response_id ?? event.response?.id ?? null, modelTurnId: Number.isInteger(turnId) ? turnId : null }
+    } else if (type === 'response.speak') {
+      s.speak += 1
+      decision = { decision: 'speak', responseId: event.response_id ?? event.response?.id ?? null }
+    } else if (type === 'overlap.decision') {
+      s.overlap += 1
+      const action = typeof event.action === 'string' ? event.action : 'unspecified'
+      s.overlapActions[action] = (s.overlapActions[action] ?? 0) + 1
+      decision = { decision: 'overlap', action, policy: event.policy ?? null, reason: event.reason ?? null, overlapMs: Number.isFinite(event.overlap_ms) ? event.overlap_ms : null, ...(typeof event.buffer_audio === 'boolean' ? { bufferAudio: event.buffer_audio } : {}), ...(typeof event.defer_runtime_append === 'boolean' ? { deferRuntimeAppend: event.defer_runtime_append } : {}) }
+    }
+    if (decision !== undefined) {
+      const entry = { at: new Date(now).toISOString(), ...decision, epoch: Number.isInteger(event.epoch) ? event.epoch : null, framesForwarded: this.frames }
+      s.recent.push(entry)
+      if (s.recent.length > 256) s.recent.shift()
+      this.publish({ type: 'live.decision', ...entry })
+    }
+  }
+
+  serverEventsSummary(until) {
+    const s = this.serverEvents
+    if (s === undefined) return null
+    const windows = [...s.windows]
+    const from = s.lastModelEventAt ?? this.readyAt
+    const trailingFrames = this.frames - s.framesAtLastModelEvent
+    if (from !== undefined && until - from >= MODEL_SILENCE_WINDOW_MS && trailingFrames > 0) windows.push({ from: new Date(from).toISOString(), to: new Date(until).toISOString(), gapMs: until - from, framesForwarded: trailingFrames, endedBy: 'close' })
+    return {
+      counts: s.counts,
+      lastAt: Object.fromEntries(Object.entries(s.lastAt).map(([k, v]) => [k, new Date(v).toISOString()])),
+      decisions: { listen: s.listen, speak: s.speak, overlap: s.overlap, listenReasons: s.listenReasons, overlapActions: s.overlapActions },
+      modelSilenceWindows: windows,
+      modelSilenceWindowMs: MODEL_SILENCE_WINDOW_MS,
+      recentDecisions: s.recent,
+    }
+  }
+
   noteServerReaction() {
     if (this.evidence.framesBeforeServerReaction !== undefined) return
     this.evidence.framesBeforeServerReaction = this.frames
@@ -866,10 +1002,21 @@ class LiveSession {
 
   async doClose(reason, error) {
     const wasReady = this.state === 'ready' && !this.reconnecting
+    const closeRequestedAt = Date.now()
     this.state = 'closed'
     this.reconnecting = false
     clearTimeout(this.idleTimer)
-    if (wasReady) await this.client?.close().catch(() => {})
+    // 0.4.11 (§K.17): end every active response's audio before waiting for the server's session.closed (up to the client
+    // close timeout). The feed's audio.end {status: "cancelled"} lets players drop scheduled audio at close time, not ~2 s later.
+    for (const response of this.responses.values()) {
+      if (response.status === 'created') {
+        response.status = 'cancelled'
+        response.summary = await response.stream.end('cancelled', { error: { code: 'LIVE_CLOSED', message: reason } })
+      }
+    }
+    const streamsStoppedAt = Date.now()
+    let serverClose = null
+    if (wasReady) serverClose = await this.client?.close().catch(() => null) ?? null
     else this.client?.socket?.close?.()
     await this.eventChain
     for (const pending of (this.controls ?? []).filter(c => c.resolvedAt === undefined)) this.resolveControl(pending, 'unconfirmed', { detail: 'session closed before a server outcome' })
@@ -954,6 +1101,9 @@ class LiveSession {
       observations: this.observations ?? [],
       controls: (this.controls ?? []).map(({ controlId, type, at, sent, targetResponseId, outcome, reason, resolvedAt, detail, staleError }) => ({ controlId, type, at, sent, targetResponseId, outcome, ...(reason ? { reason } : {}), ...(detail ? { detail } : {}), ...(staleError ? { staleError } : {}), resolvedAt })),
       inputIntegrity: { framesForwarded: this.frames, serverRejectedAppends: (this.inputRejections ?? []).length, rejections: this.inputRejections ?? [] },
+      close: { requestedAt: new Date(closeRequestedAt).toISOString(), streamsStoppedMs: streamsStoppedAt - closeRequestedAt, serverClosed: serverClose?.serverClosed ?? null, serverCloseWaitMs: serverClose?.waitMs ?? null },
+      turn: this.turnSummary(),
+      serverEvents: this.serverEventsSummary(closeRequestedAt),
       implementationLevel: this.client?.server?.capabilities?.implementation_level ?? null,
       warnings: this.warnings ?? [],
       transcripts: [...(this.transcripts?.values() ?? [])].map(t => ({ turnId: t.id, text: t.final ?? t.text, deltas: t.deltas, deltasBeforeInputEnd: t.deltasBeforeInputEnd, done: t.done })),

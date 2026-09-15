@@ -293,17 +293,20 @@ export class RealtimeDuplexClient extends EventEmitter {
         socket.send(JSON.stringify({ type: 'session.close' }))
         await new Promise(resolve => setTimeout(resolve, Math.min(timeoutMs, 300)))
       } else if (socket.readyState === 1) {
+        const started = Date.now()
         const closed = new Promise(resolve => {
-          const timer = setTimeout(resolve, timeoutMs)
-          const onEvent = (event) => { if (event.type === 'session.closed') { clearTimeout(timer); this.off('event', onEvent); resolve() } }
+          const timer = setTimeout(() => { this.off('event', onEvent); resolve(false) }, timeoutMs)
+          const onEvent = (event) => { if (event.type === 'session.closed') { clearTimeout(timer); this.off('event', onEvent); resolve(true) } }
           this.on('event', onEvent)
         })
         socket.send(JSON.stringify({ type: 'session.close' }))
-        await closed
+        const serverClosed = await closed
+        this.closeOutcome = { serverClosed, waitMs: Date.now() - started, timeoutMs }
       }
     } catch { /* socket already failing */ }
     this.state = 'closed'
     try { socket.close(1000, 'client close') } catch {}
+    return this.closeOutcome
   }
 }
 

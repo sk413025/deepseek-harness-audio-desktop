@@ -9,7 +9,7 @@ import { readSse } from './sse.js'
 import { chatStreamEvents } from './openai-stream.js'
 import { RealtimeDuplexClient, realtimeUrl } from './realtime.js'
 import { resolveRecordingId } from './recording.js'
-import { LiveError } from './live.js'
+import { LiveError, nativeDuplexRequestedOf, resolveTurnSettings } from './live.js'
 import { attributionHeaders } from './compat.js'
 import { routeApiKey } from './config.js'
 import { validateTaskParams } from './tasks.js'
@@ -101,6 +101,23 @@ async function readJsonBody(request, maxBytes = 64 * 1024) {
   try { return JSON.parse(text) } catch { throw new LiveError('BAD_REQUEST', 'request body is not JSON', 400) }
 }
 
+/** §K.18 turn modes a UI offers for an omni-duplex model; `send` is exactly what the UI posts (session-params or live/open). */
+export function turnModesOf(model) {
+  const native = nativeDuplexRequestedOf(model.realtime)
+  return {
+    default: native ? 'native-duplex' : 'no-turn-detection',
+    modes: [
+      { mode: native ? 'native-duplex' : 'no-turn-detection', send: {}, sends: { turn_detection: null }, meaning: native ? 'the model decides when to speak (native duplex); interrupt with the Interrupt control' : 'no turn detection; replies follow input commits' },
+      { mode: 'server-vad', send: { turnDetection: 'server_vad' }, sends: { turn_detection: 'server_vad', overlap_policy: 'barge_in_on_speech' }, meaning: 'server voice activity detection; speaking over a reply interrupts it' },
+    ],
+    rules: [
+      { overlapPolicy: 'barge_in_on_speech', requires: { turnDetection: 'server_vad' } },
+      { overlapPolicy: 'listen_only', forbids: { turnDetection: 'server_vad' } },
+    ],
+    refusalCode: 'INVALID_PARAM_COMBINATION',
+  }
+}
+
 function guard(handler) {
   return async (request) => {
     try {
@@ -153,6 +170,8 @@ export function createRouteHandlers(deps) {
       ...(typeof model.requestOptionsScope === 'string' ? { requestOptionsScope: model.requestOptionsScope } : {}),
       ...(model.requestOptionsEvidence !== undefined ? { requestOptionsEvidence: model.requestOptionsEvidence } : {}),
       optionControls: optionControlsOf(model),
+      // §K.18: the duplex turn-taking choice as one mode (never two independent selects), with the server's pairing rule.
+      ...(model.mode === 'realtime' && (model.realtime.wire ?? 'omni-duplex') === 'omni-duplex' ? { turnModes: turnModesOf(model) } : {}),
       io: ioOf(model),
       wire: model.mode === 'realtime' ? model.realtime.wire : { chat: model.outputAudio ? 'omni-chat-s2s' : 'openai-chat-audio', transcribe: 'openai-transcriptions', translate: 'openai-translations', speech: 'omni-speech-http', 'generate-audio': 'omni-audio-generate', align: 'vllm-pooling-forced-align', 'generate-video': 'omni-videos' }[model.mode],
       activation: deps.activation?.(route.provider, model.id) ?? { state: 'ready' },
@@ -336,6 +355,7 @@ export function createRouteHandlers(deps) {
         ? { encoding: 'text', route: `${ROUTE_PREFIX}/live/text` }
         : { encoding: 'pcm_s16le', sampleRate: session.inputRate, channels: 1, frameMs: session.model.realtime.frameMs, maxFrameBytes: config.live.maxFrameBytes, wireEncoding: session.model.realtime.inputEncoding },
       capabilities: deps.capabilities.describe(session.route, session.model),
+      turn: session.turnSummary(),
     })
   }
 
@@ -372,6 +392,8 @@ export function createRouteHandlers(deps) {
     let params
     // 0.4.3: UNKNOWN_PARAM / INVALID_PARAM with error.key so the UI can mark the control (mic HANDOFF 02:29 item 3).
     try { params = validateTaskParams(model, body.params ?? {}) } catch (error) { throw Object.assign(new LiveError(error.reason ?? 'BAD_REQUEST', error.message, 400), { key: error.key }) }
+    // §K.18: a stored realtime set that the duplex server would reject is refused here, not at the next live/open.
+    if (model.mode === 'realtime') resolveTurnSettings({ wire: model.realtime.wire ?? 'omni-duplex', stored: params, sessionConfig: model.realtime.session })
     deps.sessionParams?.set(body.sessionId, route.provider, model.id, params)
     return json(200, { ok: true, provider: route.provider, model: model.id, params })
   }
