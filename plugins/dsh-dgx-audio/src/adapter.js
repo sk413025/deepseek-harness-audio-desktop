@@ -14,7 +14,7 @@ import { safeSegment } from './recording.js'
 import { AudioHub } from './audio-hub.js'
 import { routeApiKey } from './config.js'
 import { generateVideoRequest } from './video.js'
-import { alignRequest, auxiliaryLocal, generateAudioRequest, pendingUserMessages, renderAsrBody, speechRequest, validateTaskParams } from './tasks.js'
+import { alignRequest, auxiliaryLocal, generateAudioRequest, isContextNotice, pendingUserMessages, renderAsrBody, speechRequest, validateTaskParams } from './tasks.js'
 import { catalogTasksOf, catalogTasksSourceOf, extractOptionsBlock, taskOf, uiTaskOf } from './task-map.js'
 import { resultLinkLine } from './results.js'
 import { appendInvocationRecord, refusalRecord } from './records.js'
@@ -280,7 +280,14 @@ export class DgxAudioAdapter extends LlmAdapterBase {
     const pendingIndexes = new Set(pendingUserMessages(options.messages).map(([i]) => i))
     const pendingTextFiles = []
     const pendingFiles = []
+    let droppedContextNotices = 0
     for (const [messageIndex, message] of options.messages.entries()) {
+      // 0.4.8 (§K.14): a Harness context notice ("[model changed: …]") is not the user's turn. Sent as a user message it
+      // becomes an extra text turn after the audio in template-driven audio models (MiMo-Audio spoken dialogue).
+      if (includeAudio && isContextNotice(message)) {
+        droppedContextNotices += 1
+        continue
+      }
       if (message.role === 'system') {
         systemTexts.push(textOf(message.content))
         continue
@@ -338,7 +345,7 @@ export class DgxAudioAdapter extends LlmAdapterBase {
     // Auxiliary calls (session title, compaction) keep their own instructions.
     if (includeAudio && model.systemPrompt !== undefined && model.systemPrompt.length > 0) system = model.systemPrompt
     const plan = system && audio.length > 0 ? systemPlacementPlan(model, this.deps.capabilities?.evidenceFor(this.route(options.provider), model, 'systemWithAudio')) : { placement: 'system', reason: 'no-system-or-audio' }
-    const converted = { system, systemPlacement: 'system', systemPlacementReason: plan.reason, messages, audio, pendingAudio: audio.filter(a => a.pending), pendingTextFiles, pendingFiles }
+    const converted = { system, systemPlacement: 'system', systemPlacementReason: plan.reason, messages, audio, pendingAudio: audio.filter(a => a.pending), pendingTextFiles, pendingFiles, droppedContextNotices }
     return plan.placement === 'user-prefix' ? foldSystemIntoUser(converted, plan.reason) : converted
   }
 
@@ -414,6 +421,9 @@ export class DgxAudioAdapter extends LlmAdapterBase {
         systemPlacement: converted.systemPlacement,
         systemPlacementReason: converted.systemPlacementReason,
         systemPrompt: converted.system ? `${converted.system.slice(0, 160)}${converted.system.length > 160 ? '…' : ''}` : null,
+        droppedContextNotices: converted.droppedContextNotices ?? 0,
+        // 0.4.8 (§K.14): the sampling fields actually sent, so a run can be checked against the server recipe.
+        sampling: samplingRecord(body, model.extraBody),
         messages: messages.map(m => ({
           role: m.role,
           content: typeof m.content === 'string'
@@ -910,6 +920,27 @@ export function systemPlacementPlan(model, evidence) {
 }
 
 /** Fold the system prompt into the first user message (returns a new converted object; audio parts untouched). */
+/** Sampling-related fields of one chat request body, verbatim (§K.14). Other extraBody values are named and hashed only. */
+function samplingRecord(body, extraBody) {
+  const keys = Object.keys(extraBody ?? {}).sort()
+  return {
+    temperature: body.temperature ?? null,
+    max_tokens: body.max_tokens ?? null,
+    sampling_params_list: body.sampling_params_list ?? null,
+    extraBodyKeys: keys,
+    extraBodySha256: keys.length === 0 ? null : createHash('sha256').update(canonicalJson(extraBody)).digest('hex'),
+  }
+}
+
+/** JSON with object keys sorted at every level (stable hash input). */
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
+  if (value !== null && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map(k => `${JSON.stringify(k)}:${canonicalJson(value[k])}`).join(',')}}`
+  }
+  return JSON.stringify(value) ?? 'null'
+}
+
 function foldSystemIntoUser(converted, reason) {
   if (!converted.system) return converted
   let folded = false

@@ -1,7 +1,7 @@
 // Protocol constants shared by the adapter, routes and live driver.
 
 export const PLUGIN_NAME = 'dsh-dgx-audio'
-export const PLUGIN_VERSION = '0.4.7'
+export const PLUGIN_VERSION = '0.4.8'
 export const CONTRACT_VERSION = '0.1'
 
 /** OpenAI-compatible SSE terminal payload. */
