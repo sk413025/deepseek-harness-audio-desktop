@@ -46,6 +46,37 @@ const report = new Report('desktop-availability', {
   runner: { imageOS: process.env.ImageOS, imageVersion: process.env.ImageVersion, macOS: run('sw_vers', ['-productVersion']).stdout.trim() },
   notCovered: ['real DGX model servers', 'physical USB microphone / macOS TCC prompt', 'speaker output and audio quality'],
 })
+// Observation only (no substitution): request log and output audio source timing, installed before app scripts run.
+const OBSERVER = `(() => {
+  if (window.__CI_OBS__) return
+  const obs = window.__CI_OBS__ = { fetches: [], sources: [] }
+  const originalFetch = window.fetch.bind(window)
+  window.fetch = async (input, init) => {
+    const url = String(input instanceof Request ? input.url : input)
+    const entry = /\\/api\\/(dsh-dgx-audio|session)\\//.test(url) ? { at: Date.now(), url: url.replace(location.origin, '').slice(0, 160), method: init?.method ?? 'GET' } : null
+    if (entry && obs.fetches.length < 2000) obs.fetches.push(entry)
+    try { const response = await originalFetch(input, init); if (entry) { entry.status = response.status; entry.doneAt = Date.now() } return response }
+    catch (error) { if (entry) { entry.error = String(error).slice(0, 120); entry.doneAt = Date.now() } throw error }
+  }
+  const start = AudioBufferSourceNode.prototype.start
+  const stop = AudioBufferSourceNode.prototype.stop
+  AudioBufferSourceNode.prototype.start = function (when = 0, offset = 0, duration) {
+    const ctx = this.context
+    const now = Date.now()
+    const lead = Math.max(0, (when || 0) - ctx.currentTime) * 1000
+    const seconds = this.buffer ? (duration ?? (this.buffer.duration - (offset || 0))) : 0
+    const record = { createdAt: now, expectedStartAt: now + lead, expectedEndAt: now + lead + seconds * 1000, seconds, stoppedAt: null, endedAt: null }
+    if (obs.sources.length < 5000) obs.sources.push(record)
+    this.addEventListener('ended', () => { record.endedAt = Date.now() })
+    this.__ciRecord = record
+    return start.call(this, when, offset, duration)
+  }
+  AudioBufferSourceNode.prototype.stop = function (...rest) {
+    if (this.__ciRecord && this.__ciRecord.stoppedAt === null) this.__ciRecord.stoppedAt = Date.now()
+    return stop.apply(this, rest)
+  }
+})()`
+
 const cleanups = []
 const label = (capture) => `[capture=${capture}, backend=mock]`
 
@@ -320,33 +351,3 @@ function labPathScan(home) {
   return [ok ? 'pass' : 'fail', U, `${label('none')} ${files} installed plugin/settings files and the used home: ${hits.length} lab identifiers, ${windowFiles.length} window/lease files`, { hits: hits.slice(0, 30), windowFiles: windowFiles.slice(0, 30) }]
 }
 
-// Observation only (no substitution): request log and output audio source timing, installed before app scripts run.
-const OBSERVER = `(() => {
-  if (window.__CI_OBS__) return
-  const obs = window.__CI_OBS__ = { fetches: [], sources: [] }
-  const originalFetch = window.fetch.bind(window)
-  window.fetch = async (input, init) => {
-    const url = String(input instanceof Request ? input.url : input)
-    const entry = /\\/api\\/(dsh-dgx-audio|session)\\//.test(url) ? { at: Date.now(), url: url.replace(location.origin, '').slice(0, 160), method: init?.method ?? 'GET' } : null
-    if (entry && obs.fetches.length < 2000) obs.fetches.push(entry)
-    try { const response = await originalFetch(input, init); if (entry) { entry.status = response.status; entry.doneAt = Date.now() } return response }
-    catch (error) { if (entry) { entry.error = String(error).slice(0, 120); entry.doneAt = Date.now() } throw error }
-  }
-  const start = AudioBufferSourceNode.prototype.start
-  const stop = AudioBufferSourceNode.prototype.stop
-  AudioBufferSourceNode.prototype.start = function (when = 0, offset = 0, duration) {
-    const ctx = this.context
-    const now = Date.now()
-    const lead = Math.max(0, (when || 0) - ctx.currentTime) * 1000
-    const seconds = this.buffer ? (duration ?? (this.buffer.duration - (offset || 0))) : 0
-    const record = { createdAt: now, expectedStartAt: now + lead, expectedEndAt: now + lead + seconds * 1000, seconds, stoppedAt: null, endedAt: null }
-    if (obs.sources.length < 5000) obs.sources.push(record)
-    this.addEventListener('ended', () => { record.endedAt = Date.now() })
-    this.__ciRecord = record
-    return start.call(this, when, offset, duration)
-  }
-  AudioBufferSourceNode.prototype.stop = function (...rest) {
-    if (this.__ciRecord && this.__ciRecord.stoppedAt === null) this.__ciRecord.stoppedAt = Date.now()
-    return stop.apply(this, rest)
-  }
-})()`
