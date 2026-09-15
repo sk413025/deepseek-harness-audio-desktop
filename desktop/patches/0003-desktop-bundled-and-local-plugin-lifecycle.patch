@@ -630,7 +630,7 @@ index 2fc4dc8..f6cc8e9 100644
    updates: {
      check: () => ipcRenderer.invoke(DESKTOP_IPC.updatesCheck) as Promise<DesktopUpdateState>,
 diff --git a/apps/desktop/src/project-manager.ts b/apps/desktop/src/project-manager.ts
-index b9b94f7..0487341 100644
+index b9b94f7..564aab5 100644
 --- a/apps/desktop/src/project-manager.ts
 +++ b/apps/desktop/src/project-manager.ts
 @@ -1,6 +1,6 @@
@@ -958,7 +958,7 @@ index b9b94f7..0487341 100644
      switch (mutation.type) {
        case 'plugin-add': {
          const requestedName = packageNameFromSpec(mutation.spec)
-@@ -473,17 +668,40 @@ export class DesktopProjectManager {
+@@ -473,17 +668,42 @@ export class DesktopProjectManager {
            projectDir,
            [...current, installed].sort((left, right) => left.name.localeCompare(right.name)),
          )
@@ -990,8 +990,10 @@ index b9b94f7..0487341 100644
 +          else dependencies[mutation.name] = localPackageSpec(bundled.file)
 +          writeJson(join(projectDir, 'package.json'), { ...manifest, dependencies })
 +          if (file !== undefined && file !== bundled?.file) rmSync(join(projectDir, DESKTOP_LOCAL_PACKAGES_DIR, file), { force: true })
-+          // Removing a local package needs no registry metadata (measured offline with an empty cache).
-+          await this.runPnpm(projectDir, ['install', '--offline', '--trust-lockfile'])
++          // Removing a local package needs no registry metadata (measured offline with an empty cache). The lockfile is
++          // rewritten here, so frozen mode must be off explicitly: pnpm defaults to --frozen-lockfile when CI=true is in the
++          // environment (GitHub-hosted runner, run 34927273171 lifecycle.remove-local).
++          await this.runPnpm(projectDir, ['install', '--offline', '--no-frozen-lockfile', '--trust-lockfile'])
 +          writeProfilePlugins(projectDir, remainingNames.map(name => inspectPlugin(projectDir, name)))
 +          return bundled === undefined ? { name: mutation.name } : { name: mutation.name, disableBundled: true }
 +        }
@@ -1003,7 +1005,7 @@ index b9b94f7..0487341 100644
        }
        case 'plugin-update':
          assertPackageName(mutation.name)
-@@ -491,6 +709,9 @@ export class DesktopProjectManager {
+@@ -491,6 +711,9 @@ export class DesktopProjectManager {
          if (!profilePluginNames(projectDir).includes(mutation.name)) {
            throw new Error(`desktop project: plugin ${JSON.stringify(mutation.name)} is not installed`)
          }
@@ -1013,7 +1015,7 @@ index b9b94f7..0487341 100644
          await this.runPnpm(projectDir, ['add', `${mutation.name}@${mutation.version}`, '--save-exact'])
          {
            const installed = inspectPlugin(projectDir, mutation.name)
-@@ -499,10 +720,166 @@ export class DesktopProjectManager {
+@@ -499,10 +722,166 @@ export class DesktopProjectManager {
              pluginRecords(projectDir).map(plugin => plugin.name === installed.name ? installed : plugin),
            )
          }
