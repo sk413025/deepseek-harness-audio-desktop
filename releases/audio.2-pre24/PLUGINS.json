@@ -1,0 +1,36 @@
+{
+  "plugins": [
+    {
+      "file": "dsh-audio-model-library-0.1.6.tgz",
+      "name": "dsh-audio-model-library",
+      "version": "0.1.6",
+      "bytes": 126747,
+      "sha256": "90f2a9dc268ab45038eac033d03b97ea68562a796cb2c085804825bd9a7fbc61",
+      "ownerFreezeRecord": "package-0.1.6/FINAL_FROZEN.txt (11:09)"
+    },
+    {
+      "file": "dsh-audio-release-kit-0.2.4.tgz",
+      "name": "dsh-audio-release-kit",
+      "version": "0.2.4",
+      "bytes": 32329,
+      "sha256": "793b2bbb2901e91ff65845d928d1098235be887223a3e068845977f72b6b0ff8",
+      "ownerFreezeRecord": "release-kit 0.2.4 (release lane, 18:36; preset request values fix)"
+    },
+    {
+      "file": "dsh-dgx-audio-0.4.12.tgz",
+      "name": "dsh-dgx-audio",
+      "version": "0.4.12",
+      "bytes": 115963,
+      "sha256": "dadc204ab829e4b7f34c907fab4347554b5d5a2ee4a764dd56eb7f4ecaa059ce",
+      "ownerFreezeRecord": "package-0.4.12/FINAL_FROZEN.txt (15:24)"
+    },
+    {
+      "file": "dsh-voice-capture-0.3.8.tgz",
+      "name": "dsh-voice-capture",
+      "version": "0.3.8",
+      "bytes": 270613,
+      "sha256": "683a4cb89a7e6f0f4ed52a7970978ff6550da6a06cb179a96b50711f2e88287d",
+      "ownerFreezeRecord": "FINAL_FROZEN_0.3.8.md (16:12)"
+    }
+  ]
+}

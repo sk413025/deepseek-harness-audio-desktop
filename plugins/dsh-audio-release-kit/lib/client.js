@@ -48,6 +48,10 @@ window.__ModuleLoader__.load({
 			managedTitle: "From Audio models",
 			managedBody: "These DGX Spark servers are set up by the Audio models page, which also switches the model on the DGX. Nothing to add here.",
 			duplicateOfManaged: "This address is already provided by Audio models above; adding it here creates duplicate entries in the model picker.",
+			libraryNoticeTitle: "{servers} is set up in Audio models",
+			libraryNoticeBody: "Open Audio models in the sidebar and press Refresh: its models appear in the model picker with the right request settings, and Activate switches the model on the server. Add a server here only for a different server.",
+			addManually: "Add a server manually",
+			presetRequest: "Request settings added for this model: {values}",
 			fieldModel: "Model",
 			fieldModelHint: "The exact model name the server expects (pre-filled for the DGX Spark).",
 			fieldMode: "Use",
@@ -113,6 +117,10 @@ window.__ModuleLoader__.load({
 			managedTitle: "来自“音频模型”",
 			managedBody: "这些 DGX Spark 服务器已由“音频模型”页面配置，该页面也会切换 DGX 上的模型。这里无需再添加。",
 			duplicateOfManaged: "上方“音频模型”已提供这个地址；在这里再添加会让模型选择器出现重复项。",
+			libraryNoticeTitle: "{servers} 已在“音频模型”中配置",
+			libraryNoticeBody: "打开侧边栏的“音频模型”并按“刷新”：它的模型会以正确的请求设置出现在模型选择器中，按“启用”会在服务器上切换模型。只有连接其他服务器时才在这里添加。",
+			addManually: "手动添加服务器",
+			presetRequest: "会为此模型加入请求设置：{values}",
 			fieldModel: "模型",
 			fieldModelHint: "服务器使用的准确模型名称（已为 DGX Spark 预填）。",
 			fieldMode: "用途",
@@ -370,29 +378,38 @@ window.__ModuleLoader__.load({
 			}
 		}
 		//#endregion
-		//#region src/client/AudioServersCard.tsx
-		/**
-		* Settings → Plugins card for the `dsh-dgx-audio` namespace: first-run server setup and a truthful view of what
-		* each configured model has actually been verified to do on this computer. Nothing is contacted automatically;
-		* "Test connection" is an explicit user action that asks the host for a reachability probe (no inference).
-		*/
-		/**
-		* Distribution defaults for this local build (the SBPLab DGX Spark serving vLLM-Omni). The add form opens pre-filled
-		* with the first preset so nobody has to type an address or an exact model id; every field stays editable.
-		*/
+		//#region src/client/presets.ts
 		const SERVER_PRESETS = [{
 			key: "minicpm",
 			label: "MiniCPM-o 4.5",
 			name: "DGX Spark · MiniCPM-o 4.5",
 			url: "http://100.83.70.119:18124/v1",
-			model: "openbmb/MiniCPM-o-4_5"
+			model: "openbmb/MiniCPM-o-4_5",
+			entry: {
+				id: "minicpmo45-s2s",
+				name: "MiniCPM-o 4.5 · voice/mic question → text + spoken reply",
+				request: { extraBody: { chat_template_kwargs: {
+					enable_thinking: false,
+					use_tts_template: true
+				} } }
+			}
 		}, {
 			key: "mimo",
 			label: "MiMo-Audio-7B-Instruct",
 			name: "DGX Spark · MiMo-Audio-7B-Instruct",
 			url: "http://100.83.70.119:18212/v1",
-			model: "XiaomiMiMo/MiMo-Audio-7B-Instruct"
+			model: "XiaomiMiMo/MiMo-Audio-7B-Instruct",
+			entry: {
+				id: "mimo-audio-s2s",
+				name: "MiMo-Audio-7B-Instruct · mic record → text + spoken reply",
+				request: {
+					maxTokens: 200,
+					systemPrompt: "You are a helpful voice assistant. Answer the user's spoken question briefly.",
+					systemPromptWithAudio: "system"
+				}
+			}
 		}];
+		/** Form values for a preset. */
 		function presetForm(preset) {
 			return {
 				name: preset.name,
@@ -403,11 +420,49 @@ window.__ModuleLoader__.load({
 				keyEnv: ""
 			};
 		}
-		const sameUrl = (a, b) => a.trim().replace(/\/+$/u, "") === b.trim().replace(/\/+$/u, "");
+		/** The preset whose model id equals `model` (trimmed, exact). */
+		function presetForModel(model) {
+			return SERVER_PRESETS.find((preset) => preset.model === model.trim());
+		}
 		function slug(text) {
 			const base = text.normalize("NFKD").toLowerCase().replaceAll(/[^a-z0-9]+/gu, "-").replaceAll(/^-+|-+$/gu, "").slice(0, 32);
 			return base === "" ? "audio-server" : base;
 		}
+		/**
+		* Model entry written for the form. A chat entry for a preset model gets the preset id, display name and request values;
+		* a transcription entry or any other model gets the generic entry.
+		*/
+		function modelEntry(form) {
+			const model = form.model.trim();
+			const preset = form.mode === "chat" ? presetForModel(model) : void 0;
+			if (preset !== void 0) return {
+				id: preset.entry.id,
+				name: preset.entry.name,
+				upstreamModel: model,
+				mode: "chat",
+				sendModalities: true,
+				outputAudio: form.speech,
+				...preset.entry.request
+			};
+			return {
+				id: `${slug(model.split("/").at(-1) ?? model)}${form.mode === "transcribe" ? "-transcribe" : ""}`,
+				name: model,
+				upstreamModel: model,
+				mode: form.mode,
+				...form.mode === "chat" ? {
+					sendModalities: true,
+					outputAudio: form.speech
+				} : {}
+			};
+		}
+		//#endregion
+		//#region src/client/AudioServersCard.tsx
+		/**
+		* Settings → Plugins card for the `dsh-dgx-audio` namespace: first-run server setup and a truthful view of what
+		* each configured model has actually been verified to do on this computer. Nothing is contacted automatically;
+		* "Test connection" is an explicit user action that asks the host for a reachability probe (no inference).
+		*/
+		const sameUrl = (a, b) => a.trim().replace(/\/+$/u, "") === b.trim().replace(/\/+$/u, "");
 		function capLabel(t, cap) {
 			switch (cap?.state) {
 				case "verified": return t("capVerified");
@@ -454,15 +509,31 @@ window.__ModuleLoader__.load({
 			const [form, setForm] = (0, react.useState)(() => presetForm(SERVER_PRESETS[0]));
 			const [status, setStatus] = (0, react.useState)("");
 			const [saving, setSaving] = (0, react.useState)(false);
+			const [libraryServers, setLibraryServers] = (0, react.useState)([]);
+			const [manual, setManual] = (0, react.useState)(false);
 			(0, react.useEffect)(() => {
 				face.routes.refresh();
 			}, [settings]);
+			(0, react.useEffect)(() => {
+				if (!open) return;
+				let cancelled = false;
+				fetch("/api/dsh-audio-model-library/v1/library", { credentials: "include" }).then((response) => response.ok ? response.json() : null).then((body) => {
+					if (!cancelled) setLibraryServers((body?.servers ?? []).map((server) => server.displayName ?? server.id ?? "").filter((name) => name !== ""));
+				}).catch(() => {
+					if (!cancelled) setLibraryServers([]);
+				});
+				return () => {
+					cancelled = true;
+				};
+			}, [open]);
 			if (settings.status === "unavailable") return null;
 			const configured = Array.isArray(settings.value?.routes) ? settings.value.routes : [];
 			const liveByProvider = new Map(live.routes.map((route) => [route.provider, route]));
 			const managed = live.routes.filter((route) => !configured.some((own) => own.provider === route.provider));
 			const writable = settings.writable;
 			const nextPreset = (routes) => SERVER_PRESETS.find((preset) => !routes.some((route) => sameUrl(route.baseURL, preset.url) && route.models.some((model) => model.upstreamModel === preset.model))) ?? SERVER_PRESETS[0];
+			const formPreset = form.mode === "chat" ? presetForModel(form.model) : void 0;
+			const showForm = libraryServers.length === 0 || manual;
 			const duplicateOfManaged = managed.some((route) => sameUrl(route.baseURL, form.url));
 			const write = async (routes, done) => {
 				setSaving(true);
@@ -502,22 +573,12 @@ window.__ModuleLoader__.load({
 				const taken = new Set(configured.map((route) => route.provider));
 				let provider = slug(name);
 				for (let n = 2; taken.has(provider); n++) provider = `${slug(name)}-${n}`;
-				const modelId = `${slug(model.split("/").at(-1) ?? model)}${form.mode === "transcribe" ? "-transcribe" : ""}`;
 				const route = {
 					provider,
 					displayName: name,
 					baseURL: url,
 					...form.keyEnv.trim() === "" ? {} : { apiKeyEnv: form.keyEnv.trim() },
-					models: [{
-						id: modelId,
-						name: model,
-						upstreamModel: model,
-						mode: form.mode,
-						...form.mode === "chat" ? {
-							sendModalities: true,
-							outputAudio: form.speech
-						} : {}
-					}]
+					models: [modelEntry(form)]
 				};
 				const routes = [...configured, route];
 				if (await write(routes, t("saved"))) setForm(presetForm(nextPreset(routes)));
@@ -746,7 +807,30 @@ window.__ModuleLoader__.load({
 								}, route.provider);
 							})
 						}),
-						/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("form", {
+						libraryServers.length > 0 ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+							className: kit_module_css_default.empty,
+							"data-testid": "dsh-audio-servers-library-notice",
+							children: [
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+									className: kit_module_css_default.emptyTitle,
+									children: t("libraryNoticeTitle", { servers: libraryServers.join(", ") })
+								}),
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+									className: kit_module_css_default.muted,
+									children: t("libraryNoticeBody")
+								}),
+								!manual ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+									type: "button",
+									className: kit_module_css_default.ghost,
+									onClick: () => {
+										setManual(true);
+									},
+									"data-testid": "dsh-audio-server-manual",
+									children: t("addManually")
+								}) : null
+							]
+						}) : null,
+						showForm ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("form", {
 							className: kit_module_css_default.form,
 							onSubmit: (event) => {
 								event.preventDefault();
@@ -841,7 +925,8 @@ window.__ModuleLoader__.load({
 										}),
 										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 											className: kit_module_css_default.hint,
-											children: t("fieldModelHint")
+											"data-testid": "dsh-audio-server-preset-request",
+											children: formPreset !== void 0 ? t("presetRequest", { values: Object.entries(formPreset.entry.request).map(([key, value]) => `${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`).join(" · ") }) : t("fieldModelHint")
 										})
 									]
 								}),
@@ -925,7 +1010,7 @@ window.__ModuleLoader__.load({
 									})]
 								})
 							]
-						})
+						}) : null
 					]
 				}) : null]
 			});
