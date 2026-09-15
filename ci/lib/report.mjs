@@ -84,7 +84,8 @@ export class Report {
 
   /**
    * @param {string} id stable check id
-   * @param {'pass'|'fail'|'warn'|'info'|'skip'} status
+   * @param {'pass'|'fail'|'known-fail'|'warn'|'info'|'skip'} status  known-fail: a failure that ci/expected.json knownDefects
+   *   predicts for exactly this build (kept visible, does not fail the report)
    * @param {string} evidence one of EVIDENCE
    * @param {string} summary one line
    * @param {object} [detail]
@@ -92,7 +93,7 @@ export class Report {
   add(id, status, evidence, summary, detail) {
     const check = { id, status, evidence, summary, ...(detail === undefined ? {} : { detail }) }
     this.checks.push(check)
-    const mark = { pass: 'PASS', fail: 'FAIL', warn: 'WARN', info: 'INFO', skip: 'SKIP' }[status]
+    const mark = { pass: 'PASS', fail: 'FAIL', 'known-fail': 'KNOWN-FAIL', warn: 'WARN', info: 'INFO', skip: 'SKIP' }[status]
     console.log(`${mark} [${evidence}] ${id}: ${summary}`)
     return check
   }

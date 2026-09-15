@@ -57,6 +57,7 @@ const evidence = {
   },
   required: rows,
   optional,
+  knownDefectsReproduced: reports.flatMap(r => (r.document.checks ?? []).filter(c => c.status === 'known-fail').map(c => ({ report: r.document.report, check: c.id, summary: c.summary, patchSha: c.detail?.patchSha ?? null, firstSeen: c.detail?.firstSeen ?? null, fixedBy: c.detail?.fixedBy ?? null }))),
   evidenceClasses: [...new Set(reports.flatMap(r => r.document.checks?.map(c => c.evidence) ?? []))],
   notCovered: [
     'Real DGX / vLLM-Omni model servers (MiniCPM-o-4_5 duplex, MiMo-Audio-7B-Instruct): needs a controlled Mac on the lab network — attach external evidence, never infer from this run',
@@ -70,7 +71,8 @@ const evidence = {
 writeFileSync(args.out, JSON.stringify(evidence, null, 2) + '\n')
 
 const lines = []
-lines.push(`## Release artifact CI: ${!ok ? 'FAIL' : scope === 'full' ? 'PASS (hosted checks only)' : 'PASS — sources only, macOS desktop job NOT run'}`)
+const knownNote = evidence.knownDefectsReproduced.length ? ` — ${evidence.knownDefectsReproduced.length} KNOWN DEFECT(S) reproduced` : ''
+lines.push(`## Release artifact CI: ${!ok ? 'FAIL' : scope === 'full' ? 'PASS (hosted checks only)' : 'PASS — sources only, macOS desktop job NOT run'}${knownNote}`)
 lines.push('')
 lines.push(`- **Tag:** \`${target.tag}\` → commit \`${target.tagCommit}\`; release id ${target.releaseId} (prerelease=${target.prerelease})`)
 lines.push(`- **CI scripts commit:** \`${target.ciCommit}\` (${target.event}); run ${target.runUrl}`)
@@ -79,14 +81,15 @@ if (evidence.binding.app) lines.push(`- **app:** ${evidence.binding.app.bundleId
 for (const plugin of evidence.binding.releasePlugins ?? []) lines.push(`  - ${plugin.name} ${plugin.version} \`${plugin.sha256.slice(0, 16)}…\``)
 if (evidence.binding.runner) lines.push(`- **runner:** ${evidence.binding.runner.imageOS} ${evidence.binding.runner.imageVersion}, macOS ${evidence.binding.runner.macOS}, ${evidence.binding.runner.machine}`)
 lines.push('')
-lines.push('| report | verdict | pass | fail | warn | info | skip |')
-lines.push('|---|---|---|---|---|---|---|')
+lines.push('| report | verdict | pass | fail | known-fail | warn | info | skip |')
+lines.push('|---|---|---|---|---|---|---|---|')
 for (const row of [...rows, ...optional.map(r => ({ ...r, report: `${r.report} (optional)` }))]) {
-  lines.push(`| ${row.report} | ${row.verdict === 'pass' ? '✅ pass' : row.verdict === 'missing' ? '⛔ missing' : '❌ fail'} | ${row.counts.pass ?? 0} | ${row.counts.fail ?? 0} | ${row.counts.warn ?? 0} | ${row.counts.info ?? 0} | ${row.counts.skip ?? 0} |`)
+  lines.push(`| ${row.report} | ${row.verdict === 'pass' ? '✅ pass' : row.verdict === 'missing' ? '⛔ missing' : '❌ fail'} | ${row.counts.pass ?? 0} | ${row.counts.fail ?? 0} | ${row.counts['known-fail'] ?? 0} | ${row.counts.warn ?? 0} | ${row.counts.info ?? 0} | ${row.counts.skip ?? 0} |`)
 }
 const failures = reports.flatMap(r => (r.document.checks ?? []).filter(c => c.status === 'fail').map(c => `- ❌ \`${r.document.report}\` ${c.id}: ${c.summary}`))
 const warnings = reports.flatMap(r => (r.document.checks ?? []).filter(c => c.status === 'warn').map(c => `- ⚠️ \`${r.document.report}\` ${c.id}: ${c.summary}`))
 if (failures.length) lines.push('', '### Failures', ...failures.slice(0, 60))
+if (evidence.knownDefectsReproduced.length) lines.push('', '### Known defects reproduced on this build (expected by ci/expected.json knownDefects; they do not fail the run, they are not fixed)', ...evidence.knownDefectsReproduced.map(d => `- ❗ \`${d.report}\` ${d.check}: ${d.summary}`))
 if (warnings.length) lines.push('', '### Warnings', ...warnings.slice(0, 40))
 lines.push('', '### Not covered by this hosted run', ...evidence.notCovered.map(item => `- ${item}`))
 const markdown = lines.join('\n') + '\n'
