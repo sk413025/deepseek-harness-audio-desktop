@@ -1,0 +1,6 @@
+# dsh-voice-capture bundle layer: one Loader row. The host half registers
+# nothing; the row makes the client-module scan serve lib/client.js (the
+# composer microphone button and recording panel) to Web and Desktop.
+- insert:
+    - id: voice-capture
+      name: dsh-voice-capture
