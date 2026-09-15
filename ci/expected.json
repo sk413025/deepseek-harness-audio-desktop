@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "comment": "Static expectations for the DeepSeek Harness Audio (Local Build) release artifacts. Values that change per release (plugin names, versions, hashes) are read from releases/<tag>/ in the tag tree, never from here.",
+  "app": {
+    "bundleName": "DeepSeek Harness Audio (Local Build)",
+    "bundleIdentifier": "local.sbplab.deepseek-harness-audio",
+    "desktopProfile": "desktop-audio",
+    "architecture": "arm64",
+    "signing": "adhoc",
+    "notarized": false
+  },
+  "dmg": {
+    "namePattern": "^DeepSeek-Harness-Audio-Local-(?<shortVersion>[0-9][0-9A-Za-z.-]*)-(?<tag>audio\\.[0-9A-Za-z.-]+)-arm64\\.dmg$",
+    "requiredTopLevel": ["DeepSeek Harness Audio (Local Build).app", "Applications", "examples", "使用說明 Guide"]
+  },
+  "machO": {
+    "allowedNonArm64": [
+      {
+        "pathPattern": "Contents/Resources/runtime/pnpm/dist/node_modules/@reflink/reflink-darwin-x64/reflink\\.darwin-x64\\.node$",
+        "reason": "pnpm ships every optional reflink prebuild; only the darwin-arm64 one is loaded on Apple Silicon"
+      }
+    ]
+  },
+  "privacy": {
+    "allowedPrivateIpv4Examples": [
+      { "value": "10.0.0.5", "reason": "placeholder in dsh-audio-model-library controller URL description (\"e.g. http://10.0.0.5:18190\")" },
+      { "value": "192.168.1.20", "reason": "placeholder in release-kit / model-library Settings field hint (\"e.g. http://192.168.1.20:8000/v1\")" }
+    ]
+  },
+  "hostedSmoke": {
+    "clientPlugins": ["dsh-voice-capture", "dsh-audio-model-library", "dsh-audio-release-kit"],
+    "hostRoutes": [
+      { "plugin": "dsh-dgx-audio", "path": "/api/dsh-dgx-audio/v1/capabilities" },
+      { "plugin": "dsh-audio-model-library", "path": "/api/dsh-audio-model-library/v1/library" }
+    ]
+  }
+}

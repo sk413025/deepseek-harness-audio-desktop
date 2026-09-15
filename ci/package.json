@@ -1,0 +1,12 @@
+{
+  "name": "dsh-audio-desktop-ci",
+  "private": true,
+  "description": "CI tooling for verifying published DeepSeek Harness Audio (Local Build) releases. Not shipped.",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=22" },
+  "devDependencies": {
+    "@electron/fuses": "1.8.0",
+    "playwright-core": "1.63.0"
+  }
+}
