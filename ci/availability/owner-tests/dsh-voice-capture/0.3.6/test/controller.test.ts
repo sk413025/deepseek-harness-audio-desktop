@@ -243,7 +243,8 @@ test('duration limit stops capture automatically and keeps the clip', async () =
   const controller = new VoiceCaptureController(backend, upload, sessions, SPEC, undefined, memoryStorage())
   await controller.start(A)
   backend.feed(3)
-  await new Promise(resolve => setTimeout(resolve, 20))
+  // CI timing hardening (see PROVENANCE.json): wait for the encoder instead of a fixed 20 ms (GitHub run 34933425211 saw 'encoding').
+  for (let waited = 0; waited < 2000 && controller.source(A).getSnapshot().phase === 'encoding'; waited += 10) await new Promise(resolve => setTimeout(resolve, 10))
   const snapshot = controller.source(A).getSnapshot()
   assert.equal(snapshot.phase, 'preview')
   assert.equal(snapshot.clip?.limitReached, true)

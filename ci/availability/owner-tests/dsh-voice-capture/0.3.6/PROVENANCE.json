@@ -8,7 +8,14 @@
   "copiedAt": "2026-09-15T13:40+08:00",
   "ownerResult": "owner: 102/102 on 0.3.6; negative control Z1–Z5 against 0.3.5 source 0/5 (evidence/unit-0.3.6/negative-0.3.5-v036.txt)",
   "runsAgainst": "repository plugins/dsh-voice-capture/src (0.3.5, recovered from lib/client.js.map sourcesContent); live.ts sha256 a94bc856… (same in 0.3.3–0.3.5)",
-  "redactions": [],
+  "redactions": [
+    {
+      "file": "test/controller.test.ts",
+      "line": 246,
+      "kind": "timing hardening (not a privacy redaction)",
+      "reason": "fixed 20 ms wall-clock wait before asserting phase 'preview'; on GitHub-hosted ubuntu (run 34933425211) the encoder was still in 'encoding' → owner-test flake, not a product defect. Replaced by polling while phase === 'encoding' (≤ 2 s); the assertions are unchanged. Reported to the mic owner."
+    }
+  ],
   "files": [
     {
       "path": "test/audio.test.ts",
@@ -16,7 +23,7 @@
     },
     {
       "path": "test/controller.test.ts",
-      "sha256": "4fc62835f575e2df692894bc4fb459f5057dde6795bcd1347129155860859573"
+      "sha256": "223df454570b382bf00fb4b4531f03e2beceb91ddafdf101a1546dffa43cbd54"
     },
     {
       "path": "test/fixtures-catalog-request-options.json",
