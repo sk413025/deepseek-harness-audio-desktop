@@ -1,0 +1,41 @@
+{
+  "generatedBy": "release lane (plugin build records are not shipped: they name the builder checkout)",
+  "plugins": [
+    {
+      "file": "plugins/dsh-audio-model-library-0.1.4.tgz",
+      "name": "dsh-audio-model-library",
+      "version": "0.1.4",
+      "bytes": 114239,
+      "sha256": "5cd3a029c474b9a000cff08ddd81b7eb5f04ceae7211a6af537ed26750237039",
+      "ownerFreezeRecord": "package-0.1.4/FINAL_FROZEN.txt (06:59)",
+      "installable": "Settings \u2192 Plugins \u2192 Install from File (same bytes as bundled in the app)"
+    },
+    {
+      "file": "plugins/dsh-audio-release-kit-0.2.2.tgz",
+      "name": "dsh-audio-release-kit",
+      "version": "0.2.2",
+      "bytes": 26250,
+      "sha256": "17fc0ef98dbff4e0ed92bc4ab4d186b4e50346aa144a9edc545f82d0829ad94c",
+      "ownerFreezeRecord": "release-kit 0.2.2 build record",
+      "installable": "Settings \u2192 Plugins \u2192 Install from File (same bytes as bundled in the app)"
+    },
+    {
+      "file": "plugins/dsh-dgx-audio-0.4.7.tgz",
+      "name": "dsh-dgx-audio",
+      "version": "0.4.7",
+      "bytes": 106355,
+      "sha256": "97ae555adf6c3aed2f54b23f8ba0ded7ef04fb95bb609e5b1ca598bb70621e5b",
+      "ownerFreezeRecord": "package-0.4.7/FINAL_FROZEN.txt (06:24)",
+      "installable": "Settings \u2192 Plugins \u2192 Install from File (same bytes as bundled in the app)"
+    },
+    {
+      "file": "plugins/dsh-voice-capture-0.3.3.tgz",
+      "name": "dsh-voice-capture",
+      "version": "0.3.3",
+      "bytes": 213783,
+      "sha256": "38d722c3f35983e64c5955a7b66fb9f70e6320eadc79a7d57df751b546f76b0c",
+      "ownerFreezeRecord": "FINAL_FROZEN_0.3.3.md (07:42)",
+      "installable": "Settings \u2192 Plugins \u2192 Install from File (same bytes as bundled in the app)"
+    }
+  ]
+}
