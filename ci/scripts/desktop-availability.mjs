@@ -253,7 +253,7 @@ async function main() {
 
   // Capture-dependent cases: the microphone owner's fixture + adapter, never a CI-made microphone.
   for (const id of ['capture.a2-record-while-server-down', 'capture.a6-permission-delay-cancel', 'capture.mimo-record-stop-send-progressive', 'capture.duplex-abc-overlap-interrupt-cleanup']) {
-    if (!args['capture-adapter']) report.add(id, 'skip', U, `NOT RUN: waiting for the microphone owner's fixed TTS fixtures + capture-source adapter (AUDIO_TEST_LAYERING_20260915.md); CI does not substitute its own microphone`)
+    if (!args['capture-adapter']) report.add(id, 'skip', U, `NOT RUN (blocked, owner delivery): the microphone owner's capture adapter (e2e/fixture-capture-source.page.js + scenario-fixture-duplex.mjs) is not frozen yet, and the current TTS fixture set is marked "INTERNAL TEST FIXTURE ONLY — do not commit to a shared repo" (macOS say output), so it cannot be placed in this repository; CI does not substitute its own microphone or fixtures`, { needs: ['redistributable fixture set with manifest (e.g. espeak-ng / Apache-2.0 TTS), same file names and sha256 manifest', 'frozen capture adapter + scenario from the microphone owner'], observedRunnerPermissionPath: 'see probe.permission-path' })
   }
 
   // a12.no-lab-paths: installed plugin files, seed records and the used home.
