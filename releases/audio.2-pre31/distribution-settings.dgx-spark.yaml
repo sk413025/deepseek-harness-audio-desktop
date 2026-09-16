@@ -1,0 +1,22 @@
+# DeepSeek Harness Audio (Local Build) defaults for the SBPLab DGX Spark. Added to settings.yaml on first launch only for
+# sections you do not have yet; nothing here is contacted until you open Audio models or send a message.
+# Audio models: MiniCPM-o 4.5 and MiMo-Audio-7B-Instruct on the DGX Spark. Activate switches the model on the DGX through
+# its controller over your existing SSH access (no password or key is stored here).
+dsh-audio-model-library:
+  servers:
+    - id: dgx-spark
+      displayName: DGX Spark
+      modelHost: 100.83.70.119
+      controller:
+        mode: ssh
+        sshDestination: SBPLab@100.83.70.119
+        # sshCommand: library default `dsh-audio-ctl` (linked into ~/.local/bin on the DGX)
+  focus:
+    rows: ["vllm-omni:openbmb/MiniCPM-o-4_5", "vllm-omni:XiaomiMiMo/MiMo-Audio-7B-Instruct"]
+    recipes: ["minicpmo45-omni-nightly-58adeec", "a3-omni-mimo-audio-7b-instruct"]
+  # Live duplex voice prompt (MiniCPM-o needs one). Left out automatically when this file does not exist on this Mac.
+  referenceVoiceFile: ~/DSH/parallel-work/streaming/i1/fixtures/minicpmo_system_ref_audio.wav
+# New conversations start on MiniCPM-o 4.5 (audio → text + speech) from the DGX Spark.
+agent-default-model:
+  provider: dgx-library-dgx-spark-minicpmo45-omni-nightly-58adeec
+  model: minicpmo45-omni-nightly-58adeec--speech

@@ -111,6 +111,8 @@ window.__ModuleLoader__.load({
 			voiceSubDecide: "The model decides every moment: listen or speak.",
 			voiceSubListenVad: "Speak any time; the model answers when you pause.",
 			voiceSubWaiting: "Reply stopped. The model stays quiet until you have spoken.",
+			voiceSubStart: "Say something to begin; the model answers after you speak.",
+			voiceLanguageNote: "The model answers in Traditional Chinese.",
 			voiceTimelineHint: "You and the model on one clock · each cell is 1 second",
 			voiceLaneYou: "You",
 			voiceLaneModel: "Model",
@@ -124,7 +126,7 @@ window.__ModuleLoader__.load({
 			voiceDetailInterrupt: "Interruption → server cancelled the reply",
 			voiceDetailGaps: "Reply audio gaps (audio arrived late)",
 			voiceDetailBuffer: "Playback buffer",
-			voiceDetailHeld: "Replies not played after Stop reply",
+			voiceDetailHeld: "Replies the model started on its own (not played)",
 			voiceDetailTurn: "Turn mode reported by the host",
 			voiceDetailAudio: "Microphone processing",
 			voiceMute: "Mute",
@@ -235,6 +237,8 @@ window.__ModuleLoader__.load({
 			voiceSubDecide: "模型随时决定：听，或说。",
 			voiceSubListenVad: "随时开口；你停下时模型会回答。",
 			voiceSubWaiting: "回答已停止。你说完之前，模型不会再说话。",
+			voiceSubStart: "先开口说话，模型会在你说完后回答。",
+			voiceLanguageNote: "模型会以繁体中文回答。",
 			voiceTimelineHint: "你与模型在同一时间轴 · 每格 1 秒",
 			voiceLaneYou: "你",
 			voiceLaneModel: "模型",
@@ -248,7 +252,7 @@ window.__ModuleLoader__.load({
 			voiceDetailInterrupt: "打断 → 服务端取消回答",
 			voiceDetailGaps: "回答音频断续（音频晚到）",
 			voiceDetailBuffer: "播放缓冲",
-			voiceDetailHeld: "停止回答后未播放的回答",
+			voiceDetailHeld: "模型自行开口（未播放）",
 			voiceDetailTurn: "主机报告的轮次模式",
 			voiceDetailAudio: "麦克风处理",
 			voiceMute: "静音",
@@ -488,7 +492,32 @@ window.__ModuleLoader__.load({
 			}
 		}
 		//#endregion
+		//#region src/client/reply-language.ts
+		/**
+		* Reply language of this distribution: Traditional Chinese (Taiwan), whatever language the user speaks (user decision,
+		* 2026-09-16). The rule text is used by:
+		* - the voice page: MiniCPM-o 4.5's duplex system prompt (`instructions` at `live/open`, fixed for the call), after the
+		*   server's default opening line "Streaming Omni Conversation.";
+		* - the Audio servers MiMo preset system prompt (presets.ts);
+		* - the "DGX audio (no tools)" preset persona: `presets/dgx-audio/agent.cordis.yml` holds the same text as YAML
+		*   (test/presets.test.ts compares them).
+		*/
+		const REPLY_LANGUAGE_RULE = "請一律使用繁體中文（台灣用語）回答，不要使用簡體字；使用者用英文或其他語言提問時，也用繁體中文回答。";
+		/** MiniCPM-o 4.5 duplex system prompt: the server default line first, then the reply language rule. */
+		const DUPLEX_INSTRUCTIONS = `Streaming Omni Conversation.\n${REPLY_LANGUAGE_RULE}`;
+		//#endregion
 		//#region src/client/presets.ts
+		/**
+		* Distribution presets for the Audio servers form (the SBPLab DGX Spark serving vLLM-Omni) and the model entry the form
+		* writes into the `dsh-dgx-audio` settings section.
+		*
+		* A preset carries the request values its recipe needs, the same values as the validated DGX demo routes:
+		* - MiniCPM-o 4.5: chat_template_kwargs, without which replies start with `<think>`;
+		* - MiMo-Audio-7B-Instruct: maxTokens 200 and a short system prompt, without which a reply streams for over a minute.
+		*
+		* The values apply whenever the model id matches a preset, whatever the address, so a user who only changes the server
+		* address keeps them.
+		*/
 		const SERVER_PRESETS = [{
 			key: "minicpm",
 			label: "MiniCPM-o 4.5",
@@ -514,7 +543,7 @@ window.__ModuleLoader__.load({
 				name: "MiMo-Audio-7B-Instruct · mic record → text + spoken reply",
 				request: {
 					maxTokens: 200,
-					systemPrompt: "You are a helpful voice assistant. Answer the user's spoken question briefly.",
+					systemPrompt: `You are a helpful voice assistant. Answer the user's spoken question briefly. ${REPLY_LANGUAGE_RULE}`,
 					systemPromptWithAudio: "system"
 				}
 			}
@@ -1286,7 +1315,9 @@ registerProcessor('dsh-voice-tap', VoiceTap)`;
 				this.reset(options.turnMode);
 				this.set({
 					phase: "starting",
-					error: void 0
+					error: void 0,
+					waitingForUser: true,
+					waitReason: "start"
 				});
 				try {
 					this.stream = await navigator.mediaDevices.getUserMedia({
@@ -1306,7 +1337,8 @@ registerProcessor('dsh-voice-tap', VoiceTap)`;
 						sessionId: options.sessionId,
 						provider: options.provider,
 						model: options.model,
-						...options.turnMode === "server-vad" ? { turnDetection: "server_vad" } : {}
+						...options.turnMode === "server-vad" ? { turnDetection: "server_vad" } : {},
+						...options.instructions ? { instructions: options.instructions } : {}
 					});
 					this.liveId = String(opened.liveId);
 					await this.openCapture();
@@ -1352,7 +1384,8 @@ registerProcessor('dsh-voice-tap', VoiceTap)`;
 				this.set({
 					interruptions: [...this.snapshot.interruptions, performance.now()],
 					speaking: false,
-					waitingForUser: true
+					waitingForUser: true,
+					waitReason: "stopped"
 				});
 				const cancel = this.activeResponse !== void 0;
 				const clickedAt = performance.now();
@@ -1395,7 +1428,10 @@ registerProcessor('dsh-voice-tap', VoiceTap)`;
 				this.loudMs = 0;
 				this.quietMs = 0;
 				this.userTurnSeen = false;
-				this.set({ waitingForUser: false });
+				this.set({
+					waitingForUser: false,
+					waitReason: void 0
+				});
 			}
 			async end() {
 				if (this.snapshot.phase !== "live" && this.snapshot.phase !== "starting") return;
@@ -2031,7 +2067,8 @@ registerProcessor('dsh-voice-tap', VoiceTap)`;
 						sessionId: id,
 						provider: candidate.provider,
 						model: candidate.model,
-						turnMode: snap.turnMode
+						turnMode: snap.turnMode,
+						instructions: DUPLEX_INSTRUCTIONS
 					});
 				} catch (error) {
 					setStartError(error instanceof Error ? error.message : String(error));
@@ -2039,8 +2076,8 @@ registerProcessor('dsh-voice-tap', VoiceTap)`;
 					setBusy(false);
 				}
 			};
-			const stateLabel = snap.muted ? t("voiceStateMuted") : snap.phase === "starting" ? t("voiceStateConnecting") : snap.speaking ? t("voiceStateAnswering") : snap.userSpeaking ? t("voiceStateYou") : snap.waitingForUser ? t("voiceStateWaiting") : t("voiceStateListening");
-			const stateSub = snap.muted ? t("voiceSubMuted") : snap.speaking ? snap.turnMode === "server-vad" ? t("voiceSubInterrupt") : t("voiceSubNative") : snap.waitingForUser ? t("voiceSubWaiting") : snap.turnMode === "server-vad" ? t("voiceSubListenVad") : t("voiceSubDecide");
+			const stateLabel = snap.muted ? t("voiceStateMuted") : snap.phase === "starting" ? t("voiceStateConnecting") : snap.speaking ? t("voiceStateAnswering") : snap.userSpeaking ? t("voiceStateYou") : snap.waitingForUser && snap.waitReason === "stopped" ? t("voiceStateWaiting") : t("voiceStateListening");
+			const stateSub = snap.muted ? t("voiceSubMuted") : snap.speaking ? snap.turnMode === "server-vad" ? t("voiceSubInterrupt") : t("voiceSubNative") : snap.waitingForUser ? snap.waitReason === "stopped" ? t("voiceSubWaiting") : t("voiceSubStart") : snap.turnMode === "server-vad" ? t("voiceSubListenVad") : t("voiceSubDecide");
 			const pulseClass = snap.muted ? voice_module_css_default.pulseOff : snap.speaking ? voice_module_css_default.pulseSpeak : voice_module_css_default.pulse;
 			if (!inCall) return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 				className: voice_module_css_default.page,
@@ -2129,6 +2166,10 @@ registerProcessor('dsh-voice-tap', VoiceTap)`;
 										})] })]
 									}, mode))]
 								}),
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+									className: voice_module_css_default.muted,
+									children: t("voiceLanguageNote")
+								}),
 								/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 									className: voice_module_css_default.row,
 									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
@@ -2196,6 +2237,7 @@ registerProcessor('dsh-voice-tap', VoiceTap)`;
 				"data-response-active": snap.responseActive,
 				"data-playback-gaps": snap.playbackGaps,
 				"data-waiting-for-user": snap.waitingForUser,
+				"data-wait-reason": snap.waitReason ?? "",
 				"data-held-replies": snap.heldReplies,
 				children: [
 					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("header", {
