@@ -1,6 +1,6 @@
 {
   "name": "dsh-audio-release-kit",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "DeepSeek Harness Audio (Local Build) release kit: no-tools audio preset, audio server settings card, an \"audio mode\" composer chip, a voice conversation page, and startup without the first-run dialogs. Contacts no model server on its own.",
   "private": true,
   "license": "MIT",

@@ -1,11 +1,11 @@
 # No-tools preset for audio models served through the dsh-dgx-audio adapter. Such models do not
 # implement tool calling, so no tool plugins are mounted. Routes that need an official system prompt
 # (for example Qwen2.5-Omni speech) replace this persona inside the adapter.
-# The last sentence is the distribution's reply language rule (src/client/reply-language.ts; test/presets.test.ts checks it).
+# The last sentence is the distribution's language hint (src/client/reply-language.ts; test/presets.test.ts checks it).
 
 - id: persona
   name: '@deepseek-ai/dsh-persona'
   config:
-    prefix: You are a helpful assistant. The user may send voice recordings or audio files; listen to them and answer the user directly without calling tools. 請一律使用繁體中文（台灣用語）回答，不要使用簡體字；使用者用英文或其他語言提問時，也用繁體中文回答。
+    prefix: You are a helpful assistant. The user may send voice recordings or audio files; listen to them and answer the user directly without calling tools. 預期使用者會使用中文交談。
     complete: true
     includeRuntimeContext: false

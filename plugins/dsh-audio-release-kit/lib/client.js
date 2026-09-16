@@ -112,7 +112,6 @@ window.__ModuleLoader__.load({
 			voiceSubListenVad: "Speak any time; the model answers when you pause.",
 			voiceSubWaiting: "Reply stopped. The model stays quiet until you have spoken.",
 			voiceSubStart: "Say something to begin; the model answers after you speak.",
-			voiceLanguageNote: "The model answers in Traditional Chinese.",
 			voiceTimelineHint: "You and the model on one clock · each cell is 1 second",
 			voiceLaneYou: "You",
 			voiceLaneModel: "Model",
@@ -238,7 +237,6 @@ window.__ModuleLoader__.load({
 			voiceSubListenVad: "随时开口；你停下时模型会回答。",
 			voiceSubWaiting: "回答已停止。你说完之前，模型不会再说话。",
 			voiceSubStart: "先开口说话，模型会在你说完后回答。",
-			voiceLanguageNote: "模型会以繁体中文回答。",
 			voiceTimelineHint: "你与模型在同一时间轴 · 每格 1 秒",
 			voiceLaneYou: "你",
 			voiceLaneModel: "模型",
@@ -494,17 +492,17 @@ window.__ModuleLoader__.load({
 		//#endregion
 		//#region src/client/reply-language.ts
 		/**
-		* Reply language of this distribution: Traditional Chinese (Taiwan), whatever language the user speaks (user decision,
-		* 2026-09-16). The rule text is used by:
+		* Language hint of this distribution: users are expected to speak Chinese. No reply language is imposed (user decision,
+		* 2026-09-16: kit 0.3.6's strict "always Traditional Chinese" rule made the replies sound unnatural). The hint is used by:
 		* - the voice page: MiniCPM-o 4.5's duplex system prompt (`instructions` at `live/open`, fixed for the call), after the
 		*   server's default opening line "Streaming Omni Conversation.";
 		* - the Audio servers MiMo preset system prompt (presets.ts);
 		* - the "DGX audio (no tools)" preset persona: `presets/dgx-audio/agent.cordis.yml` holds the same text as YAML
 		*   (test/presets.test.ts compares them).
 		*/
-		const REPLY_LANGUAGE_RULE = "請一律使用繁體中文（台灣用語）回答，不要使用簡體字；使用者用英文或其他語言提問時，也用繁體中文回答。";
-		/** MiniCPM-o 4.5 duplex system prompt: the server default line first, then the reply language rule. */
-		const DUPLEX_INSTRUCTIONS = `Streaming Omni Conversation.\n${REPLY_LANGUAGE_RULE}`;
+		const USER_LANGUAGE_HINT = "預期使用者會使用中文交談。";
+		/** MiniCPM-o 4.5 duplex system prompt: the server default line first, then the language hint. */
+		const DUPLEX_INSTRUCTIONS = `Streaming Omni Conversation.\n${USER_LANGUAGE_HINT}`;
 		//#endregion
 		//#region src/client/presets.ts
 		/**
@@ -543,7 +541,7 @@ window.__ModuleLoader__.load({
 				name: "MiMo-Audio-7B-Instruct · mic record → text + spoken reply",
 				request: {
 					maxTokens: 200,
-					systemPrompt: `You are a helpful voice assistant. Answer the user's spoken question briefly. ${REPLY_LANGUAGE_RULE}`,
+					systemPrompt: `You are a helpful voice assistant. Answer the user's spoken question briefly. ${USER_LANGUAGE_HINT}`,
 					systemPromptWithAudio: "system"
 				}
 			}
@@ -2165,10 +2163,6 @@ registerProcessor('dsh-voice-tap', VoiceTap)`;
 											children: mode === "server-vad" ? t("voiceModeVadHelp") : t("voiceModeNativeHelp")
 										})] })]
 									}, mode))]
-								}),
-								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-									className: voice_module_css_default.muted,
-									children: t("voiceLanguageNote")
 								}),
 								/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 									className: voice_module_css_default.row,
