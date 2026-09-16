@@ -91,6 +91,8 @@ const warnings = reports.flatMap(r => (r.document.checks ?? []).filter(c => c.st
 if (failures.length) lines.push('', '### Failures', ...failures.slice(0, 60))
 if (evidence.knownDefectsReproduced.length) lines.push('', '### Known defects reproduced on this build (expected by ci/expected.json knownDefects; they do not fail the run, they are not fixed)', ...evidence.knownDefectsReproduced.map(d => `- ❗ \`${d.report}\` ${d.check}: ${d.summary}`))
 if (warnings.length) lines.push('', '### Warnings', ...warnings.slice(0, 40))
+const scenarioTable = reports.map(r => r.path).filter(p => p.endsWith('availability-scenarios.json')).map(p => join(args.reports, p.replace(/\.json$/, '.md'))).find(p => existsSync(p))
+if (scenarioTable) lines.push('', '### Service availability scenarios (deterministic: real plugin code, loopback fake upstream, no DGX, no microphone)', readFileSync(scenarioTable, 'utf8'))
 lines.push('', '### Not covered by this hosted run', ...evidence.notCovered.map(item => `- ${item}`))
 const markdown = lines.join('\n') + '\n'
 if (args.summary) appendFileSync(args.summary, markdown)

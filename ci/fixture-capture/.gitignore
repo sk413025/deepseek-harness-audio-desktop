@@ -1,0 +1,3 @@
+# The fixture-capture harness is vendored byte-identical to the owner hash list: keep its audio fixtures and test package.
+!*.wav
+!*.tgz

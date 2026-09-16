@@ -1,0 +1,2923 @@
+{
+  "source": {
+    "host": "dsh-dgx-audio 0.4.5",
+    "adapterModelsSha256": "ed1352335decbad6f9e452c3df7e8148ee459f75acc31a86b140d8f49fdb5518"
+  },
+  "doc": {
+    "contractVersion": "0.1",
+    "taskContractVersion": "0.2",
+    "plugin": {
+      "name": "dsh-dgx-audio",
+      "version": "0.4.5"
+    },
+    "adapterModes": [
+      "chat",
+      "transcribe",
+      "translate",
+      "speech",
+      "generate-audio",
+      "realtime",
+      "align",
+      "generate-video"
+    ],
+    "realtimeWires": [
+      "omni-duplex",
+      "vllm-asr",
+      "omni-turn",
+      "omni-speech-ws"
+    ],
+    "configured": true,
+    "routes": [
+      {
+        "provider": "dgx-catalog",
+        "displayName": "Catalog 0515 entries",
+        "baseURL": "http://127.0.0.1:9/v1",
+        "authentication": "none",
+        "credentialPresent": false,
+        "models": [
+          {
+            "id": "qwen3-tts-12hz-1-7b-customvoice-speech",
+            "name": "qwen3-tts-12hz-1-7b-customvoice-speech",
+            "mode": "speech",
+            "upstreamModel": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+            "input": {
+              "formats": [
+                "wav",
+                "mp3",
+                "flac",
+                "ogg",
+                "opus",
+                "m4a",
+                "aac",
+                "webm"
+              ],
+              "recommended": {
+                "encoding": "pcm_s16le",
+                "sampleRate": 16000,
+                "channels": 1,
+                "container": "wav"
+              }
+            },
+            "task": "tts.speech",
+            "tasks": [
+              "tts.speech"
+            ],
+            "uiTask": "tts",
+            "catalogTasks": [
+              "tts",
+              "tts_preset_voice",
+              "tts_instruct_style"
+            ],
+            "catalogTasksSource": "config",
+            "catalogId": "vllm-omni:Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+            "requestOptions": [
+              "input",
+              "voice (preset, case-insensitive; default Vivian)",
+              "instructions (maps to instruct; max 500 chars)",
+              "language (Auto + codec_language_id keys)",
+              "task_type=CustomVoice (default)",
+              "response_format wav|pcm|flac|mp3|opus",
+              "sample_rate 8000|24000 (rc1+)",
+              "speed (not with streaming)",
+              "stream",
+              "stream_format sse|audio",
+              "max_new_tokens (default 2048, max 4096)",
+              "seed",
+              "initial_codec_chunk_frames",
+              "non_streaming_mode (prompt mode; default true)"
+            ],
+            "io": {
+              "input": {
+                "text": "required",
+                "audio": "none",
+                "referenceAudio": "none",
+                "referenceText": "none",
+                "referenceAudio2": "none",
+                "emotionAudio": "none"
+              },
+              "output": {
+                "text": false,
+                "audio": true,
+                "audioCount": "one",
+                "transcript": {
+                  "segments": false,
+                  "wordTimestamps": false,
+                  "speakers": false
+                },
+                "embedding": false
+              }
+            },
+            "wire": "omni-speech-http",
+            "activation": {
+              "state": "ready",
+              "detail": null,
+              "progress": null,
+              "runtime": null,
+              "updatedAt": null
+            },
+            "availability": {
+              "state": "ready"
+            },
+            "params": [
+              {
+                "key": "voice",
+                "type": "string",
+                "maxLength": 4000,
+                "valuesFrom": "/api/dsh-dgx-audio/v1/voices?provider=dgx-catalog&model=qwen3-tts-12hz-1-7b-customvoice-speech",
+                "source": "voices",
+                "default": "vivian"
+              },
+              {
+                "key": "instructions",
+                "type": "text",
+                "maxLength": 4000,
+                "default": ""
+              },
+              {
+                "key": "language",
+                "type": "string",
+                "maxLength": 4000,
+                "default": "Auto"
+              },
+              {
+                "key": "taskType",
+                "type": "enum",
+                "values": [
+                  "CustomVoice",
+                  "VoiceDesign",
+                  "Base"
+                ],
+                "default": "CustomVoice"
+              },
+              {
+                "key": "responseFormat",
+                "type": "enum",
+                "values": [
+                  "wav",
+                  "pcm"
+                ],
+                "default": "wav"
+              },
+              {
+                "key": "maxNewTokens",
+                "type": "number",
+                "step": 1
+              },
+              {
+                "key": "refText",
+                "type": "text",
+                "maxLength": 4000
+              },
+              {
+                "key": "speed",
+                "type": "number",
+                "min": 0.25,
+                "max": 4
+              },
+              {
+                "key": "seed",
+                "type": "number",
+                "step": 1
+              },
+              {
+                "key": "sampleRate",
+                "type": "number",
+                "step": 1,
+                "min": 1
+              },
+              {
+                "key": "wordTimestamps",
+                "type": "boolean"
+              },
+              {
+                "key": "xVectorOnlyMode",
+                "type": "boolean"
+              },
+              {
+                "key": "nonStreamingMode",
+                "type": "boolean"
+              },
+              {
+                "key": "initialCodecChunkFrames",
+                "type": "number",
+                "step": 1,
+                "min": 0
+              },
+              {
+                "key": "ambientSound",
+                "type": "text",
+                "maxLength": 4000
+              },
+              {
+                "key": "durationSeconds",
+                "type": "number",
+                "min": 0
+              },
+              {
+                "key": "extraParams",
+                "type": "object"
+              }
+            ],
+            "output": {
+              "text": false,
+              "audio": true
+            },
+            "capabilities": {
+              "textStreaming": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech returns audio, not text",
+                "checkedAt": null
+              },
+              "audioOutput": {
+                "state": "untested",
+                "source": "none",
+                "scope": null,
+                "detail": null,
+                "checkedAt": null
+              },
+              "audioOutputStreaming": {
+                "state": "untested",
+                "source": "none",
+                "scope": null,
+                "detail": null,
+                "checkedAt": null,
+                "observedDelivery": null
+              },
+              "liveInput": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null
+              },
+              "fullDuplex": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null,
+                "implementationLevel": null
+              },
+              "bargeIn": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null
+              },
+              "playbackAck": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null
+              },
+              "sessionResume": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null
+              }
+            },
+            "limits": {
+              "maxAudioBytes": 26214400,
+              "maxAudioPerRequest": 5,
+              "liveFrameMaxBytes": 64000,
+              "liveMaxSeconds": 600
+            }
+          },
+          {
+            "id": "qwen3-tts-12hz-1-7b-voicedesign-speech",
+            "name": "qwen3-tts-12hz-1-7b-voicedesign-speech",
+            "mode": "speech",
+            "upstreamModel": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+            "input": {
+              "formats": [
+                "wav",
+                "mp3",
+                "flac",
+                "ogg",
+                "opus",
+                "m4a",
+                "aac",
+                "webm"
+              ],
+              "recommended": {
+                "encoding": "pcm_s16le",
+                "sampleRate": 16000,
+                "channels": 1,
+                "container": "wav"
+              }
+            },
+            "task": "tts.speech",
+            "tasks": [
+              "tts.speech"
+            ],
+            "uiTask": "tts",
+            "catalogTasks": [
+              "tts",
+              "tts_voice_design"
+            ],
+            "catalogTasksSource": "config",
+            "catalogId": "vllm-omni:Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+            "requestOptions": [
+              "input",
+              "task_type=VoiceDesign (must be explicit)",
+              "instructions (required voice description; max 500 chars)",
+              "language",
+              "response_format",
+              "sample_rate 8000|24000 (rc1+)",
+              "speed",
+              "stream",
+              "stream_format",
+              "max_new_tokens",
+              "seed",
+              "initial_codec_chunk_frames",
+              "non_streaming_mode (defaults true for VoiceDesign)"
+            ],
+            "io": {
+              "input": {
+                "text": "required",
+                "audio": "none",
+                "referenceAudio": "none",
+                "referenceText": "none",
+                "referenceAudio2": "none",
+                "emotionAudio": "none"
+              },
+              "output": {
+                "text": false,
+                "audio": true,
+                "audioCount": "one",
+                "transcript": {
+                  "segments": false,
+                  "wordTimestamps": false,
+                  "speakers": false
+                },
+                "embedding": false
+              }
+            },
+            "wire": "omni-speech-http",
+            "activation": {
+              "state": "ready",
+              "detail": null,
+              "progress": null,
+              "runtime": null,
+              "updatedAt": null
+            },
+            "availability": {
+              "state": "ready"
+            },
+            "params": [
+              {
+                "key": "voice",
+                "type": "string",
+                "maxLength": 4000,
+                "valuesFrom": "/api/dsh-dgx-audio/v1/voices?provider=dgx-catalog&model=qwen3-tts-12hz-1-7b-voicedesign-speech",
+                "source": "voices"
+              },
+              {
+                "key": "instructions",
+                "type": "text",
+                "maxLength": 4000,
+                "default": ""
+              },
+              {
+                "key": "language",
+                "type": "string",
+                "maxLength": 4000,
+                "default": "Auto"
+              },
+              {
+                "key": "taskType",
+                "type": "enum",
+                "values": [
+                  "CustomVoice",
+                  "VoiceDesign",
+                  "Base"
+                ],
+                "default": "VoiceDesign"
+              },
+              {
+                "key": "responseFormat",
+                "type": "enum",
+                "values": [
+                  "wav",
+                  "pcm"
+                ],
+                "default": "wav"
+              },
+              {
+                "key": "maxNewTokens",
+                "type": "number",
+                "step": 1
+              },
+              {
+                "key": "refText",
+                "type": "text",
+                "maxLength": 4000
+              },
+              {
+                "key": "speed",
+                "type": "number",
+                "min": 0.25,
+                "max": 4
+              },
+              {
+                "key": "seed",
+                "type": "number",
+                "step": 1
+              },
+              {
+                "key": "sampleRate",
+                "type": "number",
+                "step": 1,
+                "min": 1
+              },
+              {
+                "key": "wordTimestamps",
+                "type": "boolean"
+              },
+              {
+                "key": "xVectorOnlyMode",
+                "type": "boolean"
+              },
+              {
+                "key": "nonStreamingMode",
+                "type": "boolean"
+              },
+              {
+                "key": "initialCodecChunkFrames",
+                "type": "number",
+                "step": 1,
+                "min": 0
+              },
+              {
+                "key": "ambientSound",
+                "type": "text",
+                "maxLength": 4000
+              },
+              {
+                "key": "durationSeconds",
+                "type": "number",
+                "min": 0
+              },
+              {
+                "key": "extraParams",
+                "type": "object"
+              }
+            ],
+            "output": {
+              "text": false,
+              "audio": true
+            },
+            "capabilities": {
+              "textStreaming": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech returns audio, not text",
+                "checkedAt": null
+              },
+              "audioOutput": {
+                "state": "untested",
+                "source": "none",
+                "scope": null,
+                "detail": null,
+                "checkedAt": null
+              },
+              "audioOutputStreaming": {
+                "state": "untested",
+                "source": "none",
+                "scope": null,
+                "detail": null,
+                "checkedAt": null,
+                "observedDelivery": null
+              },
+              "liveInput": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null
+              },
+              "fullDuplex": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null,
+                "implementationLevel": null
+              },
+              "bargeIn": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null
+              },
+              "playbackAck": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null
+              },
+              "sessionResume": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null
+              }
+            },
+            "limits": {
+              "maxAudioBytes": 26214400,
+              "maxAudioPerRequest": 5,
+              "liveFrameMaxBytes": 64000,
+              "liveMaxSeconds": 600
+            }
+          },
+          {
+            "id": "qwen3-tts-12hz-1-7b-base-speech",
+            "name": "qwen3-tts-12hz-1-7b-base-speech",
+            "mode": "speech",
+            "upstreamModel": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+            "input": {
+              "formats": [
+                "wav",
+                "mp3",
+                "flac",
+                "ogg",
+                "opus",
+                "m4a",
+                "aac",
+                "webm"
+              ],
+              "recommended": {
+                "encoding": "pcm_s16le",
+                "sampleRate": 16000,
+                "channels": 1,
+                "container": "wav"
+              }
+            },
+            "task": "tts.speech",
+            "tasks": [
+              "tts.speech"
+            ],
+            "uiTask": "voice-clone",
+            "catalogTasks": [
+              "tts",
+              "tts_voice_clone"
+            ],
+            "catalogTasksSource": "config",
+            "catalogId": "vllm-omni:Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+            "requestOptions": [
+              "input",
+              "task_type=Base (inferred from ref_audio/ref_text or stored voice)",
+              "ref_audio (http/https, data: URL, file:// with --allowed-local-media-path)",
+              "ref_text (required unless x_vector_only_mode)",
+              "x_vector_only_mode",
+              "speaker_embedding (dim = talker hidden_size; implies x_vector_only_mode)",
+              "voice (uploaded or precomputed profile; icl or xvec)",
+              "language",
+              "response_format",
+              "sample_rate 8000|24000 (rc1+)",
+              "speed",
+              "stream",
+              "stream_format",
+              "max_new_tokens (default: text-scaled ceiling, min 192 codec frames)",
+              "seed",
+              "initial_codec_chunk_frames",
+              "non_streaming_mode (default false)"
+            ],
+            "io": {
+              "input": {
+                "text": "required",
+                "audio": "none",
+                "referenceAudio": "required",
+                "referenceText": "optional",
+                "referenceAudio2": "none",
+                "emotionAudio": "none"
+              },
+              "output": {
+                "text": false,
+                "audio": true,
+                "audioCount": "one",
+                "transcript": {
+                  "segments": false,
+                  "wordTimestamps": false,
+                  "speakers": false
+                },
+                "embedding": false
+              }
+            },
+            "wire": "omni-speech-http",
+            "activation": {
+              "state": "ready",
+              "detail": null,
+              "progress": null,
+              "runtime": null,
+              "updatedAt": null
+            },
+            "availability": {
+              "state": "ready"
+            },
+            "params": [
+              {
+                "key": "voice",
+                "type": "string",
+                "maxLength": 4000,
+                "valuesFrom": "/api/dsh-dgx-audio/v1/voices?provider=dgx-catalog&model=qwen3-tts-12hz-1-7b-base-speech",
+                "source": "voices"
+              },
+              {
+                "key": "instructions",
+                "type": "text",
+                "maxLength": 4000
+              },
+              {
+                "key": "language",
+                "type": "string",
+                "maxLength": 4000,
+                "default": "Auto"
+              },
+              {
+                "key": "taskType",
+                "type": "enum",
+                "values": [
+                  "CustomVoice",
+                  "VoiceDesign",
+                  "Base"
+                ],
+                "default": "Base"
+              },
+              {
+                "key": "responseFormat",
+                "type": "enum",
+                "values": [
+                  "wav",
+                  "pcm"
+                ],
+                "default": "wav"
+              },
+              {
+                "key": "maxNewTokens",
+                "type": "number",
+                "step": 1
+              },
+              {
+                "key": "refText",
+                "type": "text",
+                "maxLength": 4000,
+                "default": "prompt-prefix"
+              },
+              {
+                "key": "speed",
+                "type": "number",
+                "min": 0.25,
+                "max": 4
+              },
+              {
+                "key": "seed",
+                "type": "number",
+                "step": 1
+              },
+              {
+                "key": "sampleRate",
+                "type": "number",
+                "step": 1,
+                "min": 1
+              },
+              {
+                "key": "wordTimestamps",
+                "type": "boolean"
+              },
+              {
+                "key": "xVectorOnlyMode",
+                "type": "boolean"
+              },
+              {
+                "key": "nonStreamingMode",
+                "type": "boolean"
+              },
+              {
+                "key": "initialCodecChunkFrames",
+                "type": "number",
+                "step": 1,
+                "min": 0
+              },
+              {
+                "key": "ambientSound",
+                "type": "text",
+                "maxLength": 4000
+              },
+              {
+                "key": "durationSeconds",
+                "type": "number",
+                "min": 0
+              },
+              {
+                "key": "extraParams",
+                "type": "object"
+              }
+            ],
+            "output": {
+              "text": false,
+              "audio": true
+            },
+            "capabilities": {
+              "textStreaming": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech returns audio, not text",
+                "checkedAt": null
+              },
+              "audioOutput": {
+                "state": "untested",
+                "source": "none",
+                "scope": null,
+                "detail": null,
+                "checkedAt": null
+              },
+              "audioOutputStreaming": {
+                "state": "untested",
+                "source": "none",
+                "scope": null,
+                "detail": null,
+                "checkedAt": null,
+                "observedDelivery": null
+              },
+              "liveInput": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null
+              },
+              "fullDuplex": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null,
+                "implementationLevel": null
+              },
+              "bargeIn": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null
+              },
+              "playbackAck": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null
+              },
+              "sessionResume": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null
+              }
+            },
+            "limits": {
+              "maxAudioBytes": 26214400,
+              "maxAudioPerRequest": 5,
+              "liveFrameMaxBytes": 64000,
+              "liveMaxSeconds": 600
+            }
+          },
+          {
+            "id": "moss-ttsd-v1-0-speech-dialogue",
+            "name": "moss-ttsd-v1-0-speech-dialogue",
+            "mode": "speech",
+            "upstreamModel": "OpenMOSS-Team/MOSS-TTSD-v1.0",
+            "input": {
+              "formats": [
+                "wav",
+                "mp3",
+                "flac",
+                "ogg",
+                "opus",
+                "m4a",
+                "aac",
+                "webm"
+              ],
+              "recommended": {
+                "encoding": "pcm_s16le",
+                "sampleRate": 16000,
+                "channels": 1,
+                "container": "wav"
+              }
+            },
+            "task": "tts.speech",
+            "tasks": [
+              "tts.speech"
+            ],
+            "uiTask": "voice-clone",
+            "catalogTasks": [
+              "tts_multi_speaker_dialogue"
+            ],
+            "catalogTasksSource": "config",
+            "catalogId": "vllm-omni:OpenMOSS-Team/MOSS-TTSD-v1.0",
+            "requestOptions": [
+              "input",
+              "ref_audio",
+              "ref_audio_2",
+              "voice",
+              "language",
+              "max_new_tokens",
+              "seed",
+              "response_format",
+              "stream",
+              "stream_format"
+            ],
+            "io": {
+              "input": {
+                "text": "required",
+                "audio": "none",
+                "referenceAudio": "optional",
+                "referenceText": "optional",
+                "referenceAudio2": "optional",
+                "emotionAudio": "none"
+              },
+              "output": {
+                "text": false,
+                "audio": true,
+                "audioCount": "one",
+                "transcript": {
+                  "segments": false,
+                  "wordTimestamps": false,
+                  "speakers": false
+                },
+                "embedding": false
+              }
+            },
+            "wire": "omni-speech-http",
+            "activation": {
+              "state": "ready",
+              "detail": null,
+              "progress": null,
+              "runtime": null,
+              "updatedAt": null
+            },
+            "availability": {
+              "state": "ready"
+            },
+            "params": [
+              {
+                "key": "voice",
+                "type": "string",
+                "maxLength": 4000,
+                "valuesFrom": "/api/dsh-dgx-audio/v1/voices?provider=dgx-catalog&model=moss-ttsd-v1-0-speech-dialogue",
+                "source": "voices"
+              },
+              {
+                "key": "instructions",
+                "type": "text",
+                "maxLength": 4000
+              },
+              {
+                "key": "language",
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "key": "taskType",
+                "type": "enum",
+                "values": [
+                  "CustomVoice",
+                  "VoiceDesign",
+                  "Base"
+                ]
+              },
+              {
+                "key": "responseFormat",
+                "type": "enum",
+                "values": [
+                  "wav",
+                  "pcm"
+                ],
+                "default": "wav"
+              },
+              {
+                "key": "maxNewTokens",
+                "type": "number",
+                "step": 1
+              },
+              {
+                "key": "refText",
+                "type": "text",
+                "maxLength": 4000
+              },
+              {
+                "key": "speed",
+                "type": "number",
+                "min": 0.25,
+                "max": 4
+              },
+              {
+                "key": "seed",
+                "type": "number",
+                "step": 1
+              },
+              {
+                "key": "sampleRate",
+                "type": "number",
+                "step": 1,
+                "min": 1
+              },
+              {
+                "key": "wordTimestamps",
+                "type": "boolean"
+              },
+              {
+                "key": "xVectorOnlyMode",
+                "type": "boolean"
+              },
+              {
+                "key": "nonStreamingMode",
+                "type": "boolean"
+              },
+              {
+                "key": "initialCodecChunkFrames",
+                "type": "number",
+                "step": 1,
+                "min": 0
+              },
+              {
+                "key": "ambientSound",
+                "type": "text",
+                "maxLength": 4000
+              },
+              {
+                "key": "durationSeconds",
+                "type": "number",
+                "min": 0
+              },
+              {
+                "key": "extraParams",
+                "type": "object"
+              }
+            ],
+            "output": {
+              "text": false,
+              "audio": true
+            },
+            "capabilities": {
+              "textStreaming": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech returns audio, not text",
+                "checkedAt": null
+              },
+              "audioOutput": {
+                "state": "untested",
+                "source": "none",
+                "scope": null,
+                "detail": null,
+                "checkedAt": null
+              },
+              "audioOutputStreaming": {
+                "state": "untested",
+                "source": "none",
+                "scope": null,
+                "detail": null,
+                "checkedAt": null,
+                "observedDelivery": null
+              },
+              "liveInput": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null
+              },
+              "fullDuplex": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null,
+                "implementationLevel": null
+              },
+              "bargeIn": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null
+              },
+              "playbackAck": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null
+              },
+              "sessionResume": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null
+              }
+            },
+            "limits": {
+              "maxAudioBytes": 26214400,
+              "maxAudioPerRequest": 5,
+              "liveFrameMaxBytes": 64000,
+              "liveMaxSeconds": 600
+            }
+          },
+          {
+            "id": "indextts-2-speech",
+            "name": "indextts-2-speech",
+            "mode": "speech",
+            "upstreamModel": "IndexTeam/IndexTTS-2",
+            "input": {
+              "formats": [
+                "wav",
+                "mp3",
+                "flac",
+                "ogg",
+                "opus",
+                "m4a",
+                "aac",
+                "webm"
+              ],
+              "recommended": {
+                "encoding": "pcm_s16le",
+                "sampleRate": 16000,
+                "channels": 1,
+                "container": "wav"
+              }
+            },
+            "task": "tts.speech",
+            "tasks": [
+              "tts.speech"
+            ],
+            "uiTask": "voice-clone",
+            "catalogTasks": [
+              "tts_voice_clone",
+              "tts_instruct_style"
+            ],
+            "catalogTasksSource": "config",
+            "catalogId": "vllm-omni:IndexTeam/IndexTTS-2",
+            "requestOptions": [
+              "input",
+              "ref_audio (required unless uploaded voice; http(s)/data:/file:// only)",
+              "voice (uploaded audio voice only)",
+              "max_new_tokens [1,4096]",
+              "extra_params.emo_audio",
+              "extra_params.emo_vector (8 floats in [0,1.2]: happy,angry,sad,afraid,disgusted,melancholic,surprised,calm)",
+              "extra_params.emo_alpha",
+              "extra_params.emo_text",
+              "extra_params.use_emo_text",
+              "extra_params.use_random",
+              "seed",
+              "response_format",
+              "stream (compatibility only)",
+              "speed (generic non-streaming post-processing; not native)",
+              "IGNORED: ref_text, instructions, language, task_type",
+              "NOT SUPPORTED: sample_rate"
+            ],
+            "io": {
+              "input": {
+                "text": "required",
+                "audio": "none",
+                "referenceAudio": "optional",
+                "referenceText": "optional",
+                "referenceAudio2": "none",
+                "emotionAudio": "optional"
+              },
+              "output": {
+                "text": false,
+                "audio": true,
+                "audioCount": "one",
+                "transcript": {
+                  "segments": false,
+                  "wordTimestamps": false,
+                  "speakers": false
+                },
+                "embedding": false
+              }
+            },
+            "wire": "omni-speech-http",
+            "activation": {
+              "state": "ready",
+              "detail": null,
+              "progress": null,
+              "runtime": null,
+              "updatedAt": null
+            },
+            "availability": {
+              "state": "ready"
+            },
+            "params": [
+              {
+                "key": "voice",
+                "type": "string",
+                "maxLength": 4000,
+                "valuesFrom": "/api/dsh-dgx-audio/v1/voices?provider=dgx-catalog&model=indextts-2-speech",
+                "source": "voices"
+              },
+              {
+                "key": "instructions",
+                "type": "text",
+                "maxLength": 4000
+              },
+              {
+                "key": "language",
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "key": "taskType",
+                "type": "enum",
+                "values": [
+                  "CustomVoice",
+                  "VoiceDesign",
+                  "Base"
+                ]
+              },
+              {
+                "key": "responseFormat",
+                "type": "enum",
+                "values": [
+                  "wav",
+                  "pcm"
+                ],
+                "default": "wav"
+              },
+              {
+                "key": "maxNewTokens",
+                "type": "number",
+                "step": 1
+              },
+              {
+                "key": "refText",
+                "type": "text",
+                "maxLength": 4000
+              },
+              {
+                "key": "speed",
+                "type": "number",
+                "min": 0.25,
+                "max": 4
+              },
+              {
+                "key": "seed",
+                "type": "number",
+                "step": 1
+              },
+              {
+                "key": "sampleRate",
+                "type": "number",
+                "step": 1,
+                "min": 1
+              },
+              {
+                "key": "wordTimestamps",
+                "type": "boolean"
+              },
+              {
+                "key": "xVectorOnlyMode",
+                "type": "boolean"
+              },
+              {
+                "key": "nonStreamingMode",
+                "type": "boolean"
+              },
+              {
+                "key": "initialCodecChunkFrames",
+                "type": "number",
+                "step": 1,
+                "min": 0
+              },
+              {
+                "key": "ambientSound",
+                "type": "text",
+                "maxLength": 4000
+              },
+              {
+                "key": "durationSeconds",
+                "type": "number",
+                "min": 0
+              },
+              {
+                "key": "extraParams",
+                "type": "object"
+              }
+            ],
+            "output": {
+              "text": false,
+              "audio": true
+            },
+            "capabilities": {
+              "textStreaming": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech returns audio, not text",
+                "checkedAt": null
+              },
+              "audioOutput": {
+                "state": "untested",
+                "source": "none",
+                "scope": null,
+                "detail": null,
+                "checkedAt": null
+              },
+              "audioOutputStreaming": {
+                "state": "untested",
+                "source": "none",
+                "scope": null,
+                "detail": null,
+                "checkedAt": null,
+                "observedDelivery": null
+              },
+              "liveInput": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null
+              },
+              "fullDuplex": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null,
+                "implementationLevel": null
+              },
+              "bargeIn": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null
+              },
+              "playbackAck": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null
+              },
+              "sessionResume": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null
+              }
+            },
+            "limits": {
+              "maxAudioBytes": 26214400,
+              "maxAudioPerRequest": 5,
+              "liveFrameMaxBytes": 64000,
+              "liveMaxSeconds": 600
+            }
+          },
+          {
+            "id": "qwen3-tts-12hz-1-7b-customvoice-speech-word-timestamps",
+            "name": "qwen3-tts-12hz-1-7b-customvoice-speech-word-timestamps",
+            "mode": "speech",
+            "upstreamModel": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+            "input": {
+              "formats": [
+                "wav",
+                "mp3",
+                "flac",
+                "ogg",
+                "opus",
+                "m4a",
+                "aac",
+                "webm"
+              ],
+              "recommended": {
+                "encoding": "pcm_s16le",
+                "sampleRate": 16000,
+                "channels": 1,
+                "container": "wav"
+              }
+            },
+            "task": "tts.speech",
+            "tasks": [
+              "tts.speech"
+            ],
+            "uiTask": "tts",
+            "catalogTasks": [
+              "timestamps"
+            ],
+            "catalogTasksSource": "config",
+            "catalogId": "vllm-omni:Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+            "requestOptions": [
+              "input",
+              "voice (preset, case-insensitive; default Vivian)",
+              "instructions (maps to instruct; max 500 chars)",
+              "language (Auto + codec_language_id keys)",
+              "task_type=CustomVoice (default)",
+              "response_format wav|pcm|flac|mp3|opus",
+              "sample_rate 8000|24000 (rc1+)",
+              "speed (not with streaming)",
+              "stream",
+              "stream_format sse|audio",
+              "max_new_tokens (default 2048, max 4096)",
+              "seed",
+              "initial_codec_chunk_frames",
+              "non_streaming_mode (prompt mode; default true)",
+              "word_timestamps (needs --forced-aligner; non-stream header or WS)"
+            ],
+            "io": {
+              "input": {
+                "text": "required",
+                "audio": "none",
+                "referenceAudio": "none",
+                "referenceText": "none",
+                "referenceAudio2": "none",
+                "emotionAudio": "none"
+              },
+              "output": {
+                "text": false,
+                "audio": true,
+                "audioCount": "one",
+                "transcript": {
+                  "segments": false,
+                  "wordTimestamps": true,
+                  "speakers": false
+                },
+                "embedding": false
+              }
+            },
+            "wire": "omni-speech-http",
+            "activation": {
+              "state": "ready",
+              "detail": null,
+              "progress": null,
+              "runtime": null,
+              "updatedAt": null
+            },
+            "availability": {
+              "state": "ready"
+            },
+            "params": [
+              {
+                "key": "voice",
+                "type": "string",
+                "maxLength": 4000,
+                "valuesFrom": "/api/dsh-dgx-audio/v1/voices?provider=dgx-catalog&model=qwen3-tts-12hz-1-7b-customvoice-speech-word-timestamps",
+                "source": "voices"
+              },
+              {
+                "key": "instructions",
+                "type": "text",
+                "maxLength": 4000
+              },
+              {
+                "key": "language",
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "key": "taskType",
+                "type": "enum",
+                "values": [
+                  "CustomVoice",
+                  "VoiceDesign",
+                  "Base"
+                ],
+                "default": "CustomVoice"
+              },
+              {
+                "key": "responseFormat",
+                "type": "enum",
+                "values": [
+                  "wav",
+                  "pcm"
+                ],
+                "default": "wav"
+              },
+              {
+                "key": "maxNewTokens",
+                "type": "number",
+                "step": 1
+              },
+              {
+                "key": "refText",
+                "type": "text",
+                "maxLength": 4000
+              },
+              {
+                "key": "speed",
+                "type": "number",
+                "min": 0.25,
+                "max": 4
+              },
+              {
+                "key": "seed",
+                "type": "number",
+                "step": 1
+              },
+              {
+                "key": "sampleRate",
+                "type": "number",
+                "step": 1,
+                "min": 1
+              },
+              {
+                "key": "wordTimestamps",
+                "type": "boolean",
+                "default": true
+              },
+              {
+                "key": "xVectorOnlyMode",
+                "type": "boolean"
+              },
+              {
+                "key": "nonStreamingMode",
+                "type": "boolean"
+              },
+              {
+                "key": "initialCodecChunkFrames",
+                "type": "number",
+                "step": 1,
+                "min": 0
+              },
+              {
+                "key": "ambientSound",
+                "type": "text",
+                "maxLength": 4000
+              },
+              {
+                "key": "durationSeconds",
+                "type": "number",
+                "min": 0
+              },
+              {
+                "key": "extraParams",
+                "type": "object"
+              }
+            ],
+            "output": {
+              "text": false,
+              "audio": true
+            },
+            "capabilities": {
+              "textStreaming": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech returns audio, not text",
+                "checkedAt": null
+              },
+              "audioOutput": {
+                "state": "untested",
+                "source": "none",
+                "scope": null,
+                "detail": null,
+                "checkedAt": null
+              },
+              "audioOutputStreaming": {
+                "state": "untested",
+                "source": "none",
+                "scope": null,
+                "detail": null,
+                "checkedAt": null,
+                "observedDelivery": null
+              },
+              "liveInput": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null
+              },
+              "fullDuplex": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null,
+                "implementationLevel": null
+              },
+              "bargeIn": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null
+              },
+              "playbackAck": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null
+              },
+              "sessionResume": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech mode sends complete requests over HTTP",
+                "checkedAt": null
+              }
+            },
+            "limits": {
+              "maxAudioBytes": 26214400,
+              "maxAudioPerRequest": 5,
+              "liveFrameMaxBytes": 64000,
+              "liveMaxSeconds": 600
+            }
+          },
+          {
+            "id": "qwen3-tts-12hz-1-7b-customvoice-speech-ws",
+            "name": "qwen3-tts-12hz-1-7b-customvoice-speech-ws",
+            "mode": "realtime",
+            "upstreamModel": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+            "input": {
+              "formats": [
+                "pcm_s16le"
+              ],
+              "recommended": {
+                "encoding": "text",
+                "container": "live/text"
+              }
+            },
+            "task": "tts.stream-input",
+            "tasks": [
+              "tts.stream-input"
+            ],
+            "uiTask": "tts-stream",
+            "catalogTasks": [
+              "tts",
+              "tts_preset_voice",
+              "tts_instruct_style"
+            ],
+            "catalogTasksSource": "config",
+            "catalogId": "vllm-omni:Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+            "requestOptions": [
+              "input",
+              "voice (preset, case-insensitive; default Vivian)",
+              "instructions (maps to instruct; max 500 chars)",
+              "language (Auto + codec_language_id keys)",
+              "task_type=CustomVoice (default)",
+              "sample_rate 8000|24000 (rc1+)",
+              "speed (not with streaming)",
+              "stream",
+              "max_new_tokens (default 2048, max 4096)",
+              "seed",
+              "initial_codec_chunk_frames",
+              "non_streaming_mode (prompt mode; default true)"
+            ],
+            "io": {
+              "input": {
+                "text": "required",
+                "audio": "none",
+                "referenceAudio": "none",
+                "referenceText": "none"
+              },
+              "output": {
+                "text": false,
+                "audio": true,
+                "audioCount": "many",
+                "transcript": {
+                  "segments": false,
+                  "wordTimestamps": false,
+                  "speakers": false
+                },
+                "embedding": false
+              },
+              "live": "text"
+            },
+            "wire": "omni-speech-ws",
+            "activation": {
+              "state": "ready",
+              "detail": null,
+              "progress": null,
+              "runtime": null,
+              "updatedAt": null
+            },
+            "availability": {
+              "state": "ready"
+            },
+            "params": [
+              {
+                "key": "voice",
+                "type": "string",
+                "maxLength": 4000,
+                "valuesFrom": "/api/dsh-dgx-audio/v1/voices?provider=dgx-catalog&model=qwen3-tts-12hz-1-7b-customvoice-speech-ws",
+                "source": "voices"
+              },
+              {
+                "key": "instructions",
+                "type": "text",
+                "maxLength": 4000
+              },
+              {
+                "key": "language",
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "key": "taskType",
+                "type": "enum",
+                "values": [
+                  "CustomVoice",
+                  "VoiceDesign",
+                  "Base"
+                ]
+              },
+              {
+                "key": "maxNewTokens",
+                "type": "number",
+                "step": 1,
+                "min": 1
+              },
+              {
+                "key": "speed",
+                "type": "number",
+                "min": 0.25,
+                "max": 4
+              },
+              {
+                "key": "seed",
+                "type": "number",
+                "step": 1
+              },
+              {
+                "key": "initialCodecChunkFrames",
+                "type": "number",
+                "step": 1,
+                "min": 0
+              },
+              {
+                "key": "nonStreamingMode",
+                "type": "boolean"
+              },
+              {
+                "key": "refText",
+                "type": "text",
+                "maxLength": 4000
+              },
+              {
+                "key": "xVectorOnlyMode",
+                "type": "boolean"
+              },
+              {
+                "key": "wordTimestamps",
+                "type": "boolean"
+              },
+              {
+                "key": "splitGranularity",
+                "type": "enum",
+                "values": [
+                  "none",
+                  "sentence",
+                  "clause"
+                ]
+              }
+            ],
+            "output": {
+              "text": false,
+              "audio": true
+            },
+            "capabilities": {
+              "textStreaming": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech stream-input wire returns audio",
+                "checkedAt": null
+              },
+              "audioOutput": {
+                "state": "declared",
+                "source": "config:mode",
+                "scope": "config",
+                "detail": "declared by the omni-speech-ws realtime configuration; not verified",
+                "checkedAt": null
+              },
+              "audioOutputStreaming": {
+                "state": "untested",
+                "source": "none",
+                "scope": null,
+                "detail": null,
+                "checkedAt": null,
+                "observedDelivery": null
+              },
+              "liveInput": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "speech stream-input takes incremental text, not live audio",
+                "checkedAt": null
+              },
+              "fullDuplex": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "omni-speech-ws is a turn-based realtime wire, not the duplex protocol",
+                "checkedAt": null,
+                "implementationLevel": null
+              },
+              "bargeIn": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "omni-speech-ws is a turn-based realtime wire, not the duplex protocol",
+                "checkedAt": null
+              },
+              "playbackAck": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "omni-speech-ws is a turn-based realtime wire, not the duplex protocol",
+                "checkedAt": null
+              },
+              "sessionResume": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "omni-speech-ws is a turn-based realtime wire, not the duplex protocol",
+                "checkedAt": null
+              }
+            },
+            "limits": {
+              "maxAudioBytes": 26214400,
+              "maxAudioPerRequest": 5,
+              "liveFrameMaxBytes": 64000,
+              "liveMaxSeconds": 600
+            }
+          },
+          {
+            "id": "cosmos3-nano-video",
+            "name": "cosmos3-nano-video",
+            "mode": "generate-video",
+            "upstreamModel": "nvidia/Cosmos3-Nano",
+            "input": {
+              "formats": [
+                "png",
+                "jpg",
+                "jpeg",
+                "webp",
+                "gif",
+                "bmp",
+                "wav",
+                "mp3",
+                "flac",
+                "ogg",
+                "opus",
+                "m4a",
+                "aac",
+                "webm"
+              ],
+              "recommended": {
+                "encoding": "pcm_s16le",
+                "sampleRate": 16000,
+                "channels": 1,
+                "container": "wav"
+              }
+            },
+            "task": "video.generate",
+            "tasks": [
+              "video.audio"
+            ],
+            "uiTask": "video-generation",
+            "catalogTasks": [
+              "text_to_video_with_audio",
+              "image_to_video_with_audio"
+            ],
+            "catalogTasksSource": "config",
+            "catalogId": "vllm-omni:nvidia/Cosmos3-Nano",
+            "requestOptions": [
+              "prompt (model expects JSON-upsampled structured prompts; audio description in prompt)",
+              "negative_prompt",
+              "size (1280x720 default; 256p/480p/720p at 16:9,4:3,1:1,3:4,9:16)",
+              "num_frames (189 default)",
+              "fps (24)",
+              "num_inference_steps (35)",
+              "guidance_scale (6.0)",
+              "max_sequence_length (4096)",
+              "flow_shift (10.0)",
+              "seed",
+              "generate_sound (bool)",
+              "sound_duration (s; defaults to video duration)",
+              "input_reference / image_reference (I2VS)",
+              "extra_params.use_resolution_template / use_duration_template / guardrails"
+            ],
+            "io": {
+              "input": {
+                "text": "required",
+                "audio": "none",
+                "referenceAudio": "none",
+                "referenceText": "none",
+                "image": "optional"
+              },
+              "output": {
+                "text": true,
+                "audio": true,
+                "video": true,
+                "audioCount": "one",
+                "transcript": {
+                  "segments": false,
+                  "wordTimestamps": false,
+                  "speakers": false
+                },
+                "embedding": false
+              }
+            },
+            "wire": "omni-videos",
+            "activation": {
+              "state": "ready",
+              "detail": null,
+              "progress": null,
+              "runtime": null,
+              "updatedAt": null
+            },
+            "availability": {
+              "state": "ready"
+            },
+            "params": [
+              {
+                "key": "seconds",
+                "type": "number",
+                "step": 1,
+                "min": 1
+              },
+              {
+                "key": "size",
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "key": "width",
+                "type": "number",
+                "step": 1,
+                "min": 1
+              },
+              {
+                "key": "height",
+                "type": "number",
+                "step": 1,
+                "min": 1
+              },
+              {
+                "key": "numFrames",
+                "type": "number",
+                "step": 1,
+                "min": 1
+              },
+              {
+                "key": "fps",
+                "type": "number",
+                "min": 1
+              },
+              {
+                "key": "aspectRatio",
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "key": "quality",
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "key": "negativePrompt",
+                "type": "text",
+                "maxLength": 4000
+              },
+              {
+                "key": "numInferenceSteps",
+                "type": "number",
+                "step": 1,
+                "min": 1
+              },
+              {
+                "key": "guidanceScale",
+                "type": "number"
+              },
+              {
+                "key": "guidanceScale2",
+                "type": "number"
+              },
+              {
+                "key": "flowShift",
+                "type": "number"
+              },
+              {
+                "key": "trueCfgScale",
+                "type": "number"
+              },
+              {
+                "key": "seed",
+                "type": "number",
+                "step": 1
+              },
+              {
+                "key": "generateSound",
+                "type": "boolean"
+              },
+              {
+                "key": "soundDuration",
+                "type": "number",
+                "min": 0.001
+              },
+              {
+                "key": "extraParams",
+                "type": "object"
+              }
+            ],
+            "output": {
+              "text": true,
+              "audio": false
+            },
+            "capabilities": {
+              "textStreaming": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "/v1/videos returns an MP4, not text",
+                "checkedAt": null
+              },
+              "audioOutput": {
+                "state": "untested",
+                "source": "none",
+                "scope": null,
+                "detail": null,
+                "checkedAt": null
+              },
+              "audioOutputStreaming": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "video with sound is delivered as one final MP4",
+                "checkedAt": null,
+                "observedDelivery": null
+              },
+              "liveInput": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "generate-video mode sends complete requests over HTTP",
+                "checkedAt": null
+              },
+              "fullDuplex": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "generate-video mode sends complete requests over HTTP",
+                "checkedAt": null,
+                "implementationLevel": null
+              },
+              "bargeIn": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "generate-video mode sends complete requests over HTTP",
+                "checkedAt": null
+              },
+              "playbackAck": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "generate-video mode sends complete requests over HTTP",
+                "checkedAt": null
+              },
+              "sessionResume": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "generate-video mode sends complete requests over HTTP",
+                "checkedAt": null
+              }
+            },
+            "limits": {
+              "maxAudioBytes": 26214400,
+              "maxAudioPerRequest": 5,
+              "liveFrameMaxBytes": 64000,
+              "liveMaxSeconds": 600
+            }
+          },
+          {
+            "id": "qwen3-forcedaligner-0-6b-align",
+            "name": "qwen3-forcedaligner-0-6b-align",
+            "mode": "align",
+            "upstreamModel": "Qwen/Qwen3-ForcedAligner-0.6B",
+            "input": {
+              "formats": [
+                "wav",
+                "mp3",
+                "flac",
+                "ogg",
+                "opus",
+                "m4a",
+                "aac",
+                "webm"
+              ],
+              "recommended": {
+                "encoding": "pcm_s16le",
+                "sampleRate": 16000,
+                "channels": 1,
+                "container": "wav"
+              }
+            },
+            "task": "asr.align",
+            "tasks": [
+              "asr.align"
+            ],
+            "uiTask": "alignment",
+            "catalogTasks": [
+              "timestamps"
+            ],
+            "catalogTasksSource": "config",
+            "catalogId": "vllm:Qwen/Qwen3-ForcedAligner-0.6B",
+            "requestOptions": [
+              "--runner pooling",
+              "audio + reference text prompt",
+              "token_classify pooling"
+            ],
+            "io": {
+              "input": {
+                "text": "required",
+                "audio": "required",
+                "referenceAudio": "none",
+                "referenceText": "none"
+              },
+              "output": {
+                "text": true,
+                "audio": false,
+                "audioCount": "one",
+                "transcript": {
+                  "segments": false,
+                  "wordTimestamps": true,
+                  "speakers": false
+                },
+                "embedding": false
+              }
+            },
+            "wire": "vllm-pooling-forced-align",
+            "activation": {
+              "state": "ready",
+              "detail": null,
+              "progress": null,
+              "runtime": null,
+              "updatedAt": null
+            },
+            "availability": {
+              "state": "ready"
+            },
+            "params": [
+              {
+                "key": "wordSplit",
+                "type": "enum",
+                "values": [
+                  "auto",
+                  "whitespace",
+                  "char"
+                ]
+              }
+            ],
+            "output": {
+              "text": true,
+              "audio": false
+            },
+            "capabilities": {
+              "textStreaming": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "/pooling returns one JSON body (word timestamps), not a text stream",
+                "checkedAt": null
+              },
+              "audioOutput": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "forced aligner returns word timestamps only",
+                "checkedAt": null
+              },
+              "audioOutputStreaming": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "forced aligner returns word timestamps only",
+                "checkedAt": null,
+                "observedDelivery": null
+              },
+              "liveInput": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "align mode sends complete requests over HTTP",
+                "checkedAt": null
+              },
+              "fullDuplex": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "align mode sends complete requests over HTTP",
+                "checkedAt": null,
+                "implementationLevel": null
+              },
+              "bargeIn": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "align mode sends complete requests over HTTP",
+                "checkedAt": null
+              },
+              "playbackAck": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "align mode sends complete requests over HTTP",
+                "checkedAt": null
+              },
+              "sessionResume": {
+                "state": "unsupported",
+                "source": "config",
+                "scope": "config",
+                "detail": "align mode sends complete requests over HTTP",
+                "checkedAt": null
+              }
+            },
+            "limits": {
+              "maxAudioBytes": 26214400,
+              "maxAudioPerRequest": 5,
+              "liveFrameMaxBytes": 64000,
+              "liveMaxSeconds": 600
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "catalog": {
+    "qwen3-tts-12hz-1-7b-customvoice-speech": {
+      "requestOptionsMap": [
+        {
+          "option": "input",
+          "status": "listed-by-source",
+          "raw": "input"
+        },
+        {
+          "option": "voice",
+          "status": "listed-by-source",
+          "raw": "voice (preset, case-insensitive; default Vivian)"
+        },
+        {
+          "option": "instructions",
+          "status": "listed-by-source",
+          "raw": "instructions (maps to instruct; max 500 chars)"
+        },
+        {
+          "option": "language",
+          "status": "listed-by-source",
+          "raw": "language (Auto + codec_language_id keys)"
+        },
+        {
+          "option": "task_type",
+          "status": "listed-by-source",
+          "raw": "task_type=CustomVoice (default)"
+        },
+        {
+          "option": "response_format",
+          "status": "listed-by-source",
+          "raw": "response_format wav|pcm|flac|mp3|opus"
+        },
+        {
+          "option": "sample_rate",
+          "status": "listed-by-source",
+          "raw": "sample_rate 8000|24000 (rc1+)"
+        },
+        {
+          "option": "speed",
+          "status": "listed-by-source",
+          "raw": "speed (not with streaming)"
+        },
+        {
+          "option": "stream",
+          "status": "listed-by-source",
+          "raw": "stream"
+        },
+        {
+          "option": "stream_format",
+          "status": "listed-by-source",
+          "raw": "stream_format sse|audio"
+        },
+        {
+          "option": "max_new_tokens",
+          "status": "listed-by-source",
+          "raw": "max_new_tokens (default 2048, max 4096)"
+        },
+        {
+          "option": "seed",
+          "status": "listed-by-source",
+          "raw": "seed"
+        },
+        {
+          "option": "initial_codec_chunk_frames",
+          "status": "listed-by-source",
+          "raw": "initial_codec_chunk_frames"
+        },
+        {
+          "option": "non_streaming_mode",
+          "status": "listed-by-source",
+          "raw": "non_streaming_mode (prompt mode; default true)"
+        }
+      ],
+      "requestOptionsScope": "row request_options scoped to this variant (entries for other variants/wires omitted)",
+      "requestOptionsEvidence": {
+        "source": "catalog census rows[].request_options (verbatim)",
+        "row_sources": [
+          "omni-main:docs/models/supported_models.md:85",
+          "omni-v0.29.0rc1:docs/models/supported_models.md:83",
+          "omni-v0.28.0:docs/models/supported_models.md:81",
+          "omni-main:vllm_omni/model_executor/models/registry.py:160-174",
+          "omni-main:vllm_omni/config/pipeline_registry.py:116,144",
+          "omni-main:docs/serving/speech_api.md:738"
+        ]
+      },
+      "params_required": []
+    },
+    "qwen3-tts-12hz-1-7b-voicedesign-speech": {
+      "requestOptionsMap": [
+        {
+          "option": "input",
+          "status": "listed-by-source",
+          "raw": "input"
+        },
+        {
+          "option": "task_type",
+          "status": "required",
+          "raw": "task_type=VoiceDesign (must be explicit)"
+        },
+        {
+          "option": "instructions",
+          "status": "required",
+          "raw": "instructions (required voice description; max 500 chars)"
+        },
+        {
+          "option": "language",
+          "status": "listed-by-source",
+          "raw": "language"
+        },
+        {
+          "option": "response_format",
+          "status": "listed-by-source",
+          "raw": "response_format"
+        },
+        {
+          "option": "sample_rate",
+          "status": "listed-by-source",
+          "raw": "sample_rate 8000|24000 (rc1+)"
+        },
+        {
+          "option": "speed",
+          "status": "listed-by-source",
+          "raw": "speed"
+        },
+        {
+          "option": "stream",
+          "status": "listed-by-source",
+          "raw": "stream"
+        },
+        {
+          "option": "stream_format",
+          "status": "listed-by-source",
+          "raw": "stream_format"
+        },
+        {
+          "option": "max_new_tokens",
+          "status": "listed-by-source",
+          "raw": "max_new_tokens"
+        },
+        {
+          "option": "seed",
+          "status": "listed-by-source",
+          "raw": "seed"
+        },
+        {
+          "option": "initial_codec_chunk_frames",
+          "status": "listed-by-source",
+          "raw": "initial_codec_chunk_frames"
+        },
+        {
+          "option": "non_streaming_mode",
+          "status": "listed-by-source",
+          "raw": "non_streaming_mode (defaults true for VoiceDesign)"
+        }
+      ],
+      "requestOptionsScope": "row request_options scoped to this variant (entries for other variants/wires omitted)",
+      "requestOptionsEvidence": {
+        "source": "catalog census rows[].request_options (verbatim)",
+        "row_sources": [
+          "omni-main:docs/models/supported_models.md:86",
+          "omni-v0.29.0rc1:docs/models/supported_models.md:84",
+          "omni-v0.28.0:docs/models/supported_models.md:82",
+          "omni-main:vllm_omni/model_executor/models/registry.py:160-174",
+          "omni-main:docs/serving/speech_api.md:406,739",
+          "omni-main:recipes/Qwen/Qwen3-TTS.md:24,55"
+        ]
+      },
+      "params_required": [
+        "instructions"
+      ]
+    },
+    "qwen3-tts-12hz-1-7b-base-speech": {
+      "requestOptionsMap": [
+        {
+          "option": "input",
+          "status": "listed-by-source",
+          "raw": "input"
+        },
+        {
+          "option": "task_type",
+          "status": "listed-by-source",
+          "raw": "task_type=Base (inferred from ref_audio/ref_text or stored voice)"
+        },
+        {
+          "option": "ref_audio",
+          "status": "listed-by-source",
+          "raw": "ref_audio (http/https, data: URL, file:// with --allowed-local-media-path)"
+        },
+        {
+          "option": "ref_text",
+          "status": "required-conditional",
+          "raw": "ref_text (required unless x_vector_only_mode)"
+        },
+        {
+          "option": "x_vector_only_mode",
+          "status": "listed-by-source",
+          "raw": "x_vector_only_mode"
+        },
+        {
+          "option": "speaker_embedding",
+          "status": "listed-by-source",
+          "raw": "speaker_embedding (dim = talker hidden_size; implies x_vector_only_mode)"
+        },
+        {
+          "option": "voice",
+          "status": "listed-by-source",
+          "raw": "voice (uploaded or precomputed profile; icl or xvec)"
+        },
+        {
+          "option": "language",
+          "status": "listed-by-source",
+          "raw": "language"
+        },
+        {
+          "option": "response_format",
+          "status": "listed-by-source",
+          "raw": "response_format"
+        },
+        {
+          "option": "sample_rate",
+          "status": "listed-by-source",
+          "raw": "sample_rate 8000|24000 (rc1+)"
+        },
+        {
+          "option": "speed",
+          "status": "listed-by-source",
+          "raw": "speed"
+        },
+        {
+          "option": "stream",
+          "status": "listed-by-source",
+          "raw": "stream"
+        },
+        {
+          "option": "stream_format",
+          "status": "listed-by-source",
+          "raw": "stream_format"
+        },
+        {
+          "option": "max_new_tokens",
+          "status": "listed-by-source",
+          "raw": "max_new_tokens (default: text-scaled ceiling, min 192 codec frames)"
+        },
+        {
+          "option": "seed",
+          "status": "listed-by-source",
+          "raw": "seed"
+        },
+        {
+          "option": "initial_codec_chunk_frames",
+          "status": "listed-by-source",
+          "raw": "initial_codec_chunk_frames"
+        },
+        {
+          "option": "non_streaming_mode",
+          "status": "listed-by-source",
+          "raw": "non_streaming_mode (default false)"
+        }
+      ],
+      "requestOptionsScope": "row request_options scoped to this variant (entries for other variants/wires omitted)",
+      "requestOptionsEvidence": {
+        "source": "catalog census rows[].request_options (verbatim)",
+        "row_sources": [
+          "omni-main:docs/models/supported_models.md:87",
+          "omni-v0.29.0rc1:docs/models/supported_models.md:85",
+          "omni-v0.28.0:docs/models/supported_models.md:83",
+          "omni-main:vllm_omni/model_executor/models/registry.py:160-174",
+          "omni-main:docs/serving/speech_api.md:428,518,740,888",
+          "omni-main:recipes/Qwen/Qwen3-TTS.md:25,60"
+        ]
+      },
+      "params_required": [
+        "referenceAudio",
+        "referenceText (unless xVectorOnlyMode)"
+      ]
+    },
+    "moss-ttsd-v1-0-speech-dialogue": {
+      "requestOptionsMap": [
+        {
+          "option": "input",
+          "status": "listed-by-source",
+          "raw": "input"
+        },
+        {
+          "option": "ref_audio",
+          "status": "listed-by-source",
+          "raw": "ref_audio"
+        },
+        {
+          "option": "ref_audio_2",
+          "status": "listed-by-source",
+          "raw": "ref_audio_2"
+        },
+        {
+          "option": "voice",
+          "status": "listed-by-source",
+          "raw": "voice"
+        },
+        {
+          "option": "language",
+          "status": "listed-by-source",
+          "raw": "language"
+        },
+        {
+          "option": "max_new_tokens",
+          "status": "listed-by-source",
+          "raw": "max_new_tokens"
+        },
+        {
+          "option": "seed",
+          "status": "listed-by-source",
+          "raw": "seed"
+        },
+        {
+          "option": "response_format",
+          "status": "listed-by-source",
+          "raw": "response_format"
+        },
+        {
+          "option": "stream",
+          "status": "listed-by-source",
+          "raw": "stream"
+        },
+        {
+          "option": "stream_format",
+          "status": "listed-by-source",
+          "raw": "stream_format"
+        }
+      ],
+      "requestOptionsScope": "row request_options scoped to this variant (entries for other variants/wires omitted)",
+      "requestOptionsEvidence": {
+        "source": "catalog census rows[].request_options (verbatim)",
+        "row_sources": [
+          "omni-main:recipes/OpenMOSS/MOSS-TTS.md:7",
+          "omni-main:recipes/OpenMOSS/MOSS-TTS.md:23",
+          "omni-main:vllm_omni/deploy/moss_ttsd.yaml:1-3",
+          "omni-main:vllm_omni/model_executor/models/registry.py:380",
+          "omni-main:examples/offline_inference/text_to_speech/moss_tts/end2end.py:5",
+          "omni-main:examples/offline_inference/text_to_speech/moss_tts/end2end.py:210"
+        ]
+      },
+      "params_required": [
+        "referenceAudio",
+        "referenceAudio2 (optional speaker 2)"
+      ]
+    },
+    "indextts-2-speech": {
+      "requestOptionsMap": [
+        {
+          "option": "input",
+          "status": "listed-by-source",
+          "raw": "input"
+        },
+        {
+          "option": "ref_audio",
+          "status": "required-conditional",
+          "raw": "ref_audio (required unless uploaded voice; http(s)/data:/file:// only)"
+        },
+        {
+          "option": "voice",
+          "status": "listed-by-source",
+          "raw": "voice (uploaded audio voice only)"
+        },
+        {
+          "option": "max_new_tokens",
+          "status": "listed-by-source",
+          "raw": "max_new_tokens [1,4096]"
+        },
+        {
+          "option": "extra_params.emo_audio",
+          "status": "listed-by-source",
+          "raw": "extra_params.emo_audio"
+        },
+        {
+          "option": "extra_params.emo_vector",
+          "status": "listed-by-source",
+          "raw": "extra_params.emo_vector (8 floats in [0,1.2]: happy,angry,sad,afraid,disgusted,melancholic,surprised,calm)"
+        },
+        {
+          "option": "extra_params.emo_alpha",
+          "status": "listed-by-source",
+          "raw": "extra_params.emo_alpha"
+        },
+        {
+          "option": "extra_params.emo_text",
+          "status": "listed-by-source",
+          "raw": "extra_params.emo_text"
+        },
+        {
+          "option": "extra_params.use_emo_text",
+          "status": "listed-by-source",
+          "raw": "extra_params.use_emo_text"
+        },
+        {
+          "option": "extra_params.use_random",
+          "status": "listed-by-source",
+          "raw": "extra_params.use_random"
+        },
+        {
+          "option": "seed",
+          "status": "listed-by-source",
+          "raw": "seed"
+        },
+        {
+          "option": "response_format",
+          "status": "listed-by-source",
+          "raw": "response_format"
+        },
+        {
+          "option": "stream",
+          "status": "listed-by-source",
+          "raw": "stream (compatibility only)"
+        },
+        {
+          "option": "speed",
+          "status": "listed-by-source",
+          "raw": "speed (generic non-streaming post-processing; not native)"
+        },
+        {
+          "option": "ref_text",
+          "status": "ignored",
+          "detail": "ref_text",
+          "raw": "IGNORED: ref_text, instructions, language, task_type"
+        },
+        {
+          "option": "instructions",
+          "status": "ignored",
+          "detail": "instructions",
+          "raw": "IGNORED: ref_text, instructions, language, task_type"
+        },
+        {
+          "option": "language",
+          "status": "ignored",
+          "detail": "language",
+          "raw": "IGNORED: ref_text, instructions, language, task_type"
+        },
+        {
+          "option": "task_type",
+          "status": "ignored",
+          "detail": "task_type",
+          "raw": "IGNORED: ref_text, instructions, language, task_type"
+        },
+        {
+          "option": "sample_rate",
+          "status": "unsupported",
+          "detail": "sample_rate",
+          "raw": "NOT SUPPORTED: sample_rate"
+        }
+      ],
+      "requestOptionsScope": "row request_options scoped to this variant (entries for other variants/wires omitted)",
+      "requestOptionsEvidence": {
+        "source": "catalog census rows[].request_options (verbatim)",
+        "row_sources": [
+          "omni-main:docs/models/supported_models.md:95",
+          "omni-v0.29.0rc1:docs/models/supported_models.md:93",
+          "omni-v0.28.0:docs/models/supported_models.md:91",
+          "omni-main:vllm_omni/model_executor/models/registry.py:410,415",
+          "omni-main:vllm_omni/config/pipeline_registry.py:204",
+          "omni-main:vllm_omni/model_executor/models/indextts2/pipeline.py:17-51"
+        ]
+      },
+      "params_required": [
+        "referenceAudio"
+      ]
+    },
+    "qwen3-tts-12hz-1-7b-customvoice-speech-word-timestamps": {
+      "requestOptionsMap": [
+        {
+          "option": "input",
+          "status": "listed-by-source",
+          "raw": "input"
+        },
+        {
+          "option": "voice",
+          "status": "listed-by-source",
+          "raw": "voice (preset, case-insensitive; default Vivian)"
+        },
+        {
+          "option": "instructions",
+          "status": "listed-by-source",
+          "raw": "instructions (maps to instruct; max 500 chars)"
+        },
+        {
+          "option": "language",
+          "status": "listed-by-source",
+          "raw": "language (Auto + codec_language_id keys)"
+        },
+        {
+          "option": "task_type",
+          "status": "listed-by-source",
+          "raw": "task_type=CustomVoice (default)"
+        },
+        {
+          "option": "response_format",
+          "status": "listed-by-source",
+          "raw": "response_format wav|pcm|flac|mp3|opus"
+        },
+        {
+          "option": "sample_rate",
+          "status": "listed-by-source",
+          "raw": "sample_rate 8000|24000 (rc1+)"
+        },
+        {
+          "option": "speed",
+          "status": "listed-by-source",
+          "raw": "speed (not with streaming)"
+        },
+        {
+          "option": "stream",
+          "status": "listed-by-source",
+          "raw": "stream"
+        },
+        {
+          "option": "stream_format",
+          "status": "listed-by-source",
+          "raw": "stream_format sse|audio"
+        },
+        {
+          "option": "max_new_tokens",
+          "status": "listed-by-source",
+          "raw": "max_new_tokens (default 2048, max 4096)"
+        },
+        {
+          "option": "seed",
+          "status": "listed-by-source",
+          "raw": "seed"
+        },
+        {
+          "option": "initial_codec_chunk_frames",
+          "status": "listed-by-source",
+          "raw": "initial_codec_chunk_frames"
+        },
+        {
+          "option": "non_streaming_mode",
+          "status": "listed-by-source",
+          "raw": "non_streaming_mode (prompt mode; default true)"
+        },
+        {
+          "option": "word_timestamps",
+          "status": "listed-by-source",
+          "raw": "word_timestamps (needs --forced-aligner; non-stream header or WS)"
+        }
+      ],
+      "requestOptionsScope": "row request_options scoped to this variant (entries for other variants/wires omitted)",
+      "requestOptionsEvidence": {
+        "source": "catalog census rows[].request_options (verbatim)",
+        "row_sources": [
+          "omni-main:docs/models/supported_models.md:85",
+          "omni-v0.29.0rc1:docs/models/supported_models.md:83",
+          "omni-v0.28.0:docs/models/supported_models.md:81",
+          "omni-main:vllm_omni/model_executor/models/registry.py:160-174",
+          "omni-main:vllm_omni/config/pipeline_registry.py:116,144",
+          "omni-main:docs/serving/speech_api.md:738"
+        ]
+      },
+      "params_required": []
+    },
+    "qwen3-tts-12hz-1-7b-customvoice-speech-ws": {
+      "requestOptionsMap": [
+        {
+          "option": "input",
+          "status": "listed-by-source",
+          "raw": "input"
+        },
+        {
+          "option": "voice",
+          "status": "listed-by-source",
+          "raw": "voice (preset, case-insensitive; default Vivian)"
+        },
+        {
+          "option": "instructions",
+          "status": "listed-by-source",
+          "raw": "instructions (maps to instruct; max 500 chars)"
+        },
+        {
+          "option": "language",
+          "status": "listed-by-source",
+          "raw": "language (Auto + codec_language_id keys)"
+        },
+        {
+          "option": "task_type",
+          "status": "listed-by-source",
+          "raw": "task_type=CustomVoice (default)"
+        },
+        {
+          "option": "sample_rate",
+          "status": "listed-by-source",
+          "raw": "sample_rate 8000|24000 (rc1+)"
+        },
+        {
+          "option": "speed",
+          "status": "listed-by-source",
+          "raw": "speed (not with streaming)"
+        },
+        {
+          "option": "stream",
+          "status": "listed-by-source",
+          "raw": "stream"
+        },
+        {
+          "option": "max_new_tokens",
+          "status": "listed-by-source",
+          "raw": "max_new_tokens (default 2048, max 4096)"
+        },
+        {
+          "option": "seed",
+          "status": "listed-by-source",
+          "raw": "seed"
+        },
+        {
+          "option": "initial_codec_chunk_frames",
+          "status": "listed-by-source",
+          "raw": "initial_codec_chunk_frames"
+        },
+        {
+          "option": "non_streaming_mode",
+          "status": "listed-by-source",
+          "raw": "non_streaming_mode (prompt mode; default true)"
+        }
+      ],
+      "requestOptionsScope": "row request_options scoped to this variant (entries for other variants/wires omitted)",
+      "requestOptionsEvidence": {
+        "source": "catalog census rows[].request_options (verbatim)",
+        "row_sources": [
+          "omni-main:docs/models/supported_models.md:85",
+          "omni-v0.29.0rc1:docs/models/supported_models.md:83",
+          "omni-v0.28.0:docs/models/supported_models.md:81",
+          "omni-main:vllm_omni/model_executor/models/registry.py:160-174",
+          "omni-main:vllm_omni/config/pipeline_registry.py:116,144",
+          "omni-main:docs/serving/speech_api.md:738"
+        ]
+      }
+    },
+    "cosmos3-nano-video": {
+      "requestOptionsMap": [
+        {
+          "option": "prompt",
+          "status": "listed-by-source",
+          "raw": "prompt (model expects JSON-upsampled structured prompts; audio description in prompt)"
+        },
+        {
+          "option": "negative_prompt",
+          "status": "listed-by-source",
+          "raw": "negative_prompt"
+        },
+        {
+          "option": "size",
+          "status": "listed-by-source",
+          "raw": "size (1280x720 default; 256p/480p/720p at 16:9,4:3,1:1,3:4,9:16)"
+        },
+        {
+          "option": "num_frames",
+          "status": "listed-by-source",
+          "raw": "num_frames (189 default)"
+        },
+        {
+          "option": "fps",
+          "status": "listed-by-source",
+          "raw": "fps (24)"
+        },
+        {
+          "option": "num_inference_steps",
+          "status": "listed-by-source",
+          "raw": "num_inference_steps (35)"
+        },
+        {
+          "option": "guidance_scale",
+          "status": "listed-by-source",
+          "raw": "guidance_scale (6.0)"
+        },
+        {
+          "option": "max_sequence_length",
+          "status": "listed-by-source",
+          "raw": "max_sequence_length (4096)"
+        },
+        {
+          "option": "flow_shift",
+          "status": "listed-by-source",
+          "raw": "flow_shift (10.0)"
+        },
+        {
+          "option": "seed",
+          "status": "listed-by-source",
+          "raw": "seed"
+        },
+        {
+          "option": "generate_sound",
+          "status": "listed-by-source",
+          "raw": "generate_sound (bool)"
+        },
+        {
+          "option": "sound_duration",
+          "status": "listed-by-source",
+          "raw": "sound_duration (s; defaults to video duration)"
+        },
+        {
+          "option": "input_reference",
+          "status": "listed-by-source",
+          "raw": "input_reference / image_reference (I2VS)"
+        },
+        {
+          "option": "extra_params.use_resolution_template",
+          "status": "listed-by-source",
+          "raw": "extra_params.use_resolution_template / use_duration_template / guardrails"
+        }
+      ],
+      "requestOptionsScope": "row request_options scoped to this variant (entries for other variants/wires omitted)",
+      "requestOptionsEvidence": {
+        "source": "catalog census rows[].request_options (verbatim)",
+        "row_sources": [
+          "omni-main:docs/models/supported_models.md:41",
+          "omni-main:vllm_omni/diffusion/registry.py:324",
+          "omni-main:recipes/cosmos3/Cosmos3-Nano.md:8-9",
+          "omni-main:recipes/cosmos3/Cosmos3-Nano.md:31-33",
+          "omni-main:recipes/cosmos3/Cosmos3-Nano.md:255-272",
+          "omni-main:vllm_omni/diffusion/models/cosmos3/pipeline_cosmos3.py:1-27"
+        ]
+      }
+    },
+    "qwen3-forcedaligner-0-6b-align": {
+      "requestOptionsMap": [
+        {
+          "option": "--runner",
+          "status": "deploy-flag",
+          "raw": "--runner pooling"
+        },
+        {
+          "option": "audio",
+          "status": "listed-by-source",
+          "raw": "audio + reference text prompt"
+        },
+        {
+          "option": "token_classify",
+          "status": "listed-by-source",
+          "raw": "token_classify pooling"
+        }
+      ],
+      "requestOptionsScope": "row request_options scoped to this variant (entries for other variants/wires omitted)",
+      "requestOptionsEvidence": {
+        "source": "catalog census rows[].request_options (verbatim)",
+        "row_sources": [
+          "vllm-main:docs/models/pooling_models/token_classify.md:67",
+          "vllm-main:docs/models/pooling_models/token_classify.md:34",
+          "vllm-main:vllm/model_executor/models/registry.py:305",
+          "vllm-v0.29.0:vllm/model_executor/models/registry.py:303",
+          "vllm-main:tests/models/registry.py:1408",
+          "vllm-main:vllm/model_executor/models/qwen3_asr_forced_aligner.py:30"
+        ]
+      },
+      "params_required": [
+        "audio attachment",
+        "reference text (the words to align)"
+      ]
+    }
+  }
+}

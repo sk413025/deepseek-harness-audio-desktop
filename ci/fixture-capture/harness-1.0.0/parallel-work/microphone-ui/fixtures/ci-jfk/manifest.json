@@ -1,0 +1,195 @@
+{
+  "schema": "dsh-audio-fixtures@1",
+  "set": "ci-jfk (interim redistributable CI fixtures; replaced by a redistributable TTS set later)",
+  "generatedAt": "2026-09-15T06:20:09.850578+00:00",
+  "generator": {
+    "script": "parallel-work/microphone-ui/fixtures/ci-jfk/make-ci-fixtures-jfk.py",
+    "scriptSha256": "a8b507bf8092e82441f32fc969cf0e3148c43f0e205982cc2b12f4b7c84f37f4",
+    "tts": null,
+    "python": "3.12.2",
+    "numpy": "1.26.4",
+    "soundfile": "0.13.1",
+    "method": "cut at energy minima between phrases; exact zero silences; no resampling"
+  },
+  "source": {
+    "file": "jfk-public-domain-16k.wav",
+    "sha256": "59dfb9a4acb36fe2a2affc14bacbee2920ff435cb13cc314a08c13f66ba7860e",
+    "sampleRate": 16000,
+    "durationSec": 11.0,
+    "upstream": "https://github.com/ggml-org/whisper.cpp/blob/master/samples/jfk.wav",
+    "upstreamSha256Verified": "2026-09-15 (identical sha256)",
+    "upstreamRepoLicense": "MIT (whisper.cpp)"
+  },
+  "license": {
+    "redistributable": true,
+    "status": "REDISTRIBUTABLE",
+    "basis": "Recording of John F. Kennedy's inaugural address (1961-01-20), a work of the US federal government: public domain in the US (17 U.S.C. \u00a7105). The file is distributed in the MIT-licensed whisper.cpp repository.",
+    "note": "Keep this provenance block with the files."
+  },
+  "roles": {
+    "A": "A.wav",
+    "B": "B.wav",
+    "C": "C.wav",
+    "timeline": "timeline-abc-mock-timing.wav",
+    "turn": "turn-question.wav",
+    "silence": "silence-3s.wav"
+  },
+  "regeneratePolicy": "generated once; CI verifies sha256 and never regenerates",
+  "files": [
+    {
+      "file": "A.wav",
+      "sha256": "b691e4f4b106f721cba5bb4280aee63e3b64bc4033c1efa30868529c67a84b16",
+      "bytes": 60844,
+      "sampleRate": 16000,
+      "channels": 1,
+      "sampleFormat": "PCM_S16LE",
+      "frames": 30400,
+      "durationSec": 1.9,
+      "peak": 25648,
+      "kind": "utterance",
+      "transcript": "And so, my fellow Americans,",
+      "source": {
+        "startSec": 0.3,
+        "endSec": 2.2
+      }
+    },
+    {
+      "file": "B.wav",
+      "sha256": "53e3ae7267fdd5f33963acbe3310f0e33915e6655f8722bed98e263158ebb17e",
+      "bytes": 136044,
+      "sampleRate": 16000,
+      "channels": 1,
+      "sampleFormat": "PCM_S16LE",
+      "frames": 68000,
+      "durationSec": 4.25,
+      "peak": 23710,
+      "kind": "utterance",
+      "transcript": "ask not what your country can do for you,",
+      "source": {
+        "startSec": 3.3,
+        "endSec": 7.55
+      }
+    },
+    {
+      "file": "C.wav",
+      "sha256": "b00edc8b709f33d003d9d6e48b38a406dfe8347d6bd223437f13cf6e26e84092",
+      "bytes": 88044,
+      "sampleRate": 16000,
+      "channels": 1,
+      "sampleFormat": "PCM_S16LE",
+      "frames": 44000,
+      "durationSec": 2.75,
+      "peak": 22587,
+      "kind": "utterance",
+      "transcript": "ask what you can do for your country.",
+      "source": {
+        "startSec": 8.05,
+        "endSec": 10.8
+      }
+    },
+    {
+      "file": "timeline-abc-mock-timing.wav",
+      "sha256": "3025e4713285b72f80700289bc297b193b802d7f1c8f2b1fbab4a8fdb11bad51",
+      "bytes": 668844,
+      "sampleRate": 16000,
+      "channels": 1,
+      "sampleFormat": "PCM_S16LE",
+      "frames": 334400,
+      "durationSec": 20.9,
+      "peak": 25648,
+      "kind": "timeline",
+      "segments": [
+        {
+          "startSec": 0.0,
+          "endSec": 0.5,
+          "silenceSec": 0.5
+        },
+        {
+          "startSec": 0.5,
+          "endSec": 2.4,
+          "utterance": "A",
+          "transcript": "And so, my fellow Americans,"
+        },
+        {
+          "startSec": 2.4,
+          "endSec": 4.9,
+          "silenceSec": 2.5
+        },
+        {
+          "startSec": 4.9,
+          "endSec": 9.15,
+          "utterance": "B",
+          "transcript": "ask not what your country can do for you,"
+        },
+        {
+          "startSec": 9.15,
+          "endSec": 14.15,
+          "silenceSec": 5.0
+        },
+        {
+          "startSec": 14.15,
+          "endSec": 16.9,
+          "utterance": "C",
+          "transcript": "ask what you can do for your country."
+        },
+        {
+          "startSec": 16.9,
+          "endSec": 20.9,
+          "silenceSec": 4.0
+        }
+      ],
+      "transcript": "And so, my fellow Americans, ask not what your country can do for you, ask what you can do for your country."
+    },
+    {
+      "file": "turn-question.wav",
+      "sha256": "dc77d7ffef5887cd65f816fdd58bb45adfe60997b193251c22ab46877f36a8a5",
+      "bytes": 400044,
+      "sampleRate": 16000,
+      "channels": 1,
+      "sampleFormat": "PCM_S16LE",
+      "frames": 200000,
+      "durationSec": 12.5,
+      "peak": 25648,
+      "kind": "timeline",
+      "segments": [
+        {
+          "startSec": 0.0,
+          "endSec": 0.5,
+          "silenceSec": 0.5
+        },
+        {
+          "startSec": 0.5,
+          "endSec": 11.5,
+          "utterance": "full-clip",
+          "transcript": "And so, my fellow Americans, ask not what your country can do for you, ask what you can do for your country."
+        },
+        {
+          "startSec": 11.5,
+          "endSec": 12.5,
+          "silenceSec": 1.0
+        }
+      ],
+      "transcript": "And so, my fellow Americans, ask not what your country can do for you, ask what you can do for your country."
+    },
+    {
+      "file": "silence-3s.wav",
+      "sha256": "d303811b8c84619667cd0501342f84ec6cbe69f7aa3856dcf52fabda374c92b8",
+      "bytes": 96044,
+      "sampleRate": 16000,
+      "channels": 1,
+      "sampleFormat": "PCM_S16LE",
+      "frames": 48000,
+      "durationSec": 3.0,
+      "peak": 0,
+      "kind": "timeline",
+      "segments": [
+        {
+          "startSec": 0.0,
+          "endSec": 3.0,
+          "silenceSec": 3.0
+        }
+      ],
+      "transcript": ""
+    }
+  ]
+}

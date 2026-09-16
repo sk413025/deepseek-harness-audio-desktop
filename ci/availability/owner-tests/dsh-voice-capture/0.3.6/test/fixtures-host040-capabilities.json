@@ -1,0 +1,2106 @@
+{
+  "contractVersion": "0.1",
+  "taskContractVersion": "0.2",
+  "plugin": {
+    "name": "dsh-dgx-audio",
+    "version": "0.4.0"
+  },
+  "adapterModes": [
+    "chat",
+    "transcribe",
+    "translate",
+    "speech",
+    "generate-audio",
+    "realtime"
+  ],
+  "realtimeWires": [
+    "omni-duplex",
+    "vllm-asr",
+    "omni-turn",
+    "omni-speech-ws"
+  ],
+  "configured": true,
+  "routes": [
+    {
+      "provider": "dgx-all",
+      "displayName": "All tasks",
+      "baseURL": "http://127.0.0.1:9/v1",
+      "authentication": "none",
+      "credentialPresent": false,
+      "models": [
+        {
+          "id": "omni-understand",
+          "name": "omni-understand",
+          "mode": "chat",
+          "upstreamModel": "omni-understand",
+          "input": {
+            "formats": [
+              "wav",
+              "mp3",
+              "flac",
+              "ogg",
+              "opus",
+              "m4a",
+              "aac",
+              "webm"
+            ],
+            "recommended": {
+              "encoding": "pcm_s16le",
+              "sampleRate": 16000,
+              "channels": 1,
+              "container": "wav"
+            }
+          },
+          "task": "audio.understand",
+          "tasks": [
+            "audio.understand"
+          ],
+          "uiTask": "audio-chat",
+          "catalogTasks": [
+            "audio_understanding_qa",
+            "spoken_chat_text_reply"
+          ],
+          "io": {
+            "input": {
+              "text": "optional",
+              "audio": "optional",
+              "referenceAudio": "none",
+              "referenceText": "none"
+            },
+            "output": {
+              "text": true,
+              "audio": false,
+              "audioCount": "one",
+              "transcript": {
+                "segments": false,
+                "wordTimestamps": false,
+                "speakers": false
+              },
+              "embedding": false
+            }
+          },
+          "wire": "openai-chat-audio",
+          "activation": {
+            "state": "ready",
+            "detail": null,
+            "progress": null,
+            "runtime": null,
+            "updatedAt": null
+          },
+          "availability": {
+            "state": "ready"
+          },
+          "params": [],
+          "output": {
+            "text": true,
+            "audio": false
+          },
+          "capabilities": {
+            "textStreaming": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null
+            },
+            "audioOutput": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "model entry does not request speech output",
+              "checkedAt": null
+            },
+            "audioOutputStreaming": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "model entry does not request speech output",
+              "checkedAt": null,
+              "observedDelivery": null
+            },
+            "liveInput": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "chat mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "fullDuplex": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "chat mode sends complete requests over HTTP",
+              "checkedAt": null,
+              "implementationLevel": null
+            },
+            "bargeIn": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "chat mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "playbackAck": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "chat mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "sessionResume": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "chat mode sends complete requests over HTTP",
+              "checkedAt": null
+            }
+          },
+          "limits": {
+            "maxAudioBytes": 26214400,
+            "maxAudioPerRequest": 5,
+            "liveFrameMaxBytes": 64000,
+            "liveMaxSeconds": 600
+          }
+        },
+        {
+          "id": "omni-speech",
+          "name": "omni-speech",
+          "mode": "chat",
+          "upstreamModel": "omni-speech",
+          "input": {
+            "formats": [
+              "wav",
+              "mp3",
+              "flac",
+              "ogg",
+              "opus",
+              "m4a",
+              "aac",
+              "webm"
+            ],
+            "recommended": {
+              "encoding": "pcm_s16le",
+              "sampleRate": 16000,
+              "channels": 1,
+              "container": "wav"
+            }
+          },
+          "task": "speech.s2s",
+          "tasks": [
+            "speech.s2s"
+          ],
+          "uiTask": "omni-chat",
+          "catalogTasks": [
+            "spoken_chat_speech_reply"
+          ],
+          "io": {
+            "input": {
+              "text": "optional",
+              "audio": "optional",
+              "referenceAudio": "none",
+              "referenceText": "none"
+            },
+            "output": {
+              "text": true,
+              "audio": true,
+              "audioCount": "one",
+              "transcript": {
+                "segments": false,
+                "wordTimestamps": false,
+                "speakers": false
+              },
+              "embedding": false
+            }
+          },
+          "wire": "omni-chat-s2s",
+          "activation": {
+            "state": "ready",
+            "detail": null,
+            "progress": null,
+            "runtime": null,
+            "updatedAt": null
+          },
+          "availability": {
+            "state": "ready"
+          },
+          "params": [],
+          "output": {
+            "text": true,
+            "audio": true
+          },
+          "capabilities": {
+            "textStreaming": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null
+            },
+            "audioOutput": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null
+            },
+            "audioOutputStreaming": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null,
+              "observedDelivery": null
+            },
+            "liveInput": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "chat mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "fullDuplex": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "chat mode sends complete requests over HTTP",
+              "checkedAt": null,
+              "implementationLevel": null
+            },
+            "bargeIn": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "chat mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "playbackAck": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "chat mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "sessionResume": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "chat mode sends complete requests over HTTP",
+              "checkedAt": null
+            }
+          },
+          "limits": {
+            "maxAudioBytes": 26214400,
+            "maxAudioPerRequest": 5,
+            "liveFrameMaxBytes": 64000,
+            "liveMaxSeconds": 600
+          }
+        },
+        {
+          "id": "asr-verbose",
+          "name": "asr-verbose",
+          "mode": "transcribe",
+          "upstreamModel": "asr-verbose",
+          "input": {
+            "formats": [
+              "wav",
+              "mp3",
+              "flac",
+              "ogg",
+              "opus",
+              "m4a",
+              "aac",
+              "webm"
+            ],
+            "recommended": {
+              "encoding": "pcm_s16le",
+              "sampleRate": 16000,
+              "channels": 1,
+              "container": "wav"
+            }
+          },
+          "task": "asr.transcribe",
+          "tasks": [
+            "asr.transcribe"
+          ],
+          "uiTask": "asr",
+          "catalogTasks": [
+            "asr",
+            "timestamps"
+          ],
+          "io": {
+            "input": {
+              "text": "none",
+              "audio": "required",
+              "referenceAudio": "none",
+              "referenceText": "none"
+            },
+            "output": {
+              "text": true,
+              "audio": false,
+              "audioCount": "one",
+              "transcript": {
+                "segments": true,
+                "wordTimestamps": false,
+                "speakers": false
+              },
+              "embedding": false
+            }
+          },
+          "wire": "openai-transcriptions",
+          "activation": {
+            "state": "ready",
+            "detail": null,
+            "progress": null,
+            "runtime": null,
+            "updatedAt": null
+          },
+          "availability": {
+            "state": "ready"
+          },
+          "params": [
+            {
+              "key": "language",
+              "type": "string",
+              "maxLength": 4000
+            },
+            {
+              "key": "prompt",
+              "type": "text",
+              "maxLength": 4000
+            },
+            {
+              "key": "responseFormat",
+              "type": "enum",
+              "values": [
+                "json",
+                "text",
+                "verbose_json",
+                "srt",
+                "vtt",
+                "diarized_json"
+              ],
+              "default": "verbose_json"
+            },
+            {
+              "key": "timestampGranularities",
+              "type": "list"
+            }
+          ],
+          "output": {
+            "text": true,
+            "audio": false
+          },
+          "capabilities": {
+            "textStreaming": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null
+            },
+            "audioOutput": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "transcribe endpoint returns text only",
+              "checkedAt": null
+            },
+            "audioOutputStreaming": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "transcribe endpoint returns text only",
+              "checkedAt": null,
+              "observedDelivery": null
+            },
+            "liveInput": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "transcribe mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "fullDuplex": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "transcribe mode sends complete requests over HTTP",
+              "checkedAt": null,
+              "implementationLevel": null
+            },
+            "bargeIn": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "transcribe mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "playbackAck": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "transcribe mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "sessionResume": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "transcribe mode sends complete requests over HTTP",
+              "checkedAt": null
+            }
+          },
+          "limits": {
+            "maxAudioBytes": 26214400,
+            "maxAudioPerRequest": 5,
+            "liveFrameMaxBytes": 64000,
+            "liveMaxSeconds": 600
+          }
+        },
+        {
+          "id": "asr-diarize",
+          "name": "asr-diarize",
+          "mode": "transcribe",
+          "upstreamModel": "asr-diarize",
+          "input": {
+            "formats": [
+              "wav",
+              "mp3",
+              "flac",
+              "ogg",
+              "opus",
+              "m4a",
+              "aac",
+              "webm"
+            ],
+            "recommended": {
+              "encoding": "pcm_s16le",
+              "sampleRate": 16000,
+              "channels": 1,
+              "container": "wav"
+            }
+          },
+          "task": "asr.transcribe",
+          "tasks": [
+            "asr.transcribe"
+          ],
+          "uiTask": "diarization",
+          "catalogTasks": [
+            "asr",
+            "diarization"
+          ],
+          "io": {
+            "input": {
+              "text": "none",
+              "audio": "required",
+              "referenceAudio": "none",
+              "referenceText": "none"
+            },
+            "output": {
+              "text": true,
+              "audio": false,
+              "audioCount": "one",
+              "transcript": {
+                "segments": true,
+                "wordTimestamps": false,
+                "speakers": true
+              },
+              "embedding": false
+            }
+          },
+          "wire": "openai-transcriptions",
+          "activation": {
+            "state": "ready",
+            "detail": null,
+            "progress": null,
+            "runtime": null,
+            "updatedAt": null
+          },
+          "availability": {
+            "state": "ready"
+          },
+          "params": [
+            {
+              "key": "language",
+              "type": "string",
+              "maxLength": 4000
+            },
+            {
+              "key": "prompt",
+              "type": "text",
+              "maxLength": 4000
+            },
+            {
+              "key": "responseFormat",
+              "type": "enum",
+              "values": [
+                "json",
+                "text",
+                "verbose_json",
+                "srt",
+                "vtt",
+                "diarized_json"
+              ],
+              "default": "diarized_json"
+            },
+            {
+              "key": "timestampGranularities",
+              "type": "list"
+            }
+          ],
+          "output": {
+            "text": true,
+            "audio": false
+          },
+          "capabilities": {
+            "textStreaming": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null
+            },
+            "audioOutput": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "transcribe endpoint returns text only",
+              "checkedAt": null
+            },
+            "audioOutputStreaming": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "transcribe endpoint returns text only",
+              "checkedAt": null,
+              "observedDelivery": null
+            },
+            "liveInput": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "transcribe mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "fullDuplex": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "transcribe mode sends complete requests over HTTP",
+              "checkedAt": null,
+              "implementationLevel": null
+            },
+            "bargeIn": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "transcribe mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "playbackAck": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "transcribe mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "sessionResume": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "transcribe mode sends complete requests over HTTP",
+              "checkedAt": null
+            }
+          },
+          "limits": {
+            "maxAudioBytes": 26214400,
+            "maxAudioPerRequest": 5,
+            "liveFrameMaxBytes": 64000,
+            "liveMaxSeconds": 600
+          }
+        },
+        {
+          "id": "asr-translate",
+          "name": "asr-translate",
+          "mode": "translate",
+          "upstreamModel": "asr-translate",
+          "input": {
+            "formats": [
+              "wav",
+              "mp3",
+              "flac",
+              "ogg",
+              "opus",
+              "m4a",
+              "aac",
+              "webm"
+            ],
+            "recommended": {
+              "encoding": "pcm_s16le",
+              "sampleRate": 16000,
+              "channels": 1,
+              "container": "wav"
+            }
+          },
+          "task": "asr.translate",
+          "tasks": [
+            "asr.translate"
+          ],
+          "uiTask": "translation",
+          "catalogTasks": [
+            "speech_translation"
+          ],
+          "io": {
+            "input": {
+              "text": "none",
+              "audio": "required",
+              "referenceAudio": "none",
+              "referenceText": "none"
+            },
+            "output": {
+              "text": true,
+              "audio": false,
+              "audioCount": "one",
+              "transcript": {
+                "segments": false,
+                "wordTimestamps": false,
+                "speakers": false
+              },
+              "embedding": false
+            }
+          },
+          "wire": "openai-translations",
+          "activation": {
+            "state": "ready",
+            "detail": null,
+            "progress": null,
+            "runtime": null,
+            "updatedAt": null
+          },
+          "availability": {
+            "state": "ready"
+          },
+          "params": [
+            {
+              "key": "language",
+              "type": "string",
+              "maxLength": 4000
+            },
+            {
+              "key": "prompt",
+              "type": "text",
+              "maxLength": 4000
+            },
+            {
+              "key": "toLanguage",
+              "type": "string",
+              "maxLength": 4000
+            },
+            {
+              "key": "responseFormat",
+              "type": "enum",
+              "values": [
+                "json",
+                "text",
+                "verbose_json",
+                "srt",
+                "vtt"
+              ]
+            }
+          ],
+          "output": {
+            "text": true,
+            "audio": false
+          },
+          "capabilities": {
+            "textStreaming": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null
+            },
+            "audioOutput": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "translate endpoint returns text only",
+              "checkedAt": null
+            },
+            "audioOutputStreaming": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "translate endpoint returns text only",
+              "checkedAt": null,
+              "observedDelivery": null
+            },
+            "liveInput": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "translate mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "fullDuplex": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "translate mode sends complete requests over HTTP",
+              "checkedAt": null,
+              "implementationLevel": null
+            },
+            "bargeIn": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "translate mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "playbackAck": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "translate mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "sessionResume": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "translate mode sends complete requests over HTTP",
+              "checkedAt": null
+            }
+          },
+          "limits": {
+            "maxAudioBytes": 26214400,
+            "maxAudioPerRequest": 5,
+            "liveFrameMaxBytes": 64000,
+            "liveMaxSeconds": 600
+          }
+        },
+        {
+          "id": "tts-custom",
+          "name": "tts-custom",
+          "mode": "speech",
+          "upstreamModel": "tts-custom",
+          "input": {
+            "formats": [
+              "wav",
+              "mp3",
+              "flac",
+              "ogg",
+              "opus",
+              "m4a",
+              "aac",
+              "webm"
+            ],
+            "recommended": {
+              "encoding": "pcm_s16le",
+              "sampleRate": 16000,
+              "channels": 1,
+              "container": "wav"
+            }
+          },
+          "task": "tts.speech",
+          "tasks": [
+            "tts.speech"
+          ],
+          "uiTask": "tts",
+          "catalogTasks": [
+            "tts",
+            "tts_preset_voice",
+            "tts_instruct_style"
+          ],
+          "io": {
+            "input": {
+              "text": "required",
+              "audio": "none",
+              "referenceAudio": "none",
+              "referenceText": "none"
+            },
+            "output": {
+              "text": false,
+              "audio": true,
+              "audioCount": "one",
+              "transcript": {
+                "segments": false,
+                "wordTimestamps": false,
+                "speakers": false
+              },
+              "embedding": false
+            }
+          },
+          "wire": "omni-speech-http",
+          "activation": {
+            "state": "ready",
+            "detail": null,
+            "progress": null,
+            "runtime": null,
+            "updatedAt": null
+          },
+          "availability": {
+            "state": "ready"
+          },
+          "params": [
+            {
+              "key": "voice",
+              "type": "string",
+              "maxLength": 4000,
+              "valuesFrom": "/api/dsh-dgx-audio/v1/voices?provider=dgx-all&model=tts-custom",
+              "default": "vivian"
+            },
+            {
+              "key": "instructions",
+              "type": "text",
+              "maxLength": 4000
+            },
+            {
+              "key": "language",
+              "type": "string",
+              "maxLength": 4000
+            },
+            {
+              "key": "taskType",
+              "type": "enum",
+              "values": [
+                "CustomVoice",
+                "VoiceDesign",
+                "Base"
+              ],
+              "default": "CustomVoice"
+            },
+            {
+              "key": "responseFormat",
+              "type": "enum",
+              "values": [
+                "wav",
+                "pcm"
+              ]
+            },
+            {
+              "key": "maxNewTokens",
+              "type": "integer"
+            },
+            {
+              "key": "refText",
+              "type": "text",
+              "maxLength": 4000
+            }
+          ],
+          "output": {
+            "text": false,
+            "audio": true
+          },
+          "capabilities": {
+            "textStreaming": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "speech returns audio, not text",
+              "checkedAt": null
+            },
+            "audioOutput": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null
+            },
+            "audioOutputStreaming": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null,
+              "observedDelivery": null
+            },
+            "liveInput": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "speech mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "fullDuplex": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "speech mode sends complete requests over HTTP",
+              "checkedAt": null,
+              "implementationLevel": null
+            },
+            "bargeIn": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "speech mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "playbackAck": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "speech mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "sessionResume": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "speech mode sends complete requests over HTTP",
+              "checkedAt": null
+            }
+          },
+          "limits": {
+            "maxAudioBytes": 26214400,
+            "maxAudioPerRequest": 5,
+            "liveFrameMaxBytes": 64000,
+            "liveMaxSeconds": 600
+          }
+        },
+        {
+          "id": "tts-clone",
+          "name": "tts-clone",
+          "mode": "speech",
+          "upstreamModel": "tts-clone",
+          "input": {
+            "formats": [
+              "wav",
+              "mp3",
+              "flac",
+              "ogg",
+              "opus",
+              "m4a",
+              "aac",
+              "webm"
+            ],
+            "recommended": {
+              "encoding": "pcm_s16le",
+              "sampleRate": 16000,
+              "channels": 1,
+              "container": "wav"
+            }
+          },
+          "task": "tts.speech",
+          "tasks": [
+            "tts.speech"
+          ],
+          "uiTask": "voice-clone",
+          "catalogTasks": [
+            "tts_voice_clone"
+          ],
+          "io": {
+            "input": {
+              "text": "required",
+              "audio": "none",
+              "referenceAudio": "required",
+              "referenceText": "optional"
+            },
+            "output": {
+              "text": false,
+              "audio": true,
+              "audioCount": "one",
+              "transcript": {
+                "segments": false,
+                "wordTimestamps": false,
+                "speakers": false
+              },
+              "embedding": false
+            }
+          },
+          "wire": "omni-speech-http",
+          "activation": {
+            "state": "ready",
+            "detail": null,
+            "progress": null,
+            "runtime": null,
+            "updatedAt": null
+          },
+          "availability": {
+            "state": "ready"
+          },
+          "params": [
+            {
+              "key": "voice",
+              "type": "string",
+              "maxLength": 4000,
+              "valuesFrom": "/api/dsh-dgx-audio/v1/voices?provider=dgx-all&model=tts-clone"
+            },
+            {
+              "key": "instructions",
+              "type": "text",
+              "maxLength": 4000
+            },
+            {
+              "key": "language",
+              "type": "string",
+              "maxLength": 4000
+            },
+            {
+              "key": "taskType",
+              "type": "enum",
+              "values": [
+                "CustomVoice",
+                "VoiceDesign",
+                "Base"
+              ],
+              "default": "Base"
+            },
+            {
+              "key": "responseFormat",
+              "type": "enum",
+              "values": [
+                "wav",
+                "pcm"
+              ]
+            },
+            {
+              "key": "maxNewTokens",
+              "type": "integer"
+            },
+            {
+              "key": "refText",
+              "type": "text",
+              "maxLength": 4000,
+              "default": "prompt-prefix"
+            }
+          ],
+          "output": {
+            "text": false,
+            "audio": true
+          },
+          "capabilities": {
+            "textStreaming": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "speech returns audio, not text",
+              "checkedAt": null
+            },
+            "audioOutput": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null
+            },
+            "audioOutputStreaming": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null,
+              "observedDelivery": null
+            },
+            "liveInput": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "speech mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "fullDuplex": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "speech mode sends complete requests over HTTP",
+              "checkedAt": null,
+              "implementationLevel": null
+            },
+            "bargeIn": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "speech mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "playbackAck": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "speech mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "sessionResume": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "speech mode sends complete requests over HTTP",
+              "checkedAt": null
+            }
+          },
+          "limits": {
+            "maxAudioBytes": 26214400,
+            "maxAudioPerRequest": 5,
+            "liveFrameMaxBytes": 64000,
+            "liveMaxSeconds": 600
+          }
+        },
+        {
+          "id": "music",
+          "name": "music",
+          "mode": "generate-audio",
+          "upstreamModel": "music",
+          "input": {
+            "formats": [],
+            "recommended": {
+              "encoding": "pcm_s16le",
+              "sampleRate": 16000,
+              "channels": 1,
+              "container": "wav"
+            }
+          },
+          "task": "audio.generate",
+          "tasks": [
+            "audio.generate"
+          ],
+          "uiTask": "music-generation",
+          "catalogTasks": [
+            "music_generation"
+          ],
+          "io": {
+            "input": {
+              "text": "required",
+              "audio": "none",
+              "referenceAudio": "none",
+              "referenceText": "none"
+            },
+            "output": {
+              "text": false,
+              "audio": true,
+              "audioCount": "one",
+              "transcript": {
+                "segments": false,
+                "wordTimestamps": false,
+                "speakers": false
+              },
+              "embedding": false
+            }
+          },
+          "wire": "omni-audio-generate",
+          "activation": {
+            "state": "ready",
+            "detail": null,
+            "progress": null,
+            "runtime": null,
+            "updatedAt": null
+          },
+          "availability": {
+            "state": "ready"
+          },
+          "params": [
+            {
+              "key": "audioLength",
+              "type": "number",
+              "default": 10
+            },
+            {
+              "key": "negativePrompt",
+              "type": "text",
+              "maxLength": 4000
+            },
+            {
+              "key": "guidanceScale",
+              "type": "number"
+            },
+            {
+              "key": "numInferenceSteps",
+              "type": "integer"
+            },
+            {
+              "key": "seed",
+              "type": "integer"
+            }
+          ],
+          "output": {
+            "text": false,
+            "audio": true
+          },
+          "capabilities": {
+            "textStreaming": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "generate-audio returns audio, not text",
+              "checkedAt": null
+            },
+            "audioOutput": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null
+            },
+            "audioOutputStreaming": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null,
+              "observedDelivery": null
+            },
+            "liveInput": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "generate-audio mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "fullDuplex": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "generate-audio mode sends complete requests over HTTP",
+              "checkedAt": null,
+              "implementationLevel": null
+            },
+            "bargeIn": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "generate-audio mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "playbackAck": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "generate-audio mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "sessionResume": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "generate-audio mode sends complete requests over HTTP",
+              "checkedAt": null
+            }
+          },
+          "limits": {
+            "maxAudioBytes": 26214400,
+            "maxAudioPerRequest": 5,
+            "liveFrameMaxBytes": 64000,
+            "liveMaxSeconds": 600
+          }
+        },
+        {
+          "id": "sound",
+          "name": "sound",
+          "mode": "generate-audio",
+          "upstreamModel": "sound",
+          "input": {
+            "formats": [],
+            "recommended": {
+              "encoding": "pcm_s16le",
+              "sampleRate": 16000,
+              "channels": 1,
+              "container": "wav"
+            }
+          },
+          "task": "audio.generate",
+          "tasks": [
+            "audio.generate"
+          ],
+          "uiTask": "sound-generation",
+          "catalogTasks": [
+            "sound_effect_generation",
+            "text_to_audio"
+          ],
+          "io": {
+            "input": {
+              "text": "required",
+              "audio": "none",
+              "referenceAudio": "none",
+              "referenceText": "none"
+            },
+            "output": {
+              "text": false,
+              "audio": true,
+              "audioCount": "one",
+              "transcript": {
+                "segments": false,
+                "wordTimestamps": false,
+                "speakers": false
+              },
+              "embedding": false
+            }
+          },
+          "wire": "omni-audio-generate",
+          "activation": {
+            "state": "ready",
+            "detail": null,
+            "progress": null,
+            "runtime": null,
+            "updatedAt": null
+          },
+          "availability": {
+            "state": "ready"
+          },
+          "params": [
+            {
+              "key": "audioLength",
+              "type": "number"
+            },
+            {
+              "key": "negativePrompt",
+              "type": "text",
+              "maxLength": 4000
+            },
+            {
+              "key": "guidanceScale",
+              "type": "number"
+            },
+            {
+              "key": "numInferenceSteps",
+              "type": "integer"
+            },
+            {
+              "key": "seed",
+              "type": "integer"
+            }
+          ],
+          "output": {
+            "text": false,
+            "audio": true
+          },
+          "capabilities": {
+            "textStreaming": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "generate-audio returns audio, not text",
+              "checkedAt": null
+            },
+            "audioOutput": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null
+            },
+            "audioOutputStreaming": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null,
+              "observedDelivery": null
+            },
+            "liveInput": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "generate-audio mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "fullDuplex": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "generate-audio mode sends complete requests over HTTP",
+              "checkedAt": null,
+              "implementationLevel": null
+            },
+            "bargeIn": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "generate-audio mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "playbackAck": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "generate-audio mode sends complete requests over HTTP",
+              "checkedAt": null
+            },
+            "sessionResume": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "generate-audio mode sends complete requests over HTTP",
+              "checkedAt": null
+            }
+          },
+          "limits": {
+            "maxAudioBytes": 26214400,
+            "maxAudioPerRequest": 5,
+            "liveFrameMaxBytes": 64000,
+            "liveMaxSeconds": 600
+          }
+        },
+        {
+          "id": "rt-asr",
+          "name": "rt-asr",
+          "mode": "realtime",
+          "upstreamModel": "rt-asr",
+          "input": {
+            "formats": [
+              "pcm_s16le"
+            ],
+            "recommended": {
+              "encoding": "pcm_s16le",
+              "sampleRate": 16000,
+              "channels": 1,
+              "container": "raw",
+              "frameMs": 200,
+              "wireEncoding": "pcm16"
+            }
+          },
+          "task": "asr.realtime",
+          "tasks": [
+            "asr.realtime"
+          ],
+          "uiTask": "realtime-asr",
+          "catalogTasks": [
+            "asr"
+          ],
+          "io": {
+            "input": {
+              "text": "none",
+              "audio": "required",
+              "referenceAudio": "none",
+              "referenceText": "none"
+            },
+            "output": {
+              "text": true,
+              "audio": false,
+              "audioCount": "many",
+              "transcript": {
+                "segments": false,
+                "wordTimestamps": false,
+                "speakers": false
+              },
+              "embedding": false
+            },
+            "live": "audio"
+          },
+          "wire": "vllm-asr",
+          "activation": {
+            "state": "ready",
+            "detail": null,
+            "progress": null,
+            "runtime": null,
+            "updatedAt": null
+          },
+          "availability": {
+            "state": "ready"
+          },
+          "params": [
+            {
+              "key": "voice",
+              "type": "string",
+              "maxLength": 4000,
+              "valuesFrom": "/api/dsh-dgx-audio/v1/voices?provider=dgx-all&model=rt-asr"
+            },
+            {
+              "key": "instructions",
+              "type": "text",
+              "maxLength": 4000
+            },
+            {
+              "key": "overlapPolicy",
+              "type": "enum",
+              "values": [
+                "listen_only",
+                "barge_in_on_speech"
+              ]
+            },
+            {
+              "key": "turnDetection",
+              "type": "enum",
+              "values": [
+                "none",
+                "server_vad"
+              ]
+            }
+          ],
+          "output": {
+            "text": true,
+            "audio": false
+          },
+          "capabilities": {
+            "textStreaming": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null
+            },
+            "audioOutput": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "realtime transcription wire returns text only",
+              "checkedAt": null
+            },
+            "audioOutputStreaming": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "realtime transcription wire returns text only",
+              "checkedAt": null,
+              "observedDelivery": null
+            },
+            "liveInput": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null
+            },
+            "fullDuplex": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "vllm-asr is a turn-based realtime wire, not the duplex protocol",
+              "checkedAt": null,
+              "implementationLevel": null
+            },
+            "bargeIn": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "vllm-asr is a turn-based realtime wire, not the duplex protocol",
+              "checkedAt": null
+            },
+            "playbackAck": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "vllm-asr is a turn-based realtime wire, not the duplex protocol",
+              "checkedAt": null
+            },
+            "sessionResume": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "vllm-asr is a turn-based realtime wire, not the duplex protocol",
+              "checkedAt": null
+            }
+          },
+          "limits": {
+            "maxAudioBytes": 26214400,
+            "maxAudioPerRequest": 5,
+            "liveFrameMaxBytes": 64000,
+            "liveMaxSeconds": 600
+          }
+        },
+        {
+          "id": "rt-turn",
+          "name": "rt-turn",
+          "mode": "realtime",
+          "upstreamModel": "rt-turn",
+          "input": {
+            "formats": [
+              "pcm_s16le"
+            ],
+            "recommended": {
+              "encoding": "pcm_s16le",
+              "sampleRate": 16000,
+              "channels": 1,
+              "container": "raw",
+              "frameMs": 200,
+              "wireEncoding": "pcm16"
+            }
+          },
+          "task": "speech.s2s.realtime",
+          "tasks": [
+            "speech.s2s.realtime"
+          ],
+          "uiTask": "s2s",
+          "catalogTasks": [
+            "spoken_chat_speech_reply"
+          ],
+          "io": {
+            "input": {
+              "text": "none",
+              "audio": "required",
+              "referenceAudio": "none",
+              "referenceText": "none"
+            },
+            "output": {
+              "text": true,
+              "audio": true,
+              "audioCount": "many",
+              "transcript": {
+                "segments": false,
+                "wordTimestamps": false,
+                "speakers": false
+              },
+              "embedding": false
+            },
+            "live": "audio"
+          },
+          "wire": "omni-turn",
+          "activation": {
+            "state": "ready",
+            "detail": null,
+            "progress": null,
+            "runtime": null,
+            "updatedAt": null
+          },
+          "availability": {
+            "state": "ready"
+          },
+          "params": [
+            {
+              "key": "voice",
+              "type": "string",
+              "maxLength": 4000,
+              "valuesFrom": "/api/dsh-dgx-audio/v1/voices?provider=dgx-all&model=rt-turn"
+            },
+            {
+              "key": "instructions",
+              "type": "text",
+              "maxLength": 4000
+            },
+            {
+              "key": "overlapPolicy",
+              "type": "enum",
+              "values": [
+                "listen_only",
+                "barge_in_on_speech"
+              ]
+            },
+            {
+              "key": "turnDetection",
+              "type": "enum",
+              "values": [
+                "none",
+                "server_vad"
+              ]
+            }
+          ],
+          "output": {
+            "text": true,
+            "audio": true
+          },
+          "capabilities": {
+            "textStreaming": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null
+            },
+            "audioOutput": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null
+            },
+            "audioOutputStreaming": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null,
+              "observedDelivery": null
+            },
+            "liveInput": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null
+            },
+            "fullDuplex": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "omni-turn is a turn-based realtime wire, not the duplex protocol",
+              "checkedAt": null,
+              "implementationLevel": null
+            },
+            "bargeIn": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "omni-turn is a turn-based realtime wire, not the duplex protocol",
+              "checkedAt": null
+            },
+            "playbackAck": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "omni-turn is a turn-based realtime wire, not the duplex protocol",
+              "checkedAt": null
+            },
+            "sessionResume": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "omni-turn is a turn-based realtime wire, not the duplex protocol",
+              "checkedAt": null
+            }
+          },
+          "limits": {
+            "maxAudioBytes": 26214400,
+            "maxAudioPerRequest": 5,
+            "liveFrameMaxBytes": 64000,
+            "liveMaxSeconds": 600
+          }
+        },
+        {
+          "id": "rt-duplex",
+          "name": "rt-duplex",
+          "mode": "realtime",
+          "upstreamModel": "rt-duplex",
+          "input": {
+            "formats": [
+              "pcm_s16le"
+            ],
+            "recommended": {
+              "encoding": "pcm_s16le",
+              "sampleRate": 16000,
+              "channels": 1,
+              "container": "raw",
+              "frameMs": 200,
+              "wireEncoding": "pcm16"
+            }
+          },
+          "task": "duplex",
+          "tasks": [
+            "duplex"
+          ],
+          "uiTask": "duplex",
+          "catalogTasks": [
+            "full_duplex_dialogue"
+          ],
+          "io": {
+            "input": {
+              "text": "none",
+              "audio": "required",
+              "referenceAudio": "none",
+              "referenceText": "none"
+            },
+            "output": {
+              "text": true,
+              "audio": true,
+              "audioCount": "many",
+              "transcript": {
+                "segments": false,
+                "wordTimestamps": false,
+                "speakers": false
+              },
+              "embedding": false
+            },
+            "live": "audio"
+          },
+          "wire": "omni-duplex",
+          "activation": {
+            "state": "ready",
+            "detail": null,
+            "progress": null,
+            "runtime": null,
+            "updatedAt": null
+          },
+          "availability": {
+            "state": "ready"
+          },
+          "params": [
+            {
+              "key": "voice",
+              "type": "string",
+              "maxLength": 4000,
+              "valuesFrom": "/api/dsh-dgx-audio/v1/voices?provider=dgx-all&model=rt-duplex"
+            },
+            {
+              "key": "instructions",
+              "type": "text",
+              "maxLength": 4000
+            },
+            {
+              "key": "overlapPolicy",
+              "type": "enum",
+              "values": [
+                "listen_only",
+                "barge_in_on_speech"
+              ]
+            },
+            {
+              "key": "turnDetection",
+              "type": "enum",
+              "values": [
+                "none",
+                "server_vad"
+              ]
+            }
+          ],
+          "output": {
+            "text": true,
+            "audio": true
+          },
+          "capabilities": {
+            "textStreaming": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null
+            },
+            "audioOutput": {
+              "state": "declared",
+              "source": "config",
+              "detail": null,
+              "checkedAt": null
+            },
+            "audioOutputStreaming": {
+              "state": "declared",
+              "source": "config",
+              "detail": null,
+              "checkedAt": null,
+              "observedDelivery": null
+            },
+            "liveInput": {
+              "state": "declared",
+              "source": "config",
+              "detail": null,
+              "checkedAt": null
+            },
+            "fullDuplex": {
+              "state": "declared",
+              "source": "config",
+              "detail": null,
+              "checkedAt": null,
+              "implementationLevel": null
+            },
+            "bargeIn": {
+              "state": "declared",
+              "source": "config",
+              "detail": null,
+              "checkedAt": null
+            },
+            "playbackAck": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null
+            },
+            "sessionResume": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null
+            }
+          },
+          "limits": {
+            "maxAudioBytes": 26214400,
+            "maxAudioPerRequest": 5,
+            "liveFrameMaxBytes": 64000,
+            "liveMaxSeconds": 600
+          }
+        },
+        {
+          "id": "rt-duplex-untested",
+          "name": "rt-duplex-untested",
+          "mode": "realtime",
+          "upstreamModel": "rt-duplex-untested",
+          "input": {
+            "formats": [
+              "pcm_s16le"
+            ],
+            "recommended": {
+              "encoding": "pcm_s16le",
+              "sampleRate": 16000,
+              "channels": 1,
+              "container": "raw",
+              "frameMs": 200,
+              "wireEncoding": "pcm16"
+            }
+          },
+          "task": "duplex",
+          "tasks": [
+            "duplex"
+          ],
+          "uiTask": "duplex",
+          "catalogTasks": [
+            "full_duplex_dialogue"
+          ],
+          "io": {
+            "input": {
+              "text": "none",
+              "audio": "required",
+              "referenceAudio": "none",
+              "referenceText": "none"
+            },
+            "output": {
+              "text": true,
+              "audio": true,
+              "audioCount": "many",
+              "transcript": {
+                "segments": false,
+                "wordTimestamps": false,
+                "speakers": false
+              },
+              "embedding": false
+            },
+            "live": "audio"
+          },
+          "wire": "omni-duplex",
+          "activation": {
+            "state": "ready",
+            "detail": null,
+            "progress": null,
+            "runtime": null,
+            "updatedAt": null
+          },
+          "availability": {
+            "state": "ready"
+          },
+          "params": [
+            {
+              "key": "voice",
+              "type": "string",
+              "maxLength": 4000,
+              "valuesFrom": "/api/dsh-dgx-audio/v1/voices?provider=dgx-all&model=rt-duplex-untested"
+            },
+            {
+              "key": "instructions",
+              "type": "text",
+              "maxLength": 4000
+            },
+            {
+              "key": "overlapPolicy",
+              "type": "enum",
+              "values": [
+                "listen_only",
+                "barge_in_on_speech"
+              ]
+            },
+            {
+              "key": "turnDetection",
+              "type": "enum",
+              "values": [
+                "none",
+                "server_vad"
+              ]
+            }
+          ],
+          "output": {
+            "text": true,
+            "audio": true
+          },
+          "capabilities": {
+            "textStreaming": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null
+            },
+            "audioOutput": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null
+            },
+            "audioOutputStreaming": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null,
+              "observedDelivery": null
+            },
+            "liveInput": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null
+            },
+            "fullDuplex": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null,
+              "implementationLevel": null
+            },
+            "bargeIn": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null
+            },
+            "playbackAck": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null
+            },
+            "sessionResume": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null
+            }
+          },
+          "limits": {
+            "maxAudioBytes": 26214400,
+            "maxAudioPerRequest": 5,
+            "liveFrameMaxBytes": 64000,
+            "liveMaxSeconds": 600
+          }
+        },
+        {
+          "id": "tts-stream",
+          "name": "tts-stream",
+          "mode": "realtime",
+          "upstreamModel": "tts-stream",
+          "input": {
+            "formats": [
+              "pcm_s16le"
+            ],
+            "recommended": {
+              "encoding": "text",
+              "container": "live/text"
+            }
+          },
+          "task": "tts.stream-input",
+          "tasks": [
+            "tts.stream-input"
+          ],
+          "uiTask": "tts-stream",
+          "catalogTasks": [
+            "tts"
+          ],
+          "io": {
+            "input": {
+              "text": "required",
+              "audio": "none",
+              "referenceAudio": "none",
+              "referenceText": "none"
+            },
+            "output": {
+              "text": false,
+              "audio": true,
+              "audioCount": "many",
+              "transcript": {
+                "segments": false,
+                "wordTimestamps": false,
+                "speakers": false
+              },
+              "embedding": false
+            },
+            "live": "text"
+          },
+          "wire": "omni-speech-ws",
+          "activation": {
+            "state": "ready",
+            "detail": null,
+            "progress": null,
+            "runtime": null,
+            "updatedAt": null
+          },
+          "availability": {
+            "state": "ready"
+          },
+          "params": [
+            {
+              "key": "voice",
+              "type": "string",
+              "maxLength": 4000,
+              "valuesFrom": "/api/dsh-dgx-audio/v1/voices?provider=dgx-all&model=tts-stream"
+            },
+            {
+              "key": "instructions",
+              "type": "text",
+              "maxLength": 4000
+            },
+            {
+              "key": "overlapPolicy",
+              "type": "enum",
+              "values": [
+                "listen_only",
+                "barge_in_on_speech"
+              ]
+            },
+            {
+              "key": "turnDetection",
+              "type": "enum",
+              "values": [
+                "none",
+                "server_vad"
+              ]
+            }
+          ],
+          "output": {
+            "text": false,
+            "audio": true
+          },
+          "capabilities": {
+            "textStreaming": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "speech stream-input wire returns audio",
+              "checkedAt": null
+            },
+            "audioOutput": {
+              "state": "untested",
+              "source": "none",
+              "detail": null,
+              "checkedAt": null
+            },
+            "audioOutputStreaming": {
+              "state": "declared",
+              "source": "config",
+              "detail": null,
+              "checkedAt": null,
+              "observedDelivery": null
+            },
+            "liveInput": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "speech stream-input takes incremental text, not live audio",
+              "checkedAt": null
+            },
+            "fullDuplex": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "omni-speech-ws is a turn-based realtime wire, not the duplex protocol",
+              "checkedAt": null,
+              "implementationLevel": null
+            },
+            "bargeIn": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "omni-speech-ws is a turn-based realtime wire, not the duplex protocol",
+              "checkedAt": null
+            },
+            "playbackAck": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "omni-speech-ws is a turn-based realtime wire, not the duplex protocol",
+              "checkedAt": null
+            },
+            "sessionResume": {
+              "state": "unsupported",
+              "source": "config",
+              "detail": "omni-speech-ws is a turn-based realtime wire, not the duplex protocol",
+              "checkedAt": null
+            }
+          },
+          "limits": {
+            "maxAudioBytes": 26214400,
+            "maxAudioPerRequest": 5,
+            "liveFrameMaxBytes": 64000,
+            "liveMaxSeconds": 600
+          }
+        }
+      ]
+    }
+  ]
+}

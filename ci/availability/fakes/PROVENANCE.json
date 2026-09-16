@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "files": [
+    {
+      "path": "mock-backend.mjs",
+      "owner": "mic lane (shared audio UI)",
+      "license": "MIT",
+      "copiedFrom": "parallel-work/microphone-ui/e2e/mock-backend.mjs",
+      "copiedAt": "2026-09-15T14:25+08:00",
+      "sha256": "fa19e95fd3dda87bc20c8127305514f71620288181d20b17c6831f13594e1d48",
+      "role": "loopback fake upstream (OpenAI chat SSE with progressive vLLM-Omni-shaped audio; minimal RFC 6455 realtime duplex wire). Not plugin logic, not a model.",
+      "modifications": "none"
+    }
+  ]
+}
